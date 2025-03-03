@@ -32,9 +32,14 @@ class Event:
 
 class Peep:
 	def __init__(self, **args):
+		self.id = args.get("id", 0)
+		self.index = args.get("index", 0)
+		self.name = args.get("name", "") 
+		self.priority = args.get("priority", 0)
+		self.availability = args.get("availability", [])
+		self.event_limit = args.get("event_limit", 1)
+		self.role = args.get("role", "")
 		self.num_events = 0
-		for key, value in args.items():
-			setattr(self, key, value)
 
 	@classmethod
 	def generate_test_peep(cls, id, index, event_count):
