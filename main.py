@@ -99,8 +99,15 @@ class Peep:
 
 		return cls(**data)
 	
+	@staticmethod
+	def peeps_str(peeps):
+		"""Return a string representation of a list of Peeps."""
+		result =  f"Peeps[{len(peeps)}]:\n" 
+		result += f"\n".join(f"   {peep}" for peep in peeps)
+		return result
+
 	# full representation of a Peep, can be used as a constructor 
-	def _repr__(self):
+	def __repr__(self):
 		return (f"Peep(id={self.id}, name='{self.name}', priority={self.priority}, "
 				f"availability={self.availability}, event_limit={self.event_limit}, role={self.role}, "
 				f"total_attended={self.total_attended}, cur_scheduled={self.cur_scheduled}, "
@@ -109,8 +116,8 @@ class Peep:
 	# Simplified tostring for easier testing 
 	def __str__(self):
 		role_str = "L" if self.role == Globals.leader else "F"
-		return (f"Peep: id: {self.id}, p: {self.priority}, limit: {self.event_limit}, "
-				f"a: {self.availability}, role: {role_str}")
+		return (f"Peep({self.id:>3}): p: {self.priority}, limit: {self.event_limit}, "
+				f"role: {role_str}, a: {self.availability}")
 	
 class EventSequence:
 	def __init__(self, events, peeps):
@@ -126,8 +133,8 @@ class EventSequence:
 			f"valid events: {{ {', '.join(str(event.id) for event in self.valid_events)} }}, " 
 			f"unique_peeps {self.num_unique_attendees}/{len(self.peeps)}, system_weight {self.system_weight}\n"
 		)
-		for event in self.valid_events:
-			result += f"    {event}\n"
+		result += f"\t"
+		result += "\n\t".join(str(event) for event in self.valid_events)
 		return result
 
 def save_json(data, filename):
@@ -173,20 +180,6 @@ def initialize_data (generate_events=True, generate_peeps=True):
 	sorted_peeps = sorted(peeps, reverse=True, key=lambda peep: peep.priority)
 	return sorted_peeps, events
 	
-	# if generate: 
-	# 	#generate peeps list randomly 
-	# 	num_peeps = 28
-	# 	peeps = [Peep.generate_test_peep(i, i-1, num_events) for i in range(num_peeps)]
-	# else: 
-	# 	# read peeps list from json 
-	# 	with open("test_peeps.json", "r") as file:
-	# 		data = json.load(file)
-	# 	peeps = [Peep(**peep) for peep in data]
-    
-	# # sort peeps by priority while keeping their relative ordering 
-	# sorted_peeps = sorted(peeps, reverse=True, key=lambda peep: peep.priority) 
-	# return sorted_peeps, events
-
 def sim(og_peeps, og_events):
 	# generate all permutations of events
 	def generate_event_sequences():
@@ -294,10 +287,6 @@ def sim(og_peeps, og_events):
 	sorted_sequences = sorted(event_sequences, reverse=True, key=lambda sequence: (sequence.num_unique_attendees, sequence.system_weight))
 	return sorted_sequences
 
-def print_peeps(peeps): 
-	for peep in peeps: 
-		print(f"   {peep}")
-
 def main():
 	# should we generate new lists? otherwise read from file 
 	generate_events = False 
@@ -327,33 +316,27 @@ def main():
 
 	sanitized_events = sanitize_events(events)
 
-	print("=====")
-	print("Initial State")
-	print_peeps(peeps)
-	print("=====")
-	print(f"Sanitized Events: {len(sanitized_events)}/{len(events)}")
-	print("=====")
+	if Globals.verbosity > 0: 
+		print("=====")
+	if Globals.verbosity > 1: 
+		print("Initial State")
+		print(Peep.peeps_str(peeps))
+		print("=====")
+	if Globals.verbosity > 0: 
+		print(f"Sanitized Events: {len(sanitized_events)}/{len(events)}")
+		print("=====")
 
 	sorted_sequences = sim(peeps, sanitized_events)
-	
-	if len(sorted_sequences):
+	if Globals.verbosity > 0: 
+		if len(sorted_sequences):
+			print(f"{sorted_sequences[0]}")
+			print("=====")
+			if Globals.verbosity > 1: 
+				print("Final State")
+				print(Peep.peeps_str(sorted_sequences[0].peeps))
+		else:
+			print("No Winner")
 
-		print(f"winner winner chicken dinner:" ) 
-		print(f"{sorted_sequences[0]}")
-		print("=====")
-		print("Final State")
-		for peep in sorted_sequences[0].peeps:
-			print(f"   {peep}")
-	else:
-		print("No Winner")
-
-	def save_json(peeps, filename="test_peeps.json"):
-		"""Save the list of peeps as a JSON file."""
-		with open(filename, "w") as f:
-			json.dump([peep.__dict__ for peep in peeps], f, indent=4)
-		print(f"Saved {len(peeps)} Peeps to {filename}.\n"
-		 	f"Rename before next run if you want to keep this generated test data.")
-	
 if __name__ == "__main__":
 	for i in range(1):
 		main()
