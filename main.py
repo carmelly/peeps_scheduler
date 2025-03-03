@@ -23,7 +23,7 @@ class Event:
 		for key, value in args.items():
 			setattr(self, key, value)
 
-	def Role(self, key):
+	def role(self, key):
 		return self.leaders if key == Globals.leader else self.followers
 
 	def __str__(self):
@@ -89,21 +89,23 @@ def read_doc():
 			attend_count -= 1
 		peep.availability.sort()
 
-	# Peep(id=0, name="person0", prio=3, availability=[0, 2], role=Globals.Follower)
-	# Peep(id=2, name="person2", prio=3, availability=[1], role=Globals.Follower)   
-	# Peep(id=3, name="person3", prio=3, availability=[0, 2], role=Globals.Follower)
-	# Peep(id=8, name="person8", prio=3, availability=[], role=Globals.Leader)      
-	# Peep(id=12, name="person12", prio=3, availability=[], role=Globals.Leader)    
-	# Peep(id=4, name="person4", prio=2, availability=[], role=Globals.Follower)    
-	# Peep(id=5, name="person5", prio=2, availability=[0, 2], role=Globals.Follower)
-	# Peep(id=10, name="person10", prio=2, availability=[0, 1], role=Globals.Leader)
-	# Peep(id=14, name="person14", prio=2, availability=[1], role=Globals.Leader)   
-	# Peep(id=1, name="person1", prio=1, availability=[], role=Globals.Follower)
-	# Peep(id=13, name="person13", prio=1, availability=[1], role=Globals.Leader)
-	# Peep(id=6, name="person6", prio=0, availability=[], role=Globals.Follower)
-	# Peep(id=7, name="person7", prio=0, availability=[], role=Globals.Leader)
-	# Peep(id=9, name="person9", prio=0, availability=[], role=Globals.Leader)
-	# Peep(id=11, name="person11", prio=0, availability=[], role=Globals.Leader)
+	# copypasta test data
+	# peeps = []
+	# peeps.append(Peep(id=0, name="person0", prio=3, availability=[0, 2], role=Globals.follower))
+	# peeps.append(Peep(id=2, name="person2", prio=3, availability=[1], role=Globals.follower)   )
+	# peeps.append(Peep(id=3, name="person3", prio=3, availability=[0, 2], role=Globals.follower))
+	# peeps.append(Peep(id=8, name="person8", prio=3, availability=[], role=Globals.leader)      )
+	# peeps.append(Peep(id=12, name="person12", prio=3, availability=[], role=Globals.leader)    )
+	# peeps.append(Peep(id=4, name="person4", prio=2, availability=[], role=Globals.follower)    )
+	# peeps.append(Peep(id=5, name="person5", prio=2, availability=[0, 2], role=Globals.follower))
+	# peeps.append(Peep(id=10, name="person10", prio=2, availability=[0, 1], role=Globals.leader))
+	# peeps.append(Peep(id=14, name="person14", prio=2, availability=[1], role=Globals.leader)   )
+	# peeps.append(Peep(id=1, name="person1", prio=1, availability=[], role=Globals.follower))
+	# peeps.append(Peep(id=13, name="person13", prio=1, availability=[1], role=Globals.leader))
+	# peeps.append(Peep(id=6, name="person6", prio=0, availability=[], role=Globals.follower))
+	# peeps.append(Peep(id=7, name="person7", prio=0, availability=[], role=Globals.leader))
+	# peeps.append(Peep(id=9, name="person9", prio=0, availability=[], role=Globals.leader))
+	# peeps.append(Peep(id=11, name="person11", prio=0, availability=[], role=Globals.leader))
 
 	# stable sort
 	sorted_peeps = sorted(peeps, reverse=True, key=lambda peep: peep.priority)
@@ -113,8 +115,11 @@ def sim(og_peeps, og_events):
 	# generate all permutations of events
 	def generate_event_sequences():
 		event_sequences = []
+		
+		if not len(og_events):
+			return []
 		indices = [i for i in range(len(og_events)) ]
-		# brute force.  wanna fight about it? 
+		# brute force. there are better ways...
 		index_sequences = list(itertools.permutations(indices, len(indices)))
 
 		for index_sequence in index_sequences:
@@ -127,8 +132,6 @@ def sim(og_peeps, og_events):
 
 	event_sequences = generate_event_sequences() 
 
-	print(f"NumEventSequences: {len(event_sequences)}")
-
 	# can someone go to this event
 	def eval_event(peep, event):
 		# meets the person's availability
@@ -136,10 +139,10 @@ def sim(og_peeps, og_events):
 			return False
 
 		# space for the role
-		if len(event.Role(peep.role)) >= event.max_role:
+		if len(event.role(peep.role)) >= event.max_role:
 			return False
 
-		# limit for month
+		# personal limit for month
 		if peep.num_events >= peep.event_limit:
 			return False
 
@@ -155,7 +158,7 @@ def sim(og_peeps, og_events):
 			# add peeps to event 
 			for peep in sorted_peeps:
 				if eval_event(peep, event):
-					event.Role(peep.role).append(peep)
+					event.role(peep.role).append(peep)
 					winners.append(peep)
 				else:
 					losers.append(peep)
@@ -174,23 +177,20 @@ def sim(og_peeps, og_events):
 				assert(len(event.leaders) >= event.min_role and len(event.leaders) <= event.max_role)
 				assert(len(event.followers) >= event.min_role and len(event.followers) <= event.max_role)
 
-				# for each peep, put them to the end of the rr queue
-				# because leaders and followers are technically two separate lists (unless someone changes their role), the relative order to leaders/followers doesn't matter
-				def apply_success(peep):
+				def scoot(peep):
+					sorted_peeps.remove(peep)
+					sorted_peeps.append(peep)
+					
+				# apply failure
+				for peep in losers:
+					scoot(peep)
+
+				# apply success
+				for peep in winners:
 					peep.num_events += 1
 					peep.priority = 0
-					# scootch
-					sorted_peeps.remove(peep)
-					sorted_peeps.append(peep)
-
-				for peep in losers:
-					# scootch
-					sorted_peeps.remove(peep)
-					sorted_peeps.append(peep)
-
-				for peep in winners:
-					apply_success(peep)
-
+					scoot(peep)
+	
 				sequence.peeps = sorted_peeps
 				sequence.valid_events.append(event)
 			else:
@@ -200,8 +200,7 @@ def sim(og_peeps, og_events):
 
 		# end of sequence, update
 		for peep in sequence.peeps:
-			# heuristic: "at least once a month" for "num_events"
-			# didn't make it to any, increase prio for next month
+			# didn't make it to any, increase prio for next scheduling
 			if peep.num_events <= 0:
 				peep.priority += 1
 			else:
@@ -210,11 +209,13 @@ def sim(og_peeps, og_events):
 			# track fitness of result
 			sequence.system_weight += peep.priority
 
-
 	for sequence in event_sequences:
 		eval_eventsequence(sequence)
 
-	sorted_sequences = sorted(event_sequences, reverse=True, key=lambda sequence: sequence.num_unique_attendees)
+	event_sequences = [sequence for sequence in event_sequences if len(sequence.valid_events)]
+
+	# sort by unique attendees and whichever result has the least system weight
+	sorted_sequences = sorted(event_sequences, reverse=True, key=lambda sequence: (sequence.num_unique_attendees, sequence.system_weight))
 	return sorted_sequences
 
 def main():
@@ -244,27 +245,22 @@ def main():
 	sanitized_events = sanitize_events(events)
 
 	print("=====")
-	print("Peeps:")
-	# for p in peeps:
-	# 	print(p)
+	print("InitialState")
+	for peep in peeps:
+		print(f"   {peep}")
 
 	print(f"Events: {len(sanitized_events)}/{len(events)}")
-	# for e in sanitized_events:
-	# 	print(e)
 
 	sorted_sequences = sim(peeps, sanitized_events)
 	
 	if len(sorted_sequences):
-		print("InitialState")
-		for peep in peeps:
-			print(f"   {peep}")
 
 		print(f"winner winner chicken dinner: {sorted_sequences[0]}")
 		for peep in sorted_sequences[0].peeps:
 			print(f"   {peep}")
 	else:
-		print("failure")
-			
+		print("No Winner")
+
 	# for sequence in sorted_sequences:
 	# 	print(f"   {sequence}")
 	
