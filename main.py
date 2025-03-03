@@ -32,34 +32,53 @@ class Event:
 
 class Peep:
 	def __init__(self, **args):
-		self.id = id
-		self.name = "Dummy"
-		self.priority = 0
-		# event ids
-		self.availability = []
-		# repeat count per scheduling epoch
-		self.event_limit = 2
-		self.role = Globals.leader 
-		self.total_attended = 0
-		self.cur_scheduled = 0
 		self.num_events = 0
-		self.index = 0
 		for key, value in args.items():
 			setattr(self, key, value)
 
+	@classmethod
+	def generate_test_peep(cls, id, index, event_count):
+		
+		"""Generate a test Peep with random values"""
+		data = {
+            "id": id, 
+			"index": index,
+            "name": f"Person{id}",
+            "priority": random.randint(0, 3),# Priority between 0 and 3
+            # "availability": sorted(random.sample(range(event_count), random.randint(0, event_count))),
+            "event_limit": random.randint(1, event_count),
+            "role": random.choice([Globals.leader, Globals.follower])
+        }
+		
+		# Generate random event availability
+		available_events = list(range(event_count))  # Event indices (0, 1, 2, ...)
+		random.shuffle(available_events)
+		availability = sorted(available_events[:random.randint(0, event_count)])  # Random subset
+		data.update({"availability": availability})
+
+		return cls(**data)
+	
 	def to_json(self):
-		"""Convert the object to a JSON string"""
 		return json.dumps(self.__dict__, indent=4)
 
 	@staticmethod
 	def parse_json(json_str):
-		"""Parse a JSON string and return a Peep object"""
 		data = json.loads(json_str)
 		return Peep(**data)
+	
+	# full representation of a Peep, can be used as a constructor 
+	def _repr__(self):
+		return (f"Peep(id={self.id}, name='{self.name}', priority={self.priority}, "
+				f"availability={self.availability}, event_limit={self.event_limit}, role={self.role}, "
+				f"total_attended={self.total_attended}, cur_scheduled={self.cur_scheduled}, "
+				f"num_events={self.num_events}, index={self.index})")
 
+	# Simplified tostring for easier testing 
 	def __str__(self):
-		return f"Peep(id={self.id}, name=\"{self.name}\", prio={self.priority}, availability={self.availability}, role=Globals.{self.role})" 
-
+		role_str = "L" if self.role == Globals.leader else "F"
+		return (f"Peep: id: {self.id}, p: {self.priority}, limit: {self.event_limit}, "
+				f"a: {self.availability}, role: {role_str}")
+	
 class EventSequence:
 	def __init__(self, events, peeps):
 		self.events = events
@@ -75,33 +94,22 @@ class EventSequence:
 		return result
 
 # read peeps from the google docs
-def read_doc():
-	num_events = 3
+def read_doc(generate=False):
+	num_events = 5
 	events = [ Event(id=i, min_role=3, max_role=3) for i in range(num_events) ]
 
-	num_peeps = 15 
-	peeps = [ Peep(id=i, name=f"person{i}") for i in range(num_peeps) ]
-	# make half leaders, half followers
-	for i in range(math.floor(num_peeps / 2)):
-		peeps[i].role = Globals.follower	
-
-	# randomize priority
-	for peep in peeps:
-		peep.priority = random.randint(0, 3)
-
-	# randomize availability
-	for peep in peeps:
-		# how many events can this person attend
-		attend_count = random.randint(0, len(events) - 1)
-		event_indices = [i for i in range(len(events)) ]
-		# remove a random index
-		while attend_count and event_indices:
-			peep.availability.append(event_indices.pop(random.randint(0, len(event_indices) - 1)))
-			attend_count -= 1
-		peep.availability.sort()
-
-	# stable sort
-	sorted_peeps = sorted(peeps, reverse=True, key=lambda peep: peep.priority)
+	if generate: 
+		#generate peeps list randomly 
+		num_peeps = 15
+		peeps = [Peep.generate_test_peep(i, i-1, num_events) for i in range(num_peeps)]
+	else: 
+	# read peeps list from json 
+		with open("test_peeps.json", "r") as file:
+			data = json.load(file)
+		peeps = [Peep(**peep) for peep in data]
+    
+	# sort peeps by priority while keeping their relative ordering 
+	sorted_peeps = sorted(peeps, reverse=True, key=lambda peep: peep.priority) 
 	return sorted_peeps, events
 
 def sim(og_peeps, og_events):
@@ -211,8 +219,13 @@ def sim(og_peeps, og_events):
 	sorted_sequences = sorted(event_sequences, reverse=True, key=lambda sequence: (sequence.num_unique_attendees, sequence.system_weight))
 	return sorted_sequences
 
+def print_peeps(peeps): 
+	for peep in peeps: 
+		print(f"   {peep}")
+
 def main():
-	peeps, events = read_doc()
+	generate = True # should we generate a new list? otherwise read from file 
+	peeps, events = read_doc(generate)
 
 	# remove events where there are not enough of any given role
 	def sanitize_events(events):
@@ -238,24 +251,34 @@ def main():
 	sanitized_events = sanitize_events(events)
 
 	print("=====")
-	print("InitialState")
-	for peep in peeps:
-		print(f"   {peep}")
-
-	print(f"Events: {len(sanitized_events)}/{len(events)}")
+	print("Initial State")
+	print_peeps(peeps)
+	print("=====")
+	print(f"Sanitized Events: {len(sanitized_events)}/{len(events)}")
+	print("=====")
 
 	sorted_sequences = sim(peeps, sanitized_events)
 	
 	if len(sorted_sequences):
 
 		print(f"winner winner chicken dinner: {sorted_sequences[0]}")
+		print("=====")
+		print("Final State")
 		for peep in sorted_sequences[0].peeps:
 			print(f"   {peep}")
 	else:
 		print("No Winner")
 
-	# for sequence in sorted_sequences:
-	# 	print(f"   {sequence}")
+	def save_json(peeps, filename="test_peeps.json"):
+		"""Save the list of peeps as a JSON file."""
+		with open(filename, "w") as f:
+			json.dump([peep.__dict__ for peep in peeps], f, indent=4)
+		print(f"Saved {len(peeps)} Peeps to {filename}")
+
+	# Ask if user wants to save -- useful for saving "interesting" results to debug 
+	# save_choice = input("\nDo you want to save the initial Peeps to a JSON file? (yes/no): ").strip().lower()
+	# if save_choice in ["yes", "y"]:
+	# 	save_json(peeps)
 	
 if __name__ == "__main__":
 	for i in range(1):

@@ -1,24 +1,14 @@
 [
     {
         "num_events": 0,
-        "id": 13,
-        "index": 12,
-        "name": "Person13",
+        "id": 7,
+        "index": 6,
+        "name": "Person7",
         "priority": 3,
-        "event_limit": 3,
+        "event_limit": 2,
         "role": "Leader",
-        "availability": []
-    },
-    {
-        "num_events": 0,
-        "id": 14,
-        "index": 13,
-        "name": "Person14",
-        "priority": 3,
-        "event_limit": 4,
-        "role": "Follower",
         "availability": [
-            4
+            1
         ]
     },
     {
@@ -26,31 +16,6 @@
         "id": 1,
         "index": 0,
         "name": "Person1",
-        "priority": 2,
-        "event_limit": 4,
-        "role": "Leader",
-        "availability": [
-            4
-        ]
-    },
-    {
-        "num_events": 0,
-        "id": 2,
-        "index": 1,
-        "name": "Person2",
-        "priority": 2,
-        "event_limit": 1,
-        "role": "Leader",
-        "availability": [
-            0,
-            1
-        ]
-    },
-    {
-        "num_events": 0,
-        "id": 8,
-        "index": 7,
-        "name": "Person8",
         "priority": 2,
         "event_limit": 5,
         "role": "Leader",
@@ -64,26 +29,70 @@
     },
     {
         "num_events": 0,
-        "id": 12,
-        "index": 11,
-        "name": "Person12",
+        "id": 2,
+        "index": 1,
+        "name": "Person2",
         "priority": 2,
-        "event_limit": 3,
-        "role": "Follower",
+        "event_limit": 2,
+        "role": "Leader",
         "availability": [
+            0,
+            1,
+            2,
             3,
             4
         ]
     },
     {
         "num_events": 0,
-        "id": 0,
-        "index": -1,
-        "name": "Person0",
-        "priority": 1,
+        "id": 5,
+        "index": 4,
+        "name": "Person5",
+        "priority": 2,
+        "event_limit": 4,
+        "role": "Follower",
+        "availability": [
+            0,
+            1
+        ]
+    },
+    {
+        "num_events": 0,
+        "id": 9,
+        "index": 8,
+        "name": "Person9",
+        "priority": 2,
+        "event_limit": 5,
+        "role": "Leader",
+        "availability": [
+            0,
+            1,
+            2,
+            3
+        ]
+    },
+    {
+        "num_events": 0,
+        "id": 10,
+        "index": 9,
+        "name": "Person10",
+        "priority": 2,
+        "event_limit": 5,
+        "role": "Follower",
+        "availability": [
+            2
+        ]
+    },
+    {
+        "num_events": 0,
+        "id": 13,
+        "index": 12,
+        "name": "Person13",
+        "priority": 2,
         "event_limit": 1,
         "role": "Leader",
         "availability": [
+            0,
             2,
             3,
             4
@@ -96,7 +105,56 @@
         "name": "Person3",
         "priority": 1,
         "event_limit": 4,
-        "role": "Follower",
+        "role": "Leader",
+        "availability": []
+    },
+    {
+        "num_events": 0,
+        "id": 4,
+        "index": 3,
+        "name": "Person4",
+        "priority": 1,
+        "event_limit": 5,
+        "role": "Leader",
+        "availability": [
+            0,
+            1,
+            2,
+            3,
+            4
+        ]
+    },
+    {
+        "num_events": 0,
+        "id": 8,
+        "index": 7,
+        "name": "Person8",
+        "priority": 1,
+        "event_limit": 1,
+        "role": "Leader",
+        "availability": []
+    },
+    {
+        "num_events": 0,
+        "id": 14,
+        "index": 13,
+        "name": "Person14",
+        "priority": 1,
+        "event_limit": 3,
+        "role": "Leader",
+        "availability": [
+            0,
+            1
+        ]
+    },
+    {
+        "num_events": 0,
+        "id": 0,
+        "index": -1,
+        "name": "Person0",
+        "priority": 0,
+        "event_limit": 4,
+        "role": "Leader",
         "availability": [
             0,
             1,
@@ -110,38 +168,13 @@
         "id": 6,
         "index": 5,
         "name": "Person6",
-        "priority": 1,
-        "event_limit": 5,
-        "role": "Follower",
-        "availability": [
-            0,
-            3
-        ]
-    },
-    {
-        "num_events": 0,
-        "id": 9,
-        "index": 8,
-        "name": "Person9",
-        "priority": 1,
-        "event_limit": 2,
-        "role": "Leader",
-        "availability": [
-            0
-        ]
-    },
-    {
-        "num_events": 0,
-        "id": 10,
-        "index": 9,
-        "name": "Person10",
-        "priority": 1,
-        "event_limit": 5,
+        "priority": 0,
+        "event_limit": 1,
         "role": "Leader",
         "availability": [
             0,
             1,
-            3
+            2
         ]
     },
     {
@@ -149,45 +182,26 @@
         "id": 11,
         "index": 10,
         "name": "Person11",
-        "priority": 1,
-        "event_limit": 3,
-        "role": "Leader",
-        "availability": []
-    },
-    {
-        "num_events": 0,
-        "id": 4,
-        "index": 3,
-        "name": "Person4",
         "priority": 0,
         "event_limit": 3,
-        "role": "Follower",
-        "availability": [
-            3,
-            4
-        ]
-    },
-    {
-        "num_events": 0,
-        "id": 5,
-        "index": 4,
-        "name": "Person5",
-        "priority": 0,
-        "event_limit": 2,
-        "role": "Leader",
-        "availability": []
-    },
-    {
-        "num_events": 0,
-        "id": 7,
-        "index": 6,
-        "name": "Person7",
-        "priority": 0,
-        "event_limit": 4,
         "role": "Follower",
         "availability": [
             0,
             1,
+            2,
+            3
+        ]
+    },
+    {
+        "num_events": 0,
+        "id": 12,
+        "index": 11,
+        "name": "Person12",
+        "priority": 0,
+        "event_limit": 5,
+        "role": "Follower",
+        "availability": [
+            0,
             2,
             3,
             4
