@@ -1,4 +1,4 @@
-from datetime import date
+import datetime
 import copy
 import itertools
 import math
@@ -12,23 +12,59 @@ class Globals:
 
 class Event:
 	def __init__(self, **args):
-		self.id = id
-		self.date = date(1900, 1, 1)
-		# min/max peps required per role
-		self.min_role = 0
-		self.max_role = 0
-		# current assignments
+		self.id = args.get("id", 0)
+		self.date = args.get("date", datetime.date(1900, 1, 1))
+		self.min_role = args.get("min_role", 5)
+		self.max_role = args.get("max_role", 8)
 		self.leaders = []
 		self.followers = []
-
-		for key, value in args.items():
-			setattr(self, key, value)
 
 	def role(self, key):
 		return self.leaders if key == Globals.leader else self.followers
 
+	@classmethod
+	def generate_test_event(cls, event_id, start_date):
+		"""Generate a random test event within one month on allowed days & times."""
+		allowed_days = [2, 4, 5]  # Wednesday (2), Friday (4), Saturday (5)
+		allowed_times = {
+			2: [16, 17, 18, 19],  # Wed: 4-7 PM
+			4: [16, 17, 18, 19],  # Fri: 4-7 PM
+			5: [11, 19]           # Sat: 11 AM, 7 PM
+		}
+
+		# Pick a random day in the next 30 days that matches allowed days
+		while True:
+			rand_day = start_date + datetime.timedelta(days=random.randint(1, 30))
+			if rand_day.weekday() in allowed_days:
+				break
+
+		event_hour = random.choice(allowed_times[rand_day.weekday()])
+		event_datetime = datetime.datetime(rand_day.year, rand_day.month, rand_day.day, event_hour)
+		
+		return cls(
+			id=event_id,
+			date=event_datetime,
+			min_role=random.randint(3, 5),
+			max_role=random.randint(6, 8),
+		)
+
+	def to_dict(self):
+		return {
+			"id": self.id,
+			"date": self.date.strftime("%Y-%m-%d %H:%M"), 
+			"min_role": self.min_role,
+			"max_role": self.max_role,
+		}
+
+	@staticmethod
+	def from_dict(data):
+		"""Convert dictionary data back into an Event object."""
+		data["date"] = datetime.datetime.strptime(data["date"], "%Y-%m-%d %H:%M") 
+		return Event(**data)
+
 	def __str__(self):
-		return f"Event({self.id}): name: {self.date}, date: {self.date}, min: {self.min_role}, max: {self.max_role}"
+		date_str =  self.date.strftime("%Y-%m-%d %H:%M"), 
+		return f"Event({self.id}): date: {date_str}, min: {self.min_role}, max: {self.max_role}, L: {{ {', '.join(str(peep.id) for peep in self.leaders)} }}, F: {{ {', '.join(str(peep.id) for peep in self.followers)} }}"
 
 class Peep:
 	def __init__(self, **args):
@@ -63,14 +99,6 @@ class Peep:
 
 		return cls(**data)
 	
-	def to_json(self):
-		return json.dumps(self.__dict__, indent=4)
-
-	@staticmethod
-	def parse_json(json_str):
-		data = json.loads(json_str)
-		return Peep(**data)
-	
 	# full representation of a Peep, can be used as a constructor 
 	def _repr__(self):
 		return (f"Peep(id={self.id}, name='{self.name}', priority={self.priority}, "
@@ -96,30 +124,68 @@ class EventSequence:
 		result = (f"EventSequence: "
 			f"og events: {{ {', '.join(str(event.id) for event in self.events)} }}, "
 			f"valid events: {{ {', '.join(str(event.id) for event in self.valid_events)} }}, " 
-			f"unique_peeps {self.num_unique_attendees}/{len(self.peeps)}, system_weight {self.system_weight}"
+			f"unique_peeps {self.num_unique_attendees}/{len(self.peeps)}, system_weight {self.system_weight}\n"
 		)
 		for event in self.valid_events:
-			result += f"\n   Event: {event.id}, L: {{ {', '.join(str(peep.id) for peep in event.leaders)} }}, F: {{ {', '.join(str(peep.id) for peep in event.followers)} }}"
+			result += f"    {event}\n"
 		return result
 
-# read peeps from the google docs
-def read_doc(generate=False):
-	num_events = 7
-	events = [ Event(id=i, min_role=5, max_role=7) for i in range(num_events) ]
+def save_json(data, filename):
+    """Save data (list of dicts) to a JSON file."""
+    with open(filename, "w") as f:
+        json.dump(data, f, indent=4)
 
-	if generate: 
-		#generate peeps list randomly 
-		num_peeps = 28
-		peeps = [Peep.generate_test_peep(i, i-1, num_events) for i in range(num_peeps)]
-	else: 
-	# read peeps list from json 
-		with open("test_peeps.json", "r") as file:
-			data = json.load(file)
-		peeps = [Peep(**peep) for peep in data]
-    
-	# sort peeps by priority while keeping their relative ordering 
-	sorted_peeps = sorted(peeps, reverse=True, key=lambda peep: peep.priority) 
+def load_json(filename):
+    """Load data from a JSON file."""
+    try:
+        with open(filename, "r") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return None
+	
+def initialize_data (generate_events=True, generate_peeps=True):
+	num_events = 7
+	num_peeps = 28
+	event_filename = "test_events.json"
+	peep_filename = "test_peeps.json"
+
+  # Load or generate events
+	if generate_events:
+		start_date = datetime.date.today()
+		events = [Event.generate_test_event(i, start_date) for i in range(num_events)]
+		save_json([event.to_dict() for event in events], event_filename)
+		print(f"Saved {len(events)} Events to {event_filename}.\n"
+		 	f"Rename before next run if you want to keep this generated test data.")
+	else:
+		event_data = load_json(event_filename)
+		events = [Event.from_dict(e) for e in event_data] if event_data else []
+
+	# Load or generate peeps
+	if generate_peeps:
+		peeps = [Peep.generate_test_peep(i, i - 1, num_events) for i in range(num_peeps)]
+		save_json([peep.__dict__ for peep in peeps], peep_filename)
+		print(f"Saved {len(peeps)} Peeps to {peep_filename}.\n"
+		 	f"Rename before next run if you want to keep this generated test data.")
+	else:
+		peep_data = load_json(peep_filename)
+		peeps = [Peep(**p) for p in peep_data] if peep_data else []
+
+	sorted_peeps = sorted(peeps, reverse=True, key=lambda peep: peep.priority)
 	return sorted_peeps, events
+	
+	# if generate: 
+	# 	#generate peeps list randomly 
+	# 	num_peeps = 28
+	# 	peeps = [Peep.generate_test_peep(i, i-1, num_events) for i in range(num_peeps)]
+	# else: 
+	# 	# read peeps list from json 
+	# 	with open("test_peeps.json", "r") as file:
+	# 		data = json.load(file)
+	# 	peeps = [Peep(**peep) for peep in data]
+    
+	# # sort peeps by priority while keeping their relative ordering 
+	# sorted_peeps = sorted(peeps, reverse=True, key=lambda peep: peep.priority) 
+	# return sorted_peeps, events
 
 def sim(og_peeps, og_events):
 	# generate all permutations of events
@@ -233,8 +299,10 @@ def print_peeps(peeps):
 		print(f"   {peep}")
 
 def main():
-	generate = True # should we generate a new list? otherwise read from file 
-	peeps, events = read_doc(generate)
+	# should we generate new lists? otherwise read from file 
+	generate_events = False 
+	generate_peeps = False 
+	peeps, events = initialize_data(generate_events, generate_peeps)
 
 	# remove events where there are not enough of any given role
 	def sanitize_events(events):
@@ -285,16 +353,6 @@ def main():
 			json.dump([peep.__dict__ for peep in peeps], f, indent=4)
 		print(f"Saved {len(peeps)} Peeps to {filename}.\n"
 		 	f"Rename before next run if you want to keep this generated test data.")
-
-	# Ask if user wants to save -- useful for saving "interesting" results to debug 
-	# save_choice = input("\nDo you want to save the initial Peeps to a JSON file? (yes/no): ").strip().lower()
-	# if save_choice in ["yes", "y"]:
-	# 	save_json(peeps)
-		
-	# if we generated a new list, save it, overwriting previous test json
-	# if the result was interesting, rename test_peeps.json to something else before running again 
-	if(generate):
-		save_json(peeps)
 	
 if __name__ == "__main__":
 	for i in range(1):
