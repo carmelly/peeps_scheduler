@@ -3,6 +3,7 @@ import copy
 import itertools
 import math
 import random
+import json 
 
 class Globals:
 	verbosity = 1
@@ -46,6 +47,16 @@ class Peep:
 		for key, value in args.items():
 			setattr(self, key, value)
 
+	def to_json(self):
+		"""Convert the object to a JSON string"""
+		return json.dumps(self.__dict__, indent=4)
+
+	@staticmethod
+	def parse_json(json_str):
+		"""Parse a JSON string and return a Peep object"""
+		data = json.loads(json_str)
+		return Peep(**data)
+
 	def __str__(self):
 		return f"Peep(id={self.id}, name=\"{self.name}\", prio={self.priority}, availability={self.availability}, role=Globals.{self.role})" 
 
@@ -88,22 +99,6 @@ def read_doc():
 			peep.availability.append(event_indices.pop(random.randint(0, len(event_indices) - 1)))
 			attend_count -= 1
 		peep.availability.sort()
-
-	# Peep(id=0, name="person0", prio=3, availability=[0, 2], role=Globals.Follower)
-	# Peep(id=2, name="person2", prio=3, availability=[1], role=Globals.Follower)   
-	# Peep(id=3, name="person3", prio=3, availability=[0, 2], role=Globals.Follower)
-	# Peep(id=8, name="person8", prio=3, availability=[], role=Globals.Leader)      
-	# Peep(id=12, name="person12", prio=3, availability=[], role=Globals.Leader)    
-	# Peep(id=4, name="person4", prio=2, availability=[], role=Globals.Follower)    
-	# Peep(id=5, name="person5", prio=2, availability=[0, 2], role=Globals.Follower)
-	# Peep(id=10, name="person10", prio=2, availability=[0, 1], role=Globals.Leader)
-	# Peep(id=14, name="person14", prio=2, availability=[1], role=Globals.Leader)   
-	# Peep(id=1, name="person1", prio=1, availability=[], role=Globals.Follower)
-	# Peep(id=13, name="person13", prio=1, availability=[1], role=Globals.Leader)
-	# Peep(id=6, name="person6", prio=0, availability=[], role=Globals.Follower)
-	# Peep(id=7, name="person7", prio=0, availability=[], role=Globals.Leader)
-	# Peep(id=9, name="person9", prio=0, availability=[], role=Globals.Leader)
-	# Peep(id=11, name="person11", prio=0, availability=[], role=Globals.Leader)
 
 	# stable sort
 	sorted_peeps = sorted(peeps, reverse=True, key=lambda peep: peep.priority)
