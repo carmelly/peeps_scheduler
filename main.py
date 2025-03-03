@@ -46,7 +46,7 @@ class Peep:
             "name": f"Person{id}",
             "priority": random.randint(0, 3),# Priority between 0 and 3
             # "availability": sorted(random.sample(range(event_count), random.randint(0, event_count))),
-            "event_limit": random.randint(1, event_count),
+            "event_limit": random.randint(1, 3),
             "role": random.choice([Globals.leader, Globals.follower])
         }
 		
@@ -88,19 +88,23 @@ class EventSequence:
 		self.valid_events = []
 
 	def __str__(self):
-		result = f"EventSequence: {{ {', '.join(str(event.id) for event in self.events)} }}, unique_peeps {self.num_unique_attendees}/{len(self.peeps)}, system_weight {self.system_weight}"
-		for event in self.events:
+		result = (f"EventSequence: "
+			f"og events: {{ {', '.join(str(event.id) for event in self.events)} }}, "
+			f"valid events: {{ {', '.join(str(event.id) for event in self.valid_events)} }}, " 
+			f"unique_peeps {self.num_unique_attendees}/{len(self.peeps)}, system_weight {self.system_weight}"
+		)
+		for event in self.valid_events:
 			result += f"\n   Event: {event.id}, L: {{ {', '.join(str(peep.id) for peep in event.leaders)} }}, F: {{ {', '.join(str(peep.id) for peep in event.followers)} }}"
 		return result
 
 # read peeps from the google docs
 def read_doc(generate=False):
-	num_events = 5
-	events = [ Event(id=i, min_role=3, max_role=3) for i in range(num_events) ]
+	num_events = 7
+	events = [ Event(id=i, min_role=5, max_role=7) for i in range(num_events) ]
 
 	if generate: 
 		#generate peeps list randomly 
-		num_peeps = 15
+		num_peeps = 28
 		peeps = [Peep.generate_test_peep(i, i-1, num_events) for i in range(num_peeps)]
 	else: 
 	# read peeps list from json 
@@ -261,7 +265,8 @@ def main():
 	
 	if len(sorted_sequences):
 
-		print(f"winner winner chicken dinner: {sorted_sequences[0]}")
+		print(f"winner winner chicken dinner:" ) 
+		print(f"{sorted_sequences[0]}")
 		print("=====")
 		print("Final State")
 		for peep in sorted_sequences[0].peeps:
@@ -273,12 +278,18 @@ def main():
 		"""Save the list of peeps as a JSON file."""
 		with open(filename, "w") as f:
 			json.dump([peep.__dict__ for peep in peeps], f, indent=4)
-		print(f"Saved {len(peeps)} Peeps to {filename}")
+		print(f"Saved {len(peeps)} Peeps to {filename}.\n"
+		 	f"Rename before next run if you want to keep this generated test data.")
 
 	# Ask if user wants to save -- useful for saving "interesting" results to debug 
 	# save_choice = input("\nDo you want to save the initial Peeps to a JSON file? (yes/no): ").strip().lower()
 	# if save_choice in ["yes", "y"]:
 	# 	save_json(peeps)
+		
+	# if we generated a new list, save it, overwriting previous test json
+	# if the result was interesting, rename test_peeps.json to something else before running again 
+	if(generate):
+		save_json(peeps)
 	
 if __name__ == "__main__":
 	for i in range(1):
