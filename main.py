@@ -33,47 +33,52 @@ class Peep:
 	def __init__(self, **args):
 		self.id = id
 		self.name = "Dummy"
-		self.index = 0 
 		self.priority = 0
 		# event ids
 		self.availability = []
 		# repeat count per scheduling epoch
-		self.event_limit = 1
+		self.event_limit = 2
 		self.role = Globals.leader 
 		self.total_attended = 0
 		self.cur_scheduled = 0
 		self.num_events = 0
+		self.index = 0
 		for key, value in args.items():
 			setattr(self, key, value)
 
 	def __str__(self):
-		return f"Peep({self.id}): name: {self.name}, index: {self.index}, prio: {self.priority}, availability{self.availability}"
+		return f"Peep(id={self.id}, name=\"{self.name}\", prio={self.priority}, availability={self.availability}, role=Globals.{self.role})" 
 
 class EventSequence:
 	def __init__(self, events, peeps):
 		self.events = events
 		self.peeps = peeps
 		self.num_unique_attendees = 0
+		self.system_weight = 0
+		self.valid_events = []
 
 	def __str__(self):
-		return f"EventSequence: {{ {', '.join(str(event.id) for event in self.events)} }}, unique_peeps {self.num_unique_attendees}/{len(self.peeps)}"
+		result = f"EventSequence: {{ {', '.join(str(event.id) for event in self.events)} }}, unique_peeps {self.num_unique_attendees}/{len(self.peeps)}, system_weight {self.system_weight}"
+		for event in self.events:
+			result += f"\n   Event: {event.id}, L: {{ {', '.join(str(peep.id) for peep in event.leaders)} }}, F: {{ {', '.join(str(peep.id) for peep in event.followers)} }}"
+		return result
 
 # read peeps from the google docs
 def read_doc():
-	num_events = 6
+	num_events = 3
 	events = [ Event(id=i, min_role=3, max_role=3) for i in range(num_events) ]
 
-	num_peeps = 28 
-	peeps = [ Peep(id=i, index=i, name=f"person{i}") for i in range(num_peeps) ]
+	num_peeps = 15 
+	peeps = [ Peep(id=i, name=f"person{i}") for i in range(num_peeps) ]
 	# make half leaders, half followers
 	for i in range(math.floor(num_peeps / 2)):
 		peeps[i].role = Globals.follower	
 
-	# temp randomize priority
+	# randomize priority
 	for peep in peeps:
-		peep.priority = random.randint(0, 200)
+		peep.priority = random.randint(0, 3)
 
-	# assoc event id with peep
+	# randomize availability
 	for peep in peeps:
 		# how many events can this person attend
 		attend_count = random.randint(0, len(events) - 1)
@@ -84,6 +89,22 @@ def read_doc():
 			attend_count -= 1
 		peep.availability.sort()
 
+	# Peep(id=0, name="person0", prio=3, availability=[0, 2], role=Globals.Follower)
+	# Peep(id=2, name="person2", prio=3, availability=[1], role=Globals.Follower)   
+	# Peep(id=3, name="person3", prio=3, availability=[0, 2], role=Globals.Follower)
+	# Peep(id=8, name="person8", prio=3, availability=[], role=Globals.Leader)      
+	# Peep(id=12, name="person12", prio=3, availability=[], role=Globals.Leader)    
+	# Peep(id=4, name="person4", prio=2, availability=[], role=Globals.Follower)    
+	# Peep(id=5, name="person5", prio=2, availability=[0, 2], role=Globals.Follower)
+	# Peep(id=10, name="person10", prio=2, availability=[0, 1], role=Globals.Leader)
+	# Peep(id=14, name="person14", prio=2, availability=[1], role=Globals.Leader)   
+	# Peep(id=1, name="person1", prio=1, availability=[], role=Globals.Follower)
+	# Peep(id=13, name="person13", prio=1, availability=[1], role=Globals.Leader)
+	# Peep(id=6, name="person6", prio=0, availability=[], role=Globals.Follower)
+	# Peep(id=7, name="person7", prio=0, availability=[], role=Globals.Leader)
+	# Peep(id=9, name="person9", prio=0, availability=[], role=Globals.Leader)
+	# Peep(id=11, name="person11", prio=0, availability=[], role=Globals.Leader)
+
 	# stable sort
 	sorted_peeps = sorted(peeps, reverse=True, key=lambda peep: peep.priority)
 	return sorted_peeps, events
@@ -93,20 +114,8 @@ def sim(og_peeps, og_events):
 	def generate_event_sequences():
 		event_sequences = []
 		indices = [i for i in range(len(og_events)) ]
-		# there's a better way to do this: this is for fun
+		# brute force.  wanna fight about it? 
 		index_sequences = list(itertools.permutations(indices, len(indices)))
-
-		def sanity():
-			for index_sequence in index_sequences:
-				output = "{"
-				for i in range(len(index_sequence)):
-					event_index = index_sequence[i]
-					output += f"{event_index}"
-					if i < len(index_sequence) - 1:
-						output += ", "
-				output += "}"
-				print(output)
-		# sanity()
 
 		for index_sequence in index_sequences:
 			event_sequence = []
@@ -140,11 +149,16 @@ def sim(og_peeps, og_events):
 		for event in sequence.events:
 			# always sort: this shouldn't actually do anything unless you start manipulating priorities within a sequence(TBD?) 
 			sorted_peeps = sorted(sequence.peeps, reverse=True, key=lambda peep: peep.priority)
+			winners = []
+			losers = []
 
-			# find the floor of leaders/followers for this event
+			# add peeps to event 
 			for peep in sorted_peeps:
 				if eval_event(peep, event):
 					event.Role(peep.role).append(peep)
+					winners.append(peep)
+				else:
+					losers.append(peep)
 
 			# event is valid: apply changes, otherwise, do nothing and the sequence's peeps apply to the next event
 			if len(event.leaders) >= event.min_role and len(event.followers) >= event.min_role:
@@ -153,7 +167,7 @@ def sim(og_peeps, og_events):
 					bigger_list = event.leaders if len(event.leaders) > len(event.followers) else event.followers
 					num_to_pop = abs(len(event.leaders) - len(event.followers))
 					while num_to_pop > 0:
-						bigger_list.pop(len(bigger_list) - 1)
+						winners.remove(bigger_list.pop(len(bigger_list) - 1))
 						num_to_pop -= 1
 
 				assert(len(event.leaders) == len(event.followers))
@@ -169,26 +183,39 @@ def sim(og_peeps, og_events):
 					sorted_peeps.remove(peep)
 					sorted_peeps.append(peep)
 
-				for peep in event.leaders:
-					apply_success(peep)
-				for peep in event.followers:
+				for peep in losers:
+					# scootch
+					sorted_peeps.remove(peep)
+					sorted_peeps.append(peep)
+
+				for peep in winners:
 					apply_success(peep)
 
 				sequence.peeps = sorted_peeps
+				sequence.valid_events.append(event)
+			else:
+				event.leaders = []
+				event.followers = []
+				pass
 
-		# heuristic: "at least once a month" for "num_events"
+		# end of sequence, update
 		for peep in sequence.peeps:
+			# heuristic: "at least once a month" for "num_events"
 			# didn't make it to any, increase prio for next month
 			if peep.num_events <= 0:
 				peep.priority += 1
 			else:
 				sequence.num_unique_attendees += 1
 
+			# track fitness of result
+			sequence.system_weight += peep.priority
+
+
 	for sequence in event_sequences:
 		eval_eventsequence(sequence)
 
 	sorted_sequences = sorted(event_sequences, reverse=True, key=lambda sequence: sequence.num_unique_attendees)
-	print(f"winner winner chicken dinner: {sorted_sequences[0]}")
+	return sorted_sequences
 
 def main():
 	peeps, events = read_doc()
@@ -225,8 +252,22 @@ def main():
 	# for e in sanitized_events:
 	# 	print(e)
 
-	sim(peeps, sanitized_events)
+	sorted_sequences = sim(peeps, sanitized_events)
+	
+	if len(sorted_sequences):
+		print("InitialState")
+		for peep in peeps:
+			print(f"   {peep}")
+
+		print(f"winner winner chicken dinner: {sorted_sequences[0]}")
+		for peep in sorted_sequences[0].peeps:
+			print(f"   {peep}")
+	else:
+		print("failure")
+			
+	# for sequence in sorted_sequences:
+	# 	print(f"   {sequence}")
 	
 if __name__ == "__main__":
-	for i in range(20):
+	for i in range(1):
 		main()
