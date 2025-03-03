@@ -6,7 +6,7 @@ import random
 import json 
 
 class Globals:
-	verbosity = 1
+	verbosity = 2
 	leader = "Leader"
 	follower = "Follower"
 
@@ -22,6 +22,10 @@ class Event:
 	def role(self, key):
 		return self.leaders if key == Globals.leader else self.followers
 
+	def is_valid(self): 
+		""" Event is valid if we have enough leaders and enough followers to fill the minimum per role """
+		return( len(self.leaders) >= self.min_role and len(self.followers) >= self.min_role) 
+	
 	@classmethod
 	def generate_test_event(cls, event_id, start_date):
 		"""Generate a random test event within one month on allowed days & times."""
@@ -179,10 +183,48 @@ def initialize_data (generate_events=True, generate_peeps=True):
 
 	sorted_peeps = sorted(peeps, reverse=True, key=lambda peep: peep.priority)
 	return sorted_peeps, events
+
+
+def can_attend(peep, event):
+	"""Checks if a peep can attend an event based on peep availaility, role limit and personal event limit """
 	
-def sim(og_peeps, og_events):
-	# generate all permutations of events
+	# meets the person's availability
+	if event.id not in peep.availability:
+		return False
+
+	# space for the role
+	if len(event.role(peep.role)) >= event.max_role:
+		return False
+
+	# personal limit for month
+	if peep.num_events >= peep.event_limit:
+		return False
+
+	return True
+
+def update_event_attendees(peeps, winners):
+	"""For all successful attendees, reset priority and send to the back of the line  """
+	for peep in winners:
+		peep.num_events += 1
+		peep.priority = 0  # Reset priority after successful attendance
+		peeps.remove(peep)
+		peeps.append(peep)  # Move successful peeps to the end
+
+def finalize_sequence(sequence):
+	"""Finalizes a sequence by increasing priority for unsuccessful peeps and tracking metrics."""
+	for peep in sequence.peeps:
+		if peep.num_events == 0:
+			peep.priority += 1  # Increase priority if not assigned to any event
+		else:
+			sequence.num_unique_attendees += 1
+
+		sequence.system_weight += peep.priority  # Track total system priority weight
+
+def evaluate_all_event_sequences(og_peeps, og_events):
+	"""Generates and evaluates all possible event sequences based on peep availability and role limits."""
+    
 	def generate_event_sequences():
+		"""Generates all possible permutations of event sequences. TODO: sanitize for date spread """
 		event_sequences = []
 		
 		if not len(og_events):
@@ -198,26 +240,19 @@ def sim(og_peeps, og_events):
 			event_sequences.append(EventSequence(event_sequence, copy.deepcopy(og_peeps)))
 
 		return event_sequences
+	
+	def balance_roles(event, winners):
+		"""Ensures leaders and followers are balanced within an event."""
+		if len(event.leaders) != len(event.followers):
+			larger_group = event.leaders if len(event.leaders) > len(event.followers) else event.followers
+			while len(event.leaders) != len(event.followers):
+				winners.remove(larger_group.pop())
 
-	event_sequences = generate_event_sequences() 
+		assert len(event.leaders) == len(event.followers) >= event.min_role
+		assert len(event.leaders) <= event.max_role
 
-	# can someone go to this event
-	def eval_event(peep, event):
-		# meets the person's availability
-		if event.id not in peep.availability:
-			return False
-
-		# space for the role
-		if len(event.role(peep.role)) >= event.max_role:
-			return False
-
-		# personal limit for month
-		if peep.num_events >= peep.event_limit:
-			return False
-
-		return True
-
-	def eval_eventsequence(sequence):
+	def evaluate_sequence(sequence):
+		"""Evaluates an event sequence by assigning peeps to events and updating priorities and list order."""
 		for event in sequence.events:
 			# always sort: this shouldn't actually do anything unless you start manipulating priorities within a sequence(TBD?) 
 			sorted_peeps = sorted(sequence.peeps, reverse=True, key=lambda peep: peep.priority)
@@ -226,74 +261,40 @@ def sim(og_peeps, og_events):
 
 			# add peeps to event 
 			for peep in sorted_peeps:
-				if eval_event(peep, event):
+				if can_attend(peep, event):
 					event.role(peep.role).append(peep)
 					winners.append(peep)
 				else:
 					losers.append(peep)
 
-			# event is valid: apply changes, otherwise, do nothing and the sequence's peeps apply to the next event
-			if len(event.leaders) >= event.min_role and len(event.followers) >= event.min_role:
-				# find the floor to balance leaders and followers
-				if len(event.leaders) != len(event.followers):
-					bigger_list = event.leaders if len(event.leaders) > len(event.followers) else event.followers
-					num_to_pop = abs(len(event.leaders) - len(event.followers))
-					while num_to_pop > 0:
-						winners.remove(bigger_list.pop(len(bigger_list) - 1))
-						num_to_pop -= 1
-
-				assert(len(event.leaders) == len(event.followers))
-				assert(len(event.leaders) >= event.min_role and len(event.leaders) <= event.max_role)
-				assert(len(event.followers) >= event.min_role and len(event.followers) <= event.max_role)
-
-				def scoot(peep):
-					sorted_peeps.remove(peep)
-					sorted_peeps.append(peep)
-					
-				# apply failure
-				for peep in losers:
-					scoot(peep)
-
-				# apply success
-				for peep in winners:
-					peep.num_events += 1
-					peep.priority = 0
-					scoot(peep)
-	
+			if event.is_valid(): # if we have enough to fill event
+				balance_roles(event, winners)
+				update_event_attendees(sorted_peeps, winners)
 				sequence.peeps = sorted_peeps
 				sequence.valid_events.append(event)
 			else:
-				event.leaders = []
-				event.followers = []
-				pass
+				event.leaders.clear()
+				event.followers.clear() 
 
-		# end of sequence, update
-		for peep in sequence.peeps:
-			# didn't make it to any, increase prio for next scheduling
-			if peep.num_events <= 0:
-				peep.priority += 1
-			else:
-				sequence.num_unique_attendees += 1
-
-			# track fitness of result
-			sequence.system_weight += peep.priority
-
+		# end of sequence, update peeps who didn't make it 
+		finalize_sequence(sequence)
+		
+	# create all the permutation 
+	event_sequences = generate_event_sequences() 
+	# process every permutation 
 	for sequence in event_sequences:
-		eval_eventsequence(sequence)
-
+		evaluate_sequence(sequence)
+	# only include the sequences that had valid events
 	event_sequences = [sequence for sequence in event_sequences if len(sequence.valid_events)]
-
-	# sort by unique attendees and whichever result has the least system weight
-	sorted_sequences = sorted(event_sequences, reverse=True, key=lambda sequence: (sequence.num_unique_attendees, sequence.system_weight))
-	return sorted_sequences
+	return event_sequences 
+	
 
 def main():
 	# should we generate new lists? otherwise read from file 
 	generate_events = False 
 	generate_peeps = False 
-	peeps, events = initialize_data(generate_events, generate_peeps)
-
-	# remove events where there are not enough of any given role
+	
+	# remove events where there are not enough available to fill roles
 	def sanitize_events(events):
 		valid_events = []
 		removed_events = []
@@ -314,6 +315,7 @@ def main():
 
 		return valid_events
 
+	peeps, events = initialize_data(generate_events, generate_peeps)
 	sanitized_events = sanitize_events(events)
 
 	if Globals.verbosity > 0: 
@@ -326,14 +328,19 @@ def main():
 		print(f"Sanitized Events: {len(sanitized_events)}/{len(events)}")
 		print("=====")
 
-	sorted_sequences = sim(peeps, sanitized_events)
+	event_sequences = evaluate_all_event_sequences(peeps, sanitized_events)
+
+	# sort by unique attendees and whichever result has the least system weight
+	sorted_sequences = sorted(event_sequences, reverse=True, key=lambda sequence: (sequence.num_unique_attendees, sequence.system_weight))
+	best_sequence = sorted_sequences[0] if sorted_sequences else None
+
 	if Globals.verbosity > 0: 
-		if len(sorted_sequences):
-			print(f"{sorted_sequences[0]}")
+		if best_sequence:
+			print(f"{best_sequence}")
 			print("=====")
 			if Globals.verbosity > 1: 
 				print("Final State")
-				print(Peep.peeps_str(sorted_sequences[0].peeps))
+				print(Peep.peeps_str(best_sequence.peeps))
 		else:
 			print("No Winner")
 
