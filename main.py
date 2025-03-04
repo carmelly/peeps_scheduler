@@ -4,6 +4,7 @@ import itertools
 import math
 import random
 import json 
+import sys
 
 class Globals:
 	verbosity = 1
@@ -419,6 +420,11 @@ def main():
 		
 	peeps, events = initialize_data(generate_events, generate_peeps)
 	sanitized_events = sanitize_events(events)
+
+	if len(sanitized_events) > 7: 
+		print(f"Found {len(sanitized_events)} events with enough available peeps; this results in too many permutations to compute. " 
+				f"Please remove 1 or more events and try again.")
+		sys.exit()
 
 	if Globals.verbosity > 0: 
 		print("=====")
