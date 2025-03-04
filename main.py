@@ -6,7 +6,8 @@ import random
 import json 
 
 class Globals:
-	verbosity = 2
+	verbosity = 1
+	days_between_events = 7
 	leader = "Leader"
 	follower = "Follower"
 
@@ -37,10 +38,8 @@ class Event:
 		}
 
 		# Pick a random day in the next 30 days that matches allowed days
-		while True:
-			rand_day = start_date + datetime.timedelta(days=random.randint(1, 30))
-			if rand_day.weekday() in allowed_days:
-				break
+		valid_days = [start_date + datetime.timedelta(days=i) for i in range(1, 31) if (start_date + datetime.timedelta(days=i)).weekday() in allowed_days]
+		rand_day = random.choice(valid_days)
 
 		event_hour = random.choice(allowed_times[rand_day.weekday()])
 		event_datetime = datetime.datetime(rand_day.year, rand_day.month, rand_day.day, event_hour)
@@ -66,8 +65,10 @@ class Event:
 		data["date"] = datetime.datetime.strptime(data["date"], "%Y-%m-%d %H:%M") 
 		return Event(**data)
 
+	def __repr__(self): 
+		return str(self)
 	def __str__(self):
-		date_str =  self.date.strftime("%Y-%m-%d %H:%M"), 
+		date_str =  self.date.strftime("%Y-%m-%d %H:%M") 
 		return f"Event({self.id}): date: {date_str}, min: {self.min_role}, max: {self.max_role}, L: {{ {', '.join(str(peep.id) for peep in self.leaders)} }}, F: {{ {', '.join(str(peep.id) for peep in self.followers)} }}"
 
 class Peep:
@@ -131,6 +132,8 @@ class EventSequence:
 		self.system_weight = 0
 		self.valid_events = []
 
+	def __repr__(self):
+		return (', '.join(str(event.id) for event in self.events))
 	def __str__(self):
 		result = (f"EventSequence: "
 			f"og events: {{ {', '.join(str(event.id) for event in self.events)} }}, "
@@ -220,26 +223,118 @@ def finalize_sequence(sequence):
 
 		sequence.system_weight += peep.priority  # Track total system priority weight
 
-def evaluate_all_event_sequences(og_peeps, og_events):
-	"""Generates and evaluates all possible event sequences based on peep availability and role limits."""
-    
-	def generate_event_sequences():
+def generate_event_sequences(events, peeps):
+	days = 7
+
+	def gen(): 
+		def gen2(events2, days_gap): 
+			min_date_gap  = days_gap * 24 - 1
+			if len(events2) == 1:
+				return [events2]
+
+			result = [] 
+			for a in events2:
+				remainder = []
+				for x in events2: 
+					date_gap = abs((a.date - x.date)/datetime.timedelta(hours=1))
+					if x != a and date_gap >= min_date_gap: 
+						remainder.append(x)
+				z = gen2(remainder, days_gap) 
+
+				for t in z:
+					result.append([a] + t)
+
+			return result
+
+		seqs = gen2(events, days)
+		event_sequences = [] 
+		for seq in seqs: 
+			event_sequences.append(EventSequence(copy.deepcopy(seq), copy.deepcopy(peeps)))
+
+		return event_sequences
+			
+	def with_date_check(days_gap):
+		min_date_gap  = days_gap * 24 - 1
 		"""Generates all possible permutations of event sequences. TODO: sanitize for date spread """
+		def generate_permutations(events, path=[], results=[]):
+			if not events:
+				results.append(EventSequence(copy.deepcopy(path), copy.deepcopy(peeps)))
+				return results
+
+			# if the next event to be evaluated conflicts with any previous event, 
+			# bail early on this permutation 
+			next_event = events[0]
+			conflict = False 
+			for event in path: 
+				date_gap = abs((event.date - next_event.date)/datetime.timedelta(hours=1))
+				if event.id == 1 and next_event.id == 5: 
+					print (date_gap)
+
+				if date_gap < min_date_gap: 
+					conflict = True 
+
+			if conflict: 
+				events.pop(0)
+				generate_permutations(events, path, results)
+				return results
+
+			# if not events: 
+				# results.append(EventSequence(copy.deepcopy(path), copy.deepcopy(peeps)))
+			
+			for i in range(len(events)):
+				generate_permutations(events[:i] + events[i+1:], path + [events[i]], results)
+
+			return results
+
+		sequences = generate_permutations(events)
+
+		# print("Final valid sequences:")
+		# for seq in valid_sequences:
+		# 	print([e.id for e in seq.events])
+
+		print(f"Total valid sequences generated: {len(sequences)}")
+		return sequences
+
+	def without_date_check():
+		"""Generates all possible permutations of event sequences."""
 		event_sequences = []
 		
-		if not len(og_events):
+		if not len(events):
 			return []
-		indices = [i for i in range(len(og_events)) ]
+		indices = [i for i in range(len(events)) ]
 		# brute force. there are better ways...
 		index_sequences = list(itertools.permutations(indices, len(indices)))
 
 		for index_sequence in index_sequences:
 			event_sequence = []
 			for event_index in index_sequence:
-				event_sequence.append(copy.deepcopy(og_events[event_index]))
-			event_sequences.append(EventSequence(event_sequence, copy.deepcopy(og_peeps)))
+				event_sequence.append(copy.deepcopy(events[event_index]))
+			event_sequences.append(EventSequence(event_sequence, copy.deepcopy(peeps)))
 
+		# print("Final event sequences:")
+		# for seq in event_sequences:
+		# 	print([e.id for e in seq.events])
+
+		print(f"Total event sequences generated: {len(event_sequences)}")
 		return event_sequences
+	
+	all_seqs = without_date_check()
+	
+	print (f"Days between events {days}")
+	# filtered_seqs = with_date_check(days)
+	filtered_seqs = gen()
+	print(f"Total valid sequences generated: {len(filtered_seqs)}")
+
+	# for i in range(len(all_seqs)): 
+	# 	for k in range(len(all_seqs[i].events)): 
+	# 		assert all_seqs[i].events[k].id == filtered_seqs[i].events[k].id
+	
+	return filtered_seqs
+
+def evaluate_all_event_sequences(og_peeps, og_events):
+	"""Generates and evaluates all possible event sequences based on peep availability and role limits."""
+    
+	
 	
 	def balance_roles(event, winners):
 		"""Ensures leaders and followers are balanced within an event."""
@@ -280,7 +375,7 @@ def evaluate_all_event_sequences(og_peeps, og_events):
 		finalize_sequence(sequence)
 		
 	# create all the permutation 
-	event_sequences = generate_event_sequences() 
+	event_sequences = generate_event_sequences(og_events, og_peeps)
 	# process every permutation 
 	for sequence in event_sequences:
 		evaluate_sequence(sequence)
