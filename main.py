@@ -5,6 +5,7 @@ import math
 import random
 import json 
 import sys
+import logging 
 
 class Globals:
 	verbosity = 1
@@ -183,7 +184,7 @@ def initialize_data (generate_events=True, generate_peeps=True):
 		start_date = datetime.date.today()
 		events = [Event.generate_test_event(i, start_date) for i in range(num_events)]
 		save_json([event.to_dict() for event in events], event_filename)
-		print(f"Saved {len(events)} Events to {event_filename}.\n"
+		logging.info(f"Saved {len(events)} Events to {event_filename}.\n"
 		 	f"Rename before next run if you want to keep this generated test data.")
 	else:
 		event_data = load_json(event_filename)
@@ -193,7 +194,7 @@ def initialize_data (generate_events=True, generate_peeps=True):
 	if generate_peeps:
 		peeps = [Peep.generate_test_peep(i, i - 1, num_events) for i in range(num_peeps)]
 		save_json([peep.__dict__ for peep in peeps], peep_filename)
-		print(f"Saved {len(peeps)} Peeps to {peep_filename}.\n"
+		logging.info(f"Saved {len(peeps)} Peeps to {peep_filename}.\n"
 		 	f"Rename before next run if you want to keep this generated test data.")
 	else:
 		peep_data = load_json(peep_filename)
@@ -284,9 +285,8 @@ def generate_event_sequences(events, peeps):
 		return sequences
 	
 	
-	print (f"Days between events {Globals.days_between_events}")
 	all_permutations = all_permutations()
-	print(f"All Permutations: {len(all_permutations)}")
+	logging.debug(f"Total permutations: {len(all_permutations)}")
 	
 	# filtered = generate_filtered_sequences()
 	# print(f"Filtered sequences: {len(filtered)}")
@@ -349,8 +349,21 @@ def evaluate_all_event_sequences(og_peeps, og_events):
 	event_sequences = [sequence for sequence in event_sequences if len(sequence.valid_events)]
 	return event_sequences 
 	
+def setup_logging():
+	logging.basicConfig(level=logging.DEBUG,  # Root logger level
+					format='%(asctime)s - %(levelname)s - %(message)s',
+					handlers=[
+						logging.StreamHandler(),  # Console handler
+						logging.FileHandler('debug.log')  # File handler
+					])
+
+	# Set levels for each handler
+	logging.getLogger().handlers[0].setLevel(logging.INFO)  # Console handler: INFO and above
+	logging.getLogger().handlers[1].setLevel(logging.DEBUG)  # File handler: DEBUG and above
 
 def main():
+	setup_logging()
+	
 	# should we generate new lists? otherwise read from file 
 	generate_events = False 
 	generate_peeps = False 
@@ -419,22 +432,18 @@ def main():
 		return removed 
 		
 	peeps, events = initialize_data(generate_events, generate_peeps)
+	logging.debug("Initial Peeps")
+	logging.debug(Peep.peeps_str(peeps))
+
 	sanitized_events = sanitize_events(events)
+	logging.info(f"Sanitized Events: {len(sanitized_events)}/{len(events)}")
 
 	if len(sanitized_events) > 7: 
-		print(f"Found {len(sanitized_events)} events with enough available peeps; this results in too many permutations to compute. " 
-				f"Please remove 1 or more events and try again.")
+		logging.critical(
+			f"Found {len(sanitized_events)} events with enough available peeps; this results in too many permutations to compute. " 
+			f"Please remove 1 or more events and try again."
+			)
 		sys.exit()
-
-	if Globals.verbosity > 0: 
-		print("=====")
-	if Globals.verbosity > 1: 
-		print("Initial State")
-		print(Peep.peeps_str(peeps))
-		print("=====")
-	if Globals.verbosity > 0: 
-		print(f"Sanitized Events: {len(sanitized_events)}/{len(events)}")
-		print("=====")
 
 	event_sequences = evaluate_all_event_sequences(peeps, sanitized_events)
 	# remove duplicates:sequences with the same event ids in the same order, and the same leader/followers assigned
@@ -444,25 +453,20 @@ def main():
 	sorted_unique = sorted(unique_sequences, key=lambda sequence: (-sequence.num_unique_attendees, -sequence.system_weight))
 	
 	# remove any sequences where any two event dates conflict (based on Globals.days_between_events)
+	logging.info(f"Removing sequences with conflicting events; days between events = {Globals.days_between_events}")
 	removed = remove_conflicts(sorted_unique)
-	
-	
-	if Globals.verbosity > 0:
-		print(f"Removed {len(removed)} sequences with conflicts.")
-	if Globals.verbosity > 1:
-		print(f"Removed sequences: {removed}")
+	logging.info(f"Removed {len(removed)} sequences with conflicts.")
+	logging.debug(f"Removed sequences: {removed}")
 
 	best_sequence = sorted_unique[0] if sorted_unique else None
-	
-	if Globals.verbosity > 0: 
-		if best_sequence:
-			print(f"{best_sequence}")
-			print("=====")
-			if Globals.verbosity > 1: 
-				print("Final State")
-				print(Peep.peeps_str(best_sequence.peeps))
-		else:
-			print("No Winner")
+	if best_sequence:
+		logging.info(f"Result:")
+		logging.info(f"{best_sequence}")
+			
+		logging.debug("Final Peeps:")
+		logging.debug(Peep.peeps_str(best_sequence.peeps))
+	else:
+		logging.info(f"No sequence found; couldn't fill any events.")
 
 if __name__ == "__main__":
 	for i in range(1):
