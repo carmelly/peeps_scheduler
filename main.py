@@ -1,7 +1,6 @@
 import datetime
 import copy
 import itertools
-import math
 import random
 import json 
 import sys
@@ -53,6 +52,22 @@ class Event:
 			max_role=random.randint(6, 8),
 		)
 
+	@classmethod
+	def sanitize_events(cls, events, peeps):
+		"""Sanitize events to ensure there are enough leaders and followers to fill roles."""
+		valid_events = []
+		removed_events = []
+		for event in events:
+			num_leaders = sum(1 for peep in peeps if event.id in peep.availability and peep.role == Globals.leader)
+			num_followers = sum(1 for peep in peeps if event.id in peep.availability and peep.role == Globals.follower)
+
+			if num_leaders >= event.min_role and num_followers >= event.min_role:
+				valid_events.append(event)
+			else:
+				removed_events.append(event)
+		
+		return valid_events
+	
 	def to_dict(self):
 		return {
 			"id": self.id,
@@ -67,6 +82,15 @@ class Event:
 		data["date"] = datetime.datetime.strptime(data["date"], "%Y-%m-%d %H:%M") 
 		return Event(**data)
 
+	@staticmethod
+	def events_conflict(event1, event2, days_between_events):
+		hours_gap = (days_between_events * 24) - 1 # allow event at the same time with proper days apart 
+		"""Returns True if events are too close together based on the required gap."""
+		date_gap_hours = abs((event1.date - event2.date) /datetime.timedelta(hours=1))
+		return date_gap_hours < hours_gap
+	
+	
+	
 	def __repr__(self): 
 		return str(self)
 	def __str__(self):
@@ -83,6 +107,31 @@ class Peep:
 		self.event_limit = args.get("event_limit", 1)
 		self.role = args.get("role", "")
 		self.num_events = 0
+
+	def can_attend(self, event):
+		"""Checks if a peep can attend an event based on peep availability, role limit, and personal event limit."""
+		# meets the person's availability
+		if event.id not in self.availability:
+			return False
+
+		# space for the role
+		if len(event.role(self.role)) >= event.max_role:
+			return False
+
+		# personal limit for the month
+		if self.num_events >= self.event_limit:
+			return False
+
+		return True
+	
+	@staticmethod
+	def update_event_attendees(peeps, winners):
+		"""For all successful attendees, reset priority and send to the back of the line."""
+		for peep in winners:
+			peep.num_events += 1
+			peep.priority = 0  # Reset priority after successful attendance
+			peeps.remove(peep)
+			peeps.append(peep)  # Move successful peeps to the end
 
 	@classmethod
 	def generate_test_peep(cls, id, index, event_count):
@@ -143,14 +192,47 @@ class EventSequence:
 				(event.id, tuple(sorted(peep.id for peep in event.leaders)), tuple(sorted(peep.id for peep in event.followers)))
 				for event in self.valid_events
 			)
+	
+	@staticmethod
+	def get_unique_sequences(sequences): 
+		"""Removes duplicate sequences and returns only unique ones."""
+		unique_sequences = []
+		seen_sequences = set()
+
+		for sequence in sequences:
+			seq_signature = sequence.get_signature()
+			if seq_signature not in seen_sequences:
+				seen_sequences.add(seq_signature)
+				unique_sequences.append(sequence)
+
+		return unique_sequences  
+	
+	def has_conflict(self, days_between_events): 
+		events = self.valid_events 
+		for i, event_a in enumerate(events): 
+			other_events = events[:i] + events[i + 1:]
+			for event_b in other_events: 
+				if Event.events_conflict(event_a, event_b, days_between_events): 
+					return True 
+		return False 
 		
+	@staticmethod
+	def pop_until_no_conflict(sequences, days_between_events): 
+		"""Pops event sequences with conflicts until one without conflict is found.
+
+		This method pops event sequences from the front of the list while they contain 
+		conflicting events, and stops once a sequence without conflicts is found.
+		"""
+		removed = [] 
+		while sequences and EventSequence.has_conflict(sequences[0], days_between_events): 
+			removed.append(sequences.pop(0))
+		return removed
 
 		
 	def __repr__(self):
 		return (', '.join(str(event.id) for event in self.events))
 	def __str__(self):
 		result = (f"EventSequence: "
-			f"og events: {{ {', '.join(str(event.id) for event in self.events)} }}, "
 			f"valid events: {{ {', '.join(str(event.id) for event in self.valid_events)} }}, " 
 			f"unique_peeps {self.num_unique_attendees}/{len(self.peeps)}, system_weight {self.system_weight}\n"
 		)
@@ -202,32 +284,6 @@ def initialize_data (generate_events=True, generate_peeps=True):
 
 	sorted_peeps = sorted(peeps, reverse=True, key=lambda peep: peep.priority)
 	return sorted_peeps, events
-
-
-def can_attend(peep, event):
-	"""Checks if a peep can attend an event based on peep availaility, role limit and personal event limit """
-	
-	# meets the person's availability
-	if event.id not in peep.availability:
-		return False
-
-	# space for the role
-	if len(event.role(peep.role)) >= event.max_role:
-		return False
-
-	# personal limit for month
-	if peep.num_events >= peep.event_limit:
-		return False
-
-	return True
-
-def update_event_attendees(peeps, winners):
-	"""For all successful attendees, reset priority and send to the back of the line  """
-	for peep in winners:
-		peep.num_events += 1
-		peep.priority = 0  # Reset priority after successful attendance
-		peeps.remove(peep)
-		peeps.append(peep)  # Move successful peeps to the end
 
 def finalize_sequence(sequence):
 	"""Finalizes a sequence by increasing priority for unsuccessful peeps and tracking metrics."""
@@ -322,7 +378,7 @@ def evaluate_all_event_sequences(og_peeps, og_events):
 
 			# add peeps to event 
 			for peep in sorted_peeps:
-				if can_attend(peep, event):
+				if peep.can_attend(event):
 					event.role(peep.role).append(peep)
 					winners.append(peep)
 				else:
@@ -330,7 +386,7 @@ def evaluate_all_event_sequences(og_peeps, og_events):
 
 			if event.is_valid(): # if we have enough to fill event
 				balance_roles(event, winners)
-				update_event_attendees(sorted_peeps, winners)
+				Peep.update_event_attendees(sorted_peeps, winners)
 				sequence.peeps = sorted_peeps
 				sequence.valid_events.append(event)
 			else:
@@ -368,74 +424,11 @@ def main():
 	generate_events = False 
 	generate_peeps = False 
 	
-	# remove events where there are not enough available to fill roles
-	def sanitize_events(events):
-		valid_events = []
-		removed_events = []
-		for event in events:
-			num_leaders = 0
-			num_followers = 0
-			for peep in peeps:
-				if event.id in peep.availability:
-					if peep.role == Globals.leader:
-						num_leaders += 1
-					else:
-						num_followers += 1
-
-			if not (num_leaders < event.min_role or num_followers < event.min_role):
-				valid_events.append(event)
-			else:
-				removed_events.append(event)
-
-		return valid_events
-	def events_conflict(event1, event2, days_between_events):
-		"""Returns True if events are too close together based on the required gap."""
-		date_gap_hours = abs((event1.date - event2.date) /datetime.timedelta(hours=1))
-		return date_gap_hours < (days_between_events * 24)  # Convert days to hours
-	
-	def has_conflict(event_sequence): 
-		events = event_sequence.valid_events 
-		for i, event_a in enumerate(events): 
-			other_events = events[:i] + events[i + 1:]
-			for event_b in other_events: 
-				if events_conflict(event_a, event_b, Globals.days_between_events): 
-					return True 
-		return False 
-
-	def get_unique_sequences(sequences): 
-		# Remove duplicate sequences based on valid_events
-		unique_sequences = []
-		seen_sequences = set()
-
-		for sequence in sequences:
-			seq_signature = sequence.get_signature()
-			if seq_signature not in seen_sequences:
-				seen_sequences.add(seq_signature)
-				unique_sequences.append(sequence)
-			else:
-				# Debugging: Assert that leaders & followers are the same for all duplicates
-				assert all(
-					event.leaders == sequence.valid_events[i].leaders and event.followers == sequence.valid_events[i].followers
-					for i, event in enumerate(sequence.valid_events)
-				), "Duplicate sequences have different leader/follower lists!"
-
-		return unique_sequences  
-	
-	def remove_conflicts(sequences): 
-		''' expects a sorted list. removes top sequences from the list that have any two events that conflict with each other, 
-			stops when it reaches a sequence with no conflicts.
-			modifies list in place. returns a list of removed sequences. 
-		'''
-		removed = [] 
-		while sequences and has_conflict(sequences[0]): 
-			removed.append(sequences.pop(0))
-		return removed 
-		
 	peeps, events = initialize_data(generate_events, generate_peeps)
 	logging.debug("Initial Peeps")
 	logging.debug(Peep.peeps_str(peeps))
 
-	sanitized_events = sanitize_events(events)
+	sanitized_events = Event.sanitize_events(events, peeps)
 	logging.info(f"Sanitized Events: {len(sanitized_events)}/{len(events)}")
 
 	if len(sanitized_events) > 7: 
@@ -445,23 +438,25 @@ def main():
 			)
 		sys.exit()
 
+	# process all event sequences, assigning peeps in order and determining valid events
 	event_sequences = evaluate_all_event_sequences(peeps, sanitized_events)
-	# remove duplicates:sequences with the same event ids in the same order, and the same leader/followers assigned
-	unique_sequences = get_unique_sequences(event_sequences)
+	
+	# remove duplicates:sequences with the same valid event ids in the same order, and the same leader/followers assigned
+	unique_sequences = EventSequence.get_unique_sequences(event_sequences)
+	logging.info(f"Found {len(unique_sequences)} unique sequences")
 
 	# sort by unique attendees (desc) and system weight (desc)
 	sorted_unique = sorted(unique_sequences, key=lambda sequence: (-sequence.num_unique_attendees, -sequence.system_weight))
 	
 	# remove any sequences where any two event dates conflict (based on Globals.days_between_events)
-	logging.info(f"Removing sequences with conflicting events; days between events = {Globals.days_between_events}")
-	removed = remove_conflicts(sorted_unique)
-	logging.info(f"Removed {len(removed)} sequences with conflicts.")
+	days_between_events = Globals.days_between_events
+	removed = EventSequence.pop_until_no_conflict(sorted_unique, days_between_events)
+	logging.info(f"Removed {len(removed)} sequences with conflicts; days between events = {days_between_events}")
 	logging.debug(f"Removed sequences: {removed}")
 
 	best_sequence = sorted_unique[0] if sorted_unique else None
 	if best_sequence:
-		logging.info(f"Result:")
-		logging.info(f"{best_sequence}")
+		logging.info(f"Best {best_sequence}")
 			
 		logging.debug("Final Peeps:")
 		logging.debug(Peep.peeps_str(best_sequence.peeps))
