@@ -7,7 +7,7 @@ import json
 
 class Globals:
 	verbosity = 1
-	days_between_events = 7
+	days_between_events = 0
 	leader = "Leader"
 	follower = "Follower"
 
@@ -132,6 +132,18 @@ class EventSequence:
 		self.system_weight = 0
 		self.valid_events = []
 
+	def get_signature(self): 
+		""" Returns a tuple that uniquely represents the EventSequence
+			An EventSequence is considered unique if it contains the same *valid* events in the same order, 
+			and the leader/follower lists for each event contain the same people. 
+		"""
+		return tuple(
+				(event.id, tuple(sorted(peep.id for peep in event.leaders)), tuple(sorted(peep.id for peep in event.followers)))
+				for event in self.valid_events
+			)
+		
+
+		
 	def __repr__(self):
 		return (', '.join(str(event.id) for event in self.events))
 	def __str__(self):
@@ -156,6 +168,8 @@ def load_json(filename):
             return json.load(f)
     except FileNotFoundError:
         return None
+	
+
 	
 def initialize_data (generate_events=True, generate_peeps=True):
 	num_events = 7
@@ -374,6 +388,35 @@ def main():
 					return True 
 		return False 
 
+	def get_unique_sequences(sequences): 
+		# Remove duplicate sequences based on valid_events
+		unique_sequences = []
+		seen_sequences = set()
+
+		for sequence in sequences:
+			seq_signature = sequence.get_signature()
+			if seq_signature not in seen_sequences:
+				seen_sequences.add(seq_signature)
+				unique_sequences.append(sequence)
+			else:
+				# Debugging: Assert that leaders & followers are the same for all duplicates
+				assert all(
+					event.leaders == sequence.valid_events[i].leaders and event.followers == sequence.valid_events[i].followers
+					for i, event in enumerate(sequence.valid_events)
+				), "Duplicate sequences have different leader/follower lists!"
+
+		return unique_sequences  
+	
+	def remove_conflicts(sequences): 
+		''' expects a sorted list. removes top sequences from the list that have any two events that conflict with each other, 
+			stops when it reaches a sequence with no conflicts.
+			modifies list in place. returns a list of removed sequences. 
+		'''
+		removed = [] 
+		while sequences and has_conflict(sequences[0]): 
+			removed.append(sequences.pop(0))
+		return removed 
+		
 	peeps, events = initialize_data(generate_events, generate_peeps)
 	sanitized_events = sanitize_events(events)
 
@@ -388,20 +431,22 @@ def main():
 		print("=====")
 
 	event_sequences = evaluate_all_event_sequences(peeps, sanitized_events)
+	# remove duplicates:sequences with the same event ids in the same order, and the same leader/followers assigned
+	unique_sequences = get_unique_sequences(event_sequences)
 
-	# sort by unique attendees and whichever result has the least system weight
-	sorted_sequences = sorted(event_sequences, key=lambda sequence: (-sequence.num_unique_attendees, -sequence.system_weight))
+	# sort by unique attendees (desc) and system weight (desc)
+	sorted_unique = sorted(unique_sequences, key=lambda sequence: (-sequence.num_unique_attendees, -sequence.system_weight))
 	
-	removed = [] 
-	while sorted_sequences and has_conflict(sorted_sequences[0]): 
-		removed.append(sorted_sequences.pop(0))
+	# remove any sequences where any two event dates conflict (based on Globals.days_between_events)
+	removed = remove_conflicts(sorted_unique)
+	
 	
 	if Globals.verbosity > 0:
 		print(f"Removed {len(removed)} sequences with conflicts.")
 	if Globals.verbosity > 1:
 		print(f"Removed sequences: {removed}")
-			
-	best_sequence = sorted_sequences[0] if sorted_sequences else None
+
+	best_sequence = sorted_unique[0] if sorted_unique else None
 	
 	if Globals.verbosity > 0: 
 		if best_sequence:
