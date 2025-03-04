@@ -7,7 +7,7 @@ import json
 
 class Globals:
 	verbosity = 1
-	days_between_events = 6
+	days_between_events = 7
 	leader = "Leader"
 	follower = "Follower"
 
@@ -273,16 +273,16 @@ def generate_event_sequences(events, peeps):
 	all_permutations = all_permutations()
 	print(f"All Permutations: {len(all_permutations)}")
 	
-	filtered = generate_filtered_sequences()
-	print(f"Filtered sequences: {len(filtered)}")
+	# filtered = generate_filtered_sequences()
+	# print(f"Filtered sequences: {len(filtered)}")
 
-	def validate_filtered_sequences(all_permutations, filtered):
-		# wip
-		return True
+	# def validate_filtered_sequences(all_permutations, filtered):
+	# 	# wip
+	# 	return True
 	
-	assert(validate_filtered_sequences(all_permutations, filtered))
+	# assert(validate_filtered_sequences(all_permutations, filtered))
 	
-	return filtered
+	return all_permutations
 
 def evaluate_all_event_sequences(og_peeps, og_events):
 	"""Generates and evaluates all possible event sequences based on peep availability and role limits."""
@@ -360,6 +360,19 @@ def main():
 				removed_events.append(event)
 
 		return valid_events
+	def events_conflict(event1, event2, days_between_events):
+		"""Returns True if events are too close together based on the required gap."""
+		date_gap_hours = abs((event1.date - event2.date) /datetime.timedelta(hours=1))
+		return date_gap_hours < (days_between_events * 24)  # Convert days to hours
+	
+	def has_conflict(event_sequence): 
+		events = event_sequence.valid_events 
+		for i, event_a in enumerate(events): 
+			other_events = events[:i] + events[i + 1:]
+			for event_b in other_events: 
+				if events_conflict(event_a, event_b, Globals.days_between_events): 
+					return True 
+		return False 
 
 	peeps, events = initialize_data(generate_events, generate_peeps)
 	sanitized_events = sanitize_events(events)
@@ -377,9 +390,19 @@ def main():
 	event_sequences = evaluate_all_event_sequences(peeps, sanitized_events)
 
 	# sort by unique attendees and whichever result has the least system weight
-	sorted_sequences = sorted(event_sequences, reverse=True, key=lambda sequence: (sequence.num_unique_attendees, sequence.system_weight))
+	sorted_sequences = sorted(event_sequences, key=lambda sequence: (-sequence.num_unique_attendees, -sequence.system_weight))
+	
+	removed = [] 
+	while sorted_sequences and has_conflict(sorted_sequences[0]): 
+		removed.append(sorted_sequences.pop(0))
+	
+	if Globals.verbosity > 0:
+		print(f"Removed {len(removed)} sequences with conflicts.")
+	if Globals.verbosity > 1:
+		print(f"Removed sequences: {removed}")
+			
 	best_sequence = sorted_sequences[0] if sorted_sequences else None
-
+	
 	if Globals.verbosity > 0: 
 		if best_sequence:
 			print(f"{best_sequence}")
