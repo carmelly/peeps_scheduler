@@ -7,7 +7,7 @@ import json
 
 class Globals:
 	verbosity = 1
-	days_between_events = 7
+	days_between_events = 6
 	leader = "Leader"
 	follower = "Follower"
 
@@ -224,118 +224,69 @@ def finalize_sequence(sequence):
 		sequence.system_weight += peep.priority  # Track total system priority weight
 
 def generate_event_sequences(events, peeps):
-	days = 7
-
-	def gen(): 
-		def gen2(events2, days_gap): 
-			min_date_gap  = days_gap * 24 - 1
-			if len(events2) == 1:
-				return [events2]
+	def generate_filtered_sequences(): 
+		def gen_recursive(in_events): 
+			min_date_gap  = Globals.days_between_events * 24 - 1
+			if len(in_events) == 1:
+				return [in_events]
 
 			result = [] 
-			for a in events2:
+			for a in in_events:
 				remainder = []
-				for x in events2: 
-					date_gap = abs((a.date - x.date)/datetime.timedelta(hours=1))
-					if x != a and date_gap >= min_date_gap: 
-						remainder.append(x)
-				z = gen2(remainder, days_gap) 
+				for b in in_events: 
+					date_gap = abs((a.date - b.date)/datetime.timedelta(hours=1))
+					if b != a and date_gap >= min_date_gap: 
+						remainder.append(b)
+				tail_results = gen_recursive(remainder) 
 
-				for t in z:
-					result.append([a] + t)
+				for tail in tail_results:
+					result.append([a] + tail)
 
 			return result
 
-		seqs = gen2(events, days)
-		event_sequences = [] 
+		seqs = gen_recursive(events)
+		sequences = [] 
 		for seq in seqs: 
-			event_sequences.append(EventSequence(copy.deepcopy(seq), copy.deepcopy(peeps)))
+			sequences.append(EventSequence(copy.deepcopy(seq), copy.deepcopy(peeps)))
 
-		return event_sequences
-			
-	def with_date_check(days_gap):
-		min_date_gap  = days_gap * 24 - 1
-		"""Generates all possible permutations of event sequences. TODO: sanitize for date spread """
-		def generate_permutations(events, path=[], results=[]):
-			if not events:
-				results.append(EventSequence(copy.deepcopy(path), copy.deepcopy(peeps)))
-				return results
-
-			# if the next event to be evaluated conflicts with any previous event, 
-			# bail early on this permutation 
-			next_event = events[0]
-			conflict = False 
-			for event in path: 
-				date_gap = abs((event.date - next_event.date)/datetime.timedelta(hours=1))
-				if event.id == 1 and next_event.id == 5: 
-					print (date_gap)
-
-				if date_gap < min_date_gap: 
-					conflict = True 
-
-			if conflict: 
-				events.pop(0)
-				generate_permutations(events, path, results)
-				return results
-
-			# if not events: 
-				# results.append(EventSequence(copy.deepcopy(path), copy.deepcopy(peeps)))
-			
-			for i in range(len(events)):
-				generate_permutations(events[:i] + events[i+1:], path + [events[i]], results)
-
-			return results
-
-		sequences = generate_permutations(events)
-
-		# print("Final valid sequences:")
-		# for seq in valid_sequences:
-		# 	print([e.id for e in seq.events])
-
-		print(f"Total valid sequences generated: {len(sequences)}")
 		return sequences
-
-	def without_date_check():
+			
+	def all_permutations():
 		"""Generates all possible permutations of event sequences."""
-		event_sequences = []
+		sequences = []
 		
 		if not len(events):
 			return []
 		indices = [i for i in range(len(events)) ]
-		# brute force. there are better ways...
 		index_sequences = list(itertools.permutations(indices, len(indices)))
 
 		for index_sequence in index_sequences:
 			event_sequence = []
 			for event_index in index_sequence:
 				event_sequence.append(copy.deepcopy(events[event_index]))
-			event_sequences.append(EventSequence(event_sequence, copy.deepcopy(peeps)))
+			sequences.append(EventSequence(event_sequence, copy.deepcopy(peeps)))
 
-		# print("Final event sequences:")
-		# for seq in event_sequences:
-		# 	print([e.id for e in seq.events])
+		return sequences
+	
+	
+	print (f"Days between events {Globals.days_between_events}")
+	all_permutations = all_permutations()
+	print(f"All Permutations: {len(all_permutations)}")
+	
+	filtered = generate_filtered_sequences()
+	print(f"Filtered sequences: {len(filtered)}")
 
-		print(f"Total event sequences generated: {len(event_sequences)}")
-		return event_sequences
+	def validate_filtered_sequences(all_permutations, filtered):
+		# wip
+		return True
 	
-	all_seqs = without_date_check()
+	assert(validate_filtered_sequences(all_permutations, filtered))
 	
-	print (f"Days between events {days}")
-	# filtered_seqs = with_date_check(days)
-	filtered_seqs = gen()
-	print(f"Total valid sequences generated: {len(filtered_seqs)}")
-
-	# for i in range(len(all_seqs)): 
-	# 	for k in range(len(all_seqs[i].events)): 
-	# 		assert all_seqs[i].events[k].id == filtered_seqs[i].events[k].id
-	
-	return filtered_seqs
+	return filtered
 
 def evaluate_all_event_sequences(og_peeps, og_events):
 	"""Generates and evaluates all possible event sequences based on peep availability and role limits."""
     
-	
-	
 	def balance_roles(event, winners):
 		"""Ensures leaders and followers are balanced within an event."""
 		if len(event.leaders) != len(event.followers):
