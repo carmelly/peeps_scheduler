@@ -183,29 +183,42 @@ class EventSequence:
 		self.system_weight = 0
 		self.valid_events = []
 
-	def get_signature(self): 
-		""" Returns a tuple that uniquely represents the EventSequence
-			An EventSequence is considered unique if it contains the same *valid* events in the same order, 
-			and the leader/follower lists for each event contain the same people. 
+	def __key__(self):
 		"""
+        Returns a tuple that uniquely identifies the EventSequence.
+
+        The key is based on:
+        1. Event IDs: The unique identifier of each valid event in the sequence.
+        2. Leader IDs: A sorted list of leader IDs for each event.
+        3. Follower IDs: A sorted list of follower IDs for each event.
+
+        The combination of these factors ensures that two EventSequence objects are considered equal if they contain 
+		the same events with the same leaders and followers.
+
+        Returns:
+            tuple: A tuple of (event ID, sorted leader IDs, sorted follower IDs) for each event in the sequence.
+        """
 		return tuple(
-				(event.id, tuple(sorted(peep.id for peep in event.leaders)), tuple(sorted(peep.id for peep in event.followers)))
-				for event in self.valid_events
-			)
-	
+			(event.id, tuple(sorted(peep.id for peep in event.leaders)), tuple(sorted(peep.id for peep in event.followers)))
+			for event in self.valid_events
+		)
+
+	def __eq__(self, other):
+		"""Check equality based on the event sequence key."""
+		if isinstance(other, EventSequence):
+			return self.__key__() == other.__key__()
+		return False
+
+	def __hash__(self):
+		"""Generate a hash value based on the event sequence key."""
+		return hash(self.__key__())
+
 	@staticmethod
 	def get_unique_sequences(sequences): 
-		"""Removes duplicate sequences and returns only unique ones."""
-		unique_sequences = []
-		seen_sequences = set()
-
-		for sequence in sequences:
-			seq_signature = sequence.get_signature()
-			if seq_signature not in seen_sequences:
-				seen_sequences.add(seq_signature)
-				unique_sequences.append(sequence)
-
-		return unique_sequences  
+		"""
+        Returns a list of unique EventSequences based on their valid events.
+		"""
+		return list({sequence: sequence for sequence in sequences}.values())
 	
 	def has_conflict(self, days_between_events): 
 		events = self.valid_events 
