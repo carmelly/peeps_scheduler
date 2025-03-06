@@ -104,12 +104,12 @@ class Event:
 	def get_leaders_str(self):
 		"""Returns a comma-separated string of first names of leaders."""
 		leaders = [attendee.name.split()[0] for attendee in self.leaders]
-		return f"Leaders({len(self.leaders)}):" + ", ".join(leaders)
+		return f"Leaders({len(self.leaders)}): " + ", ".join(leaders)
 
 	def get_followers_str(self):
 		"""Returns a comma-separated string of first names of followers."""
 		followers = [attendee.name.split()[0] for attendee in self.followers]
-		return  f"Followers({len(self.followers)}):" + ", ".join(followers)
+		return  f"Followers({len(self.followers)}): " + ", ".join(followers)
 	
 class Peep:
 	def __init__(self, **kwargs):
@@ -267,8 +267,8 @@ class EventSequence:
 		result += f"\t"
 		for event in self.valid_events: 
 			result += f"\n\t{event}"
-			result += f"\n\t  Leaders: {event.get_leaders_str()}"
-			result += f"\n\t  Followers: {event.get_followers_str()}"
+			result += f"\n\t  {event.get_leaders_str()}"
+			result += f"\n\t  {event.get_followers_str()}"
 
 		return result
 
@@ -327,111 +327,79 @@ def finalize_sequence(sequence):
 
 		sequence.system_weight += peep.priority  # Track total system priority weight
 
-def generate_event_sequences(events, peeps):
-	def generate_filtered_sequences(): 
-		def gen_recursive(in_events): 
-			min_date_gap  = Globals.days_between_events * 24 - 1
-			if len(in_events) == 1:
-				return [in_events]
+def generate_event_permutations(events):
+    """Generates all possible permutations of event sequences as a list of event ids."""
+    
+    if not events:
+        return []
+    event_ids = [event.id for event in events]
+    index_sequences = list(itertools.permutations(event_ids, len(event_ids)))
 
-			result = [] 
-			for a in in_events:
-				remainder = []
-				for b in in_events: 
-					date_gap = abs((a.date - b.date)/datetime.timedelta(hours=1))
-					if b != a and date_gap >= min_date_gap: 
-						remainder.append(b)
-				tail_results = gen_recursive(remainder) 
-
-				for tail in tail_results:
-					result.append([a] + tail)
-
-			return result
-
-		seqs = gen_recursive(events)
-		sequences = [] 
-		for seq in seqs: 
-			sequences.append(EventSequence(copy.deepcopy(seq), copy.deepcopy(peeps)))
-
-		return sequences
-			
-	def all_permutations():
-		"""Generates all possible permutations of event sequences."""
-		sequences = []
-		
-		if not len(events):
-			return []
-		indices = [i for i in range(len(events)) ]
-		index_sequences = list(itertools.permutations(indices, len(indices)))
-
-		for index_sequence in index_sequences:
-			event_sequence = []
-			for event_index in index_sequence:
-				event_sequence.append(copy.deepcopy(events[event_index]))
-			sequences.append(EventSequence(event_sequence, copy.deepcopy(peeps)))
-
-		return sequences
-	
-	
-	
-	
-	# filtered = generate_filtered_sequences()
-	# logging.debug(f"Filtered sequences: {len(filtered)}")
-
-	all_permutations = all_permutations()
-	logging.debug(f"Total permutations: {len(all_permutations)}")
-	
-	return all_permutations
+    logging.debug(f"Total permutations: {len(index_sequences)}")
+    return index_sequences
 
 def evaluate_all_event_sequences(og_peeps, og_events):
-	"""Generates and evaluates all possible event sequences based on peep availability and role limits."""
+    """Generates and evaluates all possible event sequences based on peep availability and role limits."""
     
-	def balance_roles(event, winners):
-		"""Ensures leaders and followers are balanced within an event."""
-		if len(event.leaders) != len(event.followers):
-			larger_group = event.leaders if len(event.leaders) > len(event.followers) else event.followers
-			while len(event.leaders) != len(event.followers):
-				winners.remove(larger_group.pop())
+    def balance_roles(event, winners):
+        """Ensures leaders and followers are balanced within an event."""
+        if len(event.leaders) != len(event.followers):
+            larger_group = event.leaders if len(event.leaders) > len(event.followers) else event.followers
+            while len(event.leaders) != len(event.followers):
+                if not larger_group:
+                    logging.warning(f"Unable to balance roles for event {event.id}.")
+                    break
+                winners.remove(larger_group.pop())
 
-		assert len(event.leaders) == len(event.followers) >= event.min_role
-		assert len(event.leaders) <= event.max_role
+        assert len(event.leaders) == len(event.followers) >= event.min_role
+        assert len(event.leaders) <= event.max_role
 
-	def evaluate_sequence(sequence):
-		"""Evaluates an event sequence by assigning peeps to events and updating priorities and list order."""
-		for event in sequence.events:
-			# always sort: this shouldn't actually do anything unless you start manipulating priorities within a sequence(TBD?) 
-			sorted_peeps = sorted(sequence.peeps, reverse=True, key=lambda peep: peep.priority)
-			winners = []
-			losers = []
+    def evaluate_sequence(sequence):
+        """Evaluates an event sequence by assigning peeps to events and updating priorities and list order."""
+        for event in sequence.events:
+            # Sort by priority (descending)
+            sorted_peeps = sorted(sequence.peeps, reverse=True, key=lambda peep: peep.priority)
+            winners = []
+            losers = []
 
-			# add peeps to event 
-			for peep in sorted_peeps:
-				if peep.can_attend(event):
-					event.role(peep.role).append(peep)
-					winners.append(peep)
-				else:
-					losers.append(peep)
+            # Add peeps to event 
+            for peep in sorted_peeps:
+                if peep.can_attend(event):
+                    event.role(peep.role).append(peep)
+                    winners.append(peep)
+                else:
+                    losers.append(peep)
 
-			if event.is_valid(): # if we have enough to fill event
-				balance_roles(event, winners)
-				Peep.update_event_attendees(sorted_peeps, winners)
-				sequence.peeps = sorted_peeps
-				sequence.valid_events.append(event)
-			else:
-				event.leaders.clear()
-				event.followers.clear() 
+            if event.is_valid():  # If we have enough to fill the event
+                balance_roles(event, winners)
+                Peep.update_event_attendees(sorted_peeps, winners)
+                sequence.peeps = sorted_peeps
+                sequence.valid_events.append(event)
+            else:
+                event.leaders.clear()
+                event.followers.clear() 
 
-		# end of sequence, update peeps who didn't make it 
-		finalize_sequence(sequence)
-		
-	# create all the permutation 
-	event_sequences = generate_event_sequences(og_events, og_peeps)
-	# process every permutation 
-	for sequence in event_sequences:
-		evaluate_sequence(sequence)
-	# only include the sequences that had valid events
-	event_sequences = [sequence for sequence in event_sequences if len(sequence.valid_events)]
-	return event_sequences 
+        # End of sequence, update peeps who didn't make it 
+        finalize_sequence(sequence)
+        
+    # Create all event permutations
+    event_perm = generate_event_permutations(og_events)
+    event_map = {event.id: event for event in og_events}  # Faster lookup
+    event_sequences = [] 
+
+    for perm in event_perm: 
+        # Create an EventSequence object for this permutation 
+        events = [copy.deepcopy(event_map[id]) for id in perm] 
+        event_sequence = EventSequence(events, copy.deepcopy(og_peeps))
+
+        # Evaluate the EventSequence 
+        evaluate_sequence(event_sequence)
+
+        # Only include sequences with valid events
+        if event_sequence.valid_events:
+            event_sequences.append(event_sequence)
+    
+    return event_sequences
 	
 def setup_logging():
 	logging.basicConfig(level=logging.DEBUG,  # Root logger level
@@ -537,8 +505,8 @@ def main():
 	generate_events = False 
 	generate_peeps = False 
 	
-	# peeps, events = initialize_data(generate_events, generate_peeps)
-	peeps, events = initialize_data_from_json()
+	peeps, events = initialize_data(generate_events, generate_peeps)
+	# peeps, events = initialize_data_from_json()
 	
 
 	logging.debug("Initial Peeps")
