@@ -509,11 +509,11 @@ def find_event_to_remove(events, peeps):
         return candidates[0]
     
     # Use weight as a tiebreaker
-    event_weights = {event.id: sum(peep.priority for peep in peeps if event.id in peep.availability) for event in candidates}
+    event_weights = {event: sum(peep.priority for peep in peeps if event.id in peep.availability) for event in candidates}
     event_to_remove = min(event_weights, key=event_weights.get)
     
     logging.info(f"Tie on overlap. Removing event based on lowest weight")
-    return event_to_remove[0]
+    return event_to_remove
 
 def remove_high_overlap_events(events, peeps, max_events):
     """
