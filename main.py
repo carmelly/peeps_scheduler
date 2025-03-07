@@ -357,13 +357,11 @@ def evaluate_all_event_sequences(og_peeps, og_events):
     def evaluate_sequence(sequence):
         """Evaluates an event sequence by assigning peeps to events and updating priorities and list order."""
         for event in sequence.events:
-            # Sort by priority (descending)
-            sorted_peeps = sorted(sequence.peeps, reverse=True, key=lambda peep: peep.priority)
             winners = []
             losers = []
 
             # Add peeps to event 
-            for peep in sorted_peeps:
+            for peep in sequence.peeps:
                 if peep.can_attend(event):
                     event.role(peep.role).append(peep)
                     winners.append(peep)
@@ -372,8 +370,7 @@ def evaluate_all_event_sequences(og_peeps, og_events):
 
             if event.is_valid():  # If we have enough to fill the event
                 balance_roles(event, winners)
-                Peep.update_event_attendees(sorted_peeps, winners)
-                sequence.peeps = sorted_peeps
+                Peep.update_event_attendees(sequence.peeps, winners)
                 sequence.valid_events.append(event)
             else:
                 event.leaders.clear()
@@ -507,7 +504,11 @@ def main():
 	
 	peeps, events = initialize_data(generate_events, generate_peeps)
 	# peeps, events = initialize_data_from_json()
-	
+
+	# Sort peeps by priority (descending)
+	# TODO: the list should already come in from the file correctly sorted, 
+	# need to check for this once we finalize how the import works 
+	peeps = sorted(peeps, reverse=True, key=lambda peep: peep.priority)
 
 	logging.debug("Initial Peeps")
 	logging.debug(Peep.peeps_str(peeps))
