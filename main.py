@@ -4,7 +4,8 @@ import itertools
 import random
 import json 
 import sys
-import logging 
+import logging
+import time 
 from csv_loader import convert_to_json
 
 class Globals:
@@ -468,7 +469,7 @@ def find_event_to_remove(events, peeps):
     max_overlap = max(overlap_scores.values())
     candidates = [event for event in events if overlap_scores[event.id] == max_overlap]
     
-    logging.info(f"Events with max overlap ({max_overlap}): {[event.id for event in candidates]}")
+    logging.debug(f"Events with max overlap ({max_overlap}): {[event.id for event in candidates]}")
     
     if len(candidates) == 1:
         return candidates[0]
@@ -477,18 +478,18 @@ def find_event_to_remove(events, peeps):
     event_weights = {event: sum(peep.priority for peep in peeps if event.id in peep.availability) for event in candidates}
     event_to_remove = min(event_weights, key=event_weights.get)
     
-    logging.info(f"Tie on overlap. Removing event based on lowest weight")
+    logging.debug(f"Tie on overlap. Removing event based on lowest weight")
     return event_to_remove
 
 def remove_high_overlap_events(events, peeps, max_events):
     """
     Remove events with the highest participant overlap. If overlap is the same, remove the lowest-weighted event.
     """
-    logging.info(f"Initial event count: {len(events)}. Target event count: {max_events}.")
+    logging.debug(f"Initial event count: {len(events)}. Target event count: {max_events}.")
     
     while len(events) > max_events:
         event_to_remove = find_event_to_remove(events, peeps)
-        logging.info(f"Removing event: Event({event_to_remove.id}) Date: {event_to_remove.date}. Remaining events: {len(events) - 1}.")
+        logging.debug(f"Removing event: Event({event_to_remove.id}) Date: {event_to_remove.date}. Remaining events: {len(events) - 1}.")
         events = [event for event in events if event.id != event_to_remove.id]
     
     logging.info(f"Final event count: {len(events)}.")
@@ -524,7 +525,12 @@ def main():
 		sanitized_events = remove_high_overlap_events(sanitized_events, peeps, Globals.max_events)
 
 	# process all event sequences, assigning peeps in order and determining valid events
+	logging.info(f"Evaluating all sequences...")
+	start_time = time.perf_counter()  # Start timing
 	event_sequences = evaluate_all_event_sequences(peeps, sanitized_events)
+	end_time = time.perf_counter()  # End timing
+	elapsed_time = end_time - start_time
+	logging.info(f"Evaluation complete. Elapsed time: {elapsed_time:.2f} seconds")
 	
 	# remove duplicates:sequences with the same valid event ids in the same order, and the same leader/followers assigned
 	unique_sequences = EventSequence.get_unique_sequences(event_sequences)
@@ -544,7 +550,7 @@ def main():
 		logging.info(f"Best {best_sequence}")
 			
 		logging.debug("Final Peeps:")
-		logging.debug(peep for peep in best_sequence.peeps)
+		logging.debug(Peep.peeps_str(best_sequence.peeps))
 	else:
 		logging.info(f"No sequence found; couldn't fill any events.")
 
