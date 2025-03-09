@@ -2,4 +2,4 @@ debug.log
 data/*
 __pycache__/
 *.pyc
-
+.vscode/
