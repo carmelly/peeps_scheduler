@@ -73,7 +73,7 @@ class Peep:
 	def __repr__(self):
 		return (f"Peep(id={self.id}, name='{self.name}', priority={self.priority}, "
 				f"availability={self.availability}, event_limit={self.event_limit}, role={self.role}, "
-				f"total_attended={self.total_attended}, cur_scheduled={self.cur_scheduled}, "
+				f"total_attended={self.total_attended}, "
 				f"num_events={self.num_events}, index={self.index})")
 
 	# Simplified tostring for easier testing 
