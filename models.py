@@ -14,6 +14,7 @@ class Peep:
 		self.availability = list(kwargs.get("availability", []))  # Ensure list format
 		self.event_limit = int(kwargs.get("event_limit", 0) or 0)
 		self.num_events = 0 # always start at 0, gets incremented during the run 
+		#TODO: add self.cooldown that we will use instead of days_between_events global
 
 	def can_attend(self, event):
 		"""Checks if a peep can attend an event based on peep availability, role limit, and personal event limit."""
@@ -90,6 +91,7 @@ class Event:
 		self.max_role = kwargs.get("max_role", 8)
 		self.leaders = []
 		self.followers = []
+		#TODO: use attendees list instead of separate leaders and followers? 
 
 	def role(self, key):
 		return self.leaders if key == Globals.leader else self.followers

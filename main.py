@@ -16,6 +16,7 @@ def evaluate_all_event_sequences(og_peeps, og_events):
                 if not larger_group:
                     logging.warning(f"Unable to balance roles for event {event.id}.")
                     break
+				#TODO: save removed to an alternates list 
                 winners.remove(larger_group.pop())
 
         assert len(event.leaders) == len(event.followers) >= event.min_role
@@ -122,6 +123,9 @@ def main():
 		logging.debug(Peep.peeps_str(best_sequence.peeps))
 	else:
 		logging.info(f"No sequence found; couldn't fill any events.")
+          
+	#TODO: output to results.json.
+	#TODO: add a way to apply final_results.json to members.csv to import to google sheet 
 
 if __name__ == "__main__":
 	for i in range(1):

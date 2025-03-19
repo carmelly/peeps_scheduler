@@ -10,6 +10,7 @@ def parse_event_date(date_str):
 	Assumes the event is in the current year.
 	TODO: fix for next year if date has passed, but right now we're testing 
 	with old dates. 
+	TODO: Add weekday to expected date format
 
 	Expected input format: "Month Day - H[AM/PM]" (e.g., "March 5 - 4PM")
 	Output format: "YYYY-MM-DD HH:MM"
