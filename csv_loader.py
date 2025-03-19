@@ -60,13 +60,14 @@ def convert_to_json(responses_file, members_file, output_file):
 			
 			event_ids = []
 			for event in available_dates.split(', '):
-				if event not in unique_events:
-					unique_events[event] = {
-						"id": event_counter,
-						"date": parse_event_date(event),
-					}
-					event_counter += 1
-				event_ids.append(unique_events[event]['id'])
+				if event: 
+					if event not in unique_events:
+						unique_events[event] = {
+							"id": event_counter,
+							"date": parse_event_date(event),
+						}
+						event_counter += 1
+					event_ids.append(unique_events[event]['id'])
 			
 			peep['availability'] = list(set(peep['availability'] + event_ids))
 			jsonData.append({
