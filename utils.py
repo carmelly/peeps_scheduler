@@ -45,8 +45,9 @@ def initialize_data (generate_events=True, generate_peeps=True):
 	sorted_peeps = sorted(peeps, reverse=True, key=lambda peep: peep.priority)
 	return sorted_peeps, events
 
-def initialize_data_from_json(): 
-	output_json = 'data/novice_peeps_output.json'
+def initialize_data_from_json(data_folder):
+	 
+	output_json = f'data/{data_folder}/output.json'
 
 	json_data = load_json(output_json)
 	response_data = json_data['responses'] # don't really need this but could help debugging 

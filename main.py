@@ -69,11 +69,11 @@ def main():
 	utils.setup_logging()
 	
 	# should we generate new lists? otherwise read from file 
-	generate_events = True 
-	generate_peeps = True 
+	generate_events = False 
+	generate_peeps = False 
 	
-	peeps, events = utils.initialize_data(generate_events, generate_peeps)
-	# peeps, events = utils.initialize_data_from_json()
+	# peeps, events = utils.initialize_data(generate_events, generate_peeps)
+	peeps, events = utils.initialize_data_from_json(Globals.data_folder)
 
 	# Sort peeps by priority (descending)
 	# TODO: the list should already come in from the file correctly sorted, 

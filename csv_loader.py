@@ -2,6 +2,7 @@ import csv
 import json
 from collections import defaultdict
 from datetime import datetime
+from globals import Globals
 
 def parse_event_date(date_str):
 	"""
@@ -91,9 +92,9 @@ def convert_to_json(responses_file, members_file, output_file):
 		json.dump(output, f, indent=2)
 	
 if __name__ == "__main__":
-	responses_csv = 'data/Novice Peeps Scheduling - March Responses.csv'
-	peeps_csv = 'data/Novice Peeps Scheduling - All Novice Peeps Members.csv'
-	output_json = 'data/novice_peeps_output.json'
+	responses_csv = f'data/{Globals.data_folder}/responses.csv'
+	peeps_csv = f'data/{Globals.data_folder}/members.csv'
+	output_json = f'data/{Globals.data_folder}/output.json'
 
 	convert_to_json(responses_csv, peeps_csv, output_json)
 
