@@ -5,15 +5,15 @@ import datetime
 import itertools
 
 def generate_event_permutations(events):
-    """Generates all possible permutations of event sequences as a list of event ids."""
-    
-    if not events:
-        return []
-    event_ids = [event.id for event in events]
-    index_sequences = list(itertools.permutations(event_ids, len(event_ids)))
+	"""Generates all possible permutations of event sequences as a list of event ids."""
 
-    logging.debug(f"Total permutations: {len(index_sequences)}")
-    return index_sequences
+	if not events:
+		return []
+	event_ids = [event.id for event in events]
+	index_sequences = list(itertools.permutations(event_ids, len(event_ids)))
+
+	logging.debug(f"Total permutations: {len(index_sequences)}")
+	return index_sequences
 
 def initialize_data (generate_events=True, generate_peeps=True):
 	num_events = 10
@@ -46,20 +46,20 @@ def initialize_data (generate_events=True, generate_peeps=True):
 	return sorted_peeps, events
 
 def initialize_data_from_json(data_folder):
-	 
+
 	output_json = f'data/{data_folder}/output.json'
 
 	json_data = load_json(output_json)
-	response_data = json_data['responses'] # don't really need this but could help debugging 
+	response_data = json_data['responses'] # don't really need this but could help debugging
 	event_data = json_data['events']
 	peeps_data = json_data['peeps']
-		
+
 	events = [Event.from_dict(e) for e in event_data] if event_data else []
 	peeps = [Peep(**p) for p in peeps_data] if peeps_data else []
 
-	# sort peeps by their current index from the csv, which represents 
-	# their current order in the priority queue 
-	# TODO: if we want to be super crazy we can check that the priorities are in descending order 
+	# sort peeps by their current index from the csv, which represents
+	# their current order in the priority queue
+	# TODO: if we want to be super crazy we can check that the priorities are in descending order
 	sorted_peeps = sorted(peeps, key=lambda peep: peep.index)
 	return sorted_peeps, events
 

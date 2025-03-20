@@ -13,7 +13,7 @@ class Peep:
 		self.total_attended = int(kwargs.get("total_attended", 0) or 0)
 		self.availability = list(kwargs.get("availability", []))  # Ensure list format
 		self.event_limit = int(kwargs.get("event_limit", 0) or 0)
-		self.num_events = 0 # always start at 0, gets incremented during the run 
+		self.num_events = 0 # always start at 0, gets incremented during the run
 		#TODO: add self.cooldown that we will use instead of days_between_events global
 
 	def can_attend(self, event):
@@ -31,7 +31,7 @@ class Peep:
 			return False
 
 		return True
-	
+
 	@staticmethod
 	def update_event_attendees(peeps, winners):
 		"""For all successful attendees, reset priority and send to the back of the line."""
@@ -43,18 +43,18 @@ class Peep:
 
 	@classmethod
 	def generate_test_peep(cls, id, index, event_count):
-		
+
 		"""Generate a test Peep with random values"""
 		data = {
-            "id": id, 
+			"id": id,
 			"index": index,
-            "name": f"Person{id}",
-            "priority": random.randint(0, 3),# Priority between 0 and 3
-            # "availability": sorted(random.sample(range(event_count), random.randint(0, event_count))),
-            "event_limit": random.randint(1, 3),
-            "role": random.choice([Globals.leader, Globals.follower])
-        }
-		
+			"name": f"Person{id}",
+			"priority": random.randint(0, 3),# Priority between 0 and 3
+			# "availability": sorted(random.sample(range(event_count), random.randint(0, event_count))),
+			"event_limit": random.randint(1, 3),
+			"role": random.choice([Globals.leader, Globals.follower])
+		}
+
 		# Generate random event availability
 		available_events = list(range(event_count))  # Event indices (0, 1, 2, ...)
 		random.shuffle(available_events)
@@ -62,27 +62,27 @@ class Peep:
 		data.update({"availability": availability})
 
 		return cls(**data)
-	
+
 	@staticmethod
 	def peeps_str(peeps):
 		"""Return a string representation of a list of Peeps."""
-		result =  f"Peeps[{len(peeps)}]:\n" 
+		result =  f"Peeps[{len(peeps)}]:\n"
 		result += f"\n".join(f"   {peep}" for peep in peeps)
 		return result
 
-	# full representation of a Peep, can be used as a constructor 
+	# full representation of a Peep, can be used as a constructor
 	def __repr__(self):
 		return (f"Peep(id={self.id}, name='{self.name}', priority={self.priority}, "
 				f"availability={self.availability}, event_limit={self.event_limit}, role={self.role}, "
 				f"total_attended={self.total_attended}, "
 				f"num_events={self.num_events}, index={self.index})")
 
-	# Simplified tostring for easier testing 
+	# Simplified tostring for easier testing
 	def __str__(self):
 		role_str = "L" if self.role == Globals.leader else "F"
 		return (f"Peep({self.id:>3}): p: {self.priority}, limit: {self.event_limit}, "
 				f"role: {role_str}, a: {self.availability}")
-	
+
 class Event:
 	def __init__(self, **kwargs):
 		self.id = kwargs.get("id", 0)
@@ -91,29 +91,29 @@ class Event:
 		self.max_role = kwargs.get("max_role", 8)
 		self.leaders = []
 		self.followers = []
-		#TODO: use attendees list instead of separate leaders and followers? 
+		#TODO: use attendees list instead of separate leaders and followers?
 
 	def role(self, key):
 		return self.leaders if key == Globals.leader else self.followers
 
-	def is_valid(self): 
+	def is_valid(self):
 		""" Event is valid if we have enough leaders and enough followers to fill the minimum per role """
-		return( len(self.leaders) >= self.min_role and len(self.followers) >= self.min_role) 
-	
+		return( len(self.leaders) >= self.min_role and len(self.followers) >= self.min_role)
+
 	def to_dict(self):
 		return {
 			"id": self.id,
-			"date": self.date.strftime("%Y-%m-%d %H:%M"), 
+			"date": self.date.strftime("%Y-%m-%d %H:%M"),
 			"min_role": self.min_role,
 			"max_role": self.max_role,
 		}
-	
+
 	@classmethod
 	def from_dict(cls, data):
 		"""Convert dictionary data back into an Event object."""
-		data["date"] = datetime.datetime.strptime(data["date"], "%Y-%m-%d %H:%M") 
+		data["date"] = datetime.datetime.strptime(data["date"], "%Y-%m-%d %H:%M")
 		return cls(**data)
-	
+
 	@classmethod
 	def generate_test_event(cls, event_id, start_date):
 		"""Generate a random test event within one month on allowed days & times."""
@@ -130,7 +130,7 @@ class Event:
 
 		event_hour = random.choice(allowed_times[rand_day.weekday()])
 		event_datetime = datetime.datetime(rand_day.year, rand_day.month, rand_day.day, event_hour)
-		
+
 		return cls(
 			id=event_id,
 			date=event_datetime,
@@ -151,44 +151,44 @@ class Event:
 				valid_events.append(event)
 			else:
 				removed_events.append(event)
-		
+
 		return valid_events
-	
+
 	@staticmethod
 	def remove_high_overlap_events(events, peeps, max_events):
 		"""
-		Remove events that have the highest participant overlap with all other events in the list, 
+		Remove events that have the highest participant overlap with all other events in the list,
 		until we have no more than max_events in the list. If overlap is the same, remove the lowest-weighted event.
-		Returns a new list. 
+		Returns a new list.
 		"""
-		
+
 		def find_overlapping_events(events, peeps):
 			"""
 			Identify the event with the highest participant overlap.
-			
-			Overlap is calculated by counting the number of shared participants between each pair of events. 
+
+			Overlap is calculated by counting the number of shared participants between each pair of events.
 			If a peep is available for both event A and event B, they contribute to the overlap score for both events.
 			"""
 			overlap_scores = {event.id: 0 for event in events}
-			
+
 			logging.debug("Computing event overlap...")
-			
+
 			# Create a lookup for peep availability
 			peep_event_map = {peep.id: set(peep.availability) for peep in peeps}
-			
+
 			# Compute event overlap
 			for i, event_a in enumerate(events):
 				for j, event_b in enumerate(events):
 					if i >= j:
 						continue  # Avoid redundant checks
-					
+
 					# Count shared peeps who are available for both events
-					shared_peeps = sum(1 for peep in peeps if 
+					shared_peeps = sum(1 for peep in peeps if
 									event_a.id in peep_event_map[peep.id] and event_b.id in peep_event_map[peep.id])
-					
+
 					overlap_scores[event_a.id] += shared_peeps
 					overlap_scores[event_b.id] += shared_peeps
-			
+
 			logging.debug(f"Overlap scores: {overlap_scores}")
 			return overlap_scores
 
@@ -199,31 +199,31 @@ class Event:
 			overlap_scores = find_overlapping_events(events, peeps)
 			max_overlap = max(overlap_scores.values())
 			candidates = [event for event in events if overlap_scores[event.id] == max_overlap]
-			
+
 			logging.debug(f"Events with max overlap ({max_overlap}): {[event.id for event in candidates]}")
-			
+
 			if len(candidates) == 1:
 				return candidates[0]
-			
+
 			# Use weight as a tiebreaker
 			event_weights = {event: sum(peep.priority for peep in peeps if event.id in peep.availability) for event in candidates}
 			event_to_remove = min(event_weights, key=event_weights.get)
-			
+
 			logging.debug(f"Tie on overlap. Removing event based on lowest weight")
 			return event_to_remove
-		
+
 		logging.debug(f"Initial event count: {len(events)}. Target event count: {max_events}.")
 		while len(events) > max_events:
 			event_to_remove = find_event_to_remove(events, peeps)
 			logging.debug(f"Removing event: Event({event_to_remove.id}) Date: {event_to_remove.date}. Remaining events: {len(events) - 1}.")
 			events = [event for event in events if event.id != event_to_remove.id]
-			
+
 		logging.info(f"Final event count: {len(events)}.")
 		return events
 
 	@staticmethod
 	def events_conflict(event1, event2, days_between_events):
-		hours_gap = (days_between_events * 24) - 1 # allow event at the same time with proper days apart 
+		hours_gap = (days_between_events * 24) - 1 # allow event at the same time with proper days apart
 		"""Returns True if events are too close together based on the required gap."""
 		date_gap_hours = abs((event1.date - event2.date) /datetime.timedelta(hours=1))
 		return date_gap_hours < hours_gap
@@ -231,13 +231,13 @@ class Event:
 	def __repr__(self):
 		""" Used for logging at DEBUG level - detailed format """
 		return (f"Event(event_id={self.id}, date={self.date}, "
-                f"min_role={self.min_role}, max_role={self.max_role}, "
-                f"leaders=[{self.get_leaders_str()}], followers=[{self.get_leaders_str()}])")
-	
+				f"min_role={self.min_role}, max_role={self.max_role}, "
+				f"leaders=[{self.get_leaders_str()}], followers=[{self.get_leaders_str()}])")
+
 	def __str__(self):
 		""" Used for logging at INFO level - concise format """
 		return f"Event {self.id} on {self.date.strftime('%Y-%m-%d %H:%M')}"
-	
+
 	def get_leaders_str(self):
 		"""Returns a comma-separated string of first names of leaders."""
 		leaders = [attendee.name.split()[0] for attendee in self.leaders]
@@ -246,7 +246,7 @@ class Event:
 	def get_followers_str(self):
 		"""Returns a comma-separated string of first names of followers."""
 		followers = [attendee.name.split()[0] for attendee in self.followers]
-		return  f"Followers({len(self.followers)}): " + ", ".join(followers)	
+		return  f"Followers({len(self.followers)}): " + ", ".join(followers)
 
 class EventSequence:
 	def __init__(self, events, peeps):
@@ -256,16 +256,16 @@ class EventSequence:
 		self.system_weight = 0
 		self.valid_events = []
 
-	def has_conflict(self, days_between_events): 
-		events = self.valid_events 
-		for i, event_a in enumerate(events): 
+	def has_conflict(self, days_between_events):
+		events = self.valid_events
+		for i, event_a in enumerate(events):
 			other_events = events[:i] + events[i + 1:]
-			for event_b in other_events: 
-				if Event.events_conflict(event_a, event_b, days_between_events): 
-					return True 
-		return False 
+			for event_b in other_events:
+				if Event.events_conflict(event_a, event_b, days_between_events):
+					return True
+		return False
 
-	def finalize(self): 
+	def finalize(self):
 		"""Finalizes a sequence by increasing priority for unsuccessful peeps and tracking metrics."""
 		for peep in self.peeps:
 			if peep.num_events == 0:
@@ -273,42 +273,42 @@ class EventSequence:
 			else:
 				self.num_unique_attendees += 1
 
-			self.system_weight += peep.priority  # Track total system priority weight	
+			self.system_weight += peep.priority  # Track total system priority weight
 
 	@staticmethod
-	def get_unique_sequences(sequences): 
+	def get_unique_sequences(sequences):
 		"""
-        Returns a list of unique EventSequences based on their valid events.
+		Returns a list of unique EventSequences based on their valid events.
 		"""
-		return list({sequence: sequence for sequence in sequences}.values())		
-		
+		return list({sequence: sequence for sequence in sequences}.values())
+
 	@staticmethod
-	def pop_until_no_conflict(sequences, days_between_events): 
+	def pop_until_no_conflict(sequences, days_between_events):
 		"""Pops event sequences with conflicts until one without conflict is found.
 
-		This method pops event sequences from the front of the list while they contain 
+		This method pops event sequences from the front of the list while they contain
 		conflicting events, and stops once a sequence without conflicts is found.
 		"""
-		removed = [] 
-		while sequences and EventSequence.has_conflict(sequences[0], days_between_events): 
+		removed = []
+		while sequences and EventSequence.has_conflict(sequences[0], days_between_events):
 			removed.append(sequences.pop(0))
 		return removed
-	
+
 	def __key__(self):
 		"""
-        Returns a tuple that uniquely identifies the EventSequence.
+		Returns a tuple that uniquely identifies the EventSequence.
 
-        The key is based on:
-        1. Event IDs: The unique identifier of each valid event in the sequence.
-        2. Leader IDs: A sorted list of leader IDs for each event.
-        3. Follower IDs: A sorted list of follower IDs for each event.
+		The key is based on:
+		1. Event IDs: The unique identifier of each valid event in the sequence.
+		2. Leader IDs: A sorted list of leader IDs for each event.
+		3. Follower IDs: A sorted list of follower IDs for each event.
 
-        The combination of these factors ensures that two EventSequence objects are considered equal if they contain 
+		The combination of these factors ensures that two EventSequence objects are considered equal if they contain
 		the same events with the same leaders and followers.
 
-        Returns:
-            tuple: A tuple of (event ID, sorted leader IDs, sorted follower IDs) for each event in the sequence.
-        """
+		Returns:
+			tuple: A tuple of (event ID, sorted leader IDs, sorted follower IDs) for each event in the sequence.
+		"""
 		return tuple(
 			(event.id, tuple(sorted(peep.id for peep in event.leaders)), tuple(sorted(peep.id for peep in event.followers)))
 			for event in self.valid_events
@@ -323,17 +323,17 @@ class EventSequence:
 	def __hash__(self):
 		"""Generate a hash value based on the event sequence key."""
 		return hash(self.__key__())
-		
+
 	def __repr__(self):
 		return (', '.join(str(event.id) for event in self.events))
-	
+
 	def __str__(self):
 		result = (f"EventSequence: "
-			f"valid events: {{ {', '.join(str(event.id) for event in self.valid_events)} }}, " 
+			f"valid events: {{ {', '.join(str(event.id) for event in self.valid_events)} }}, "
 			f"unique_peeps {self.num_unique_attendees}/{len(self.peeps)}, system_weight {self.system_weight}"
 		)
 		result += f"\t"
-		for event in self.valid_events: 
+		for event in self.valid_events:
 			result += f"\n\t{event}"
 			result += f"\n\t  {event.get_leaders_str()}"
 			result += f"\n\t  {event.get_followers_str()}"
