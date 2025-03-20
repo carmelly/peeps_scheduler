@@ -38,7 +38,7 @@ def evaluate_all_event_sequences(og_peeps, og_events):
 
 			if event.is_valid():  # If we have enough to fill the event
 				balance_roles(event, winners)
-				Peep.update_event_attendees(sequence.peeps, winners)
+				Peep.update_event_attendees(sequence.peeps, winners, event)
 				sequence.valid_events.append(event)
 			else:
 				event.leaders.clear()
@@ -108,12 +108,6 @@ def main():
 
 	# sort by unique attendees (desc) and system weight (desc)
 	sorted_unique = sorted(unique_sequences, key=lambda sequence: (-sequence.num_unique_attendees, -sequence.system_weight))
-
-	# remove any sequences where any two event dates conflict (based on Globals.days_between_events)
-	days_between_events = Globals.days_between_events
-	removed = EventSequence.pop_until_no_conflict(sorted_unique, days_between_events)
-	logging.info(f"Removed {len(removed)} sequences with conflicts; days between events = {days_between_events}")
-	logging.debug(f"Removed sequences: {removed}")
 
 	best_sequence = sorted_unique[0] if sorted_unique else None
 	if best_sequence:

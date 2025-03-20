@@ -14,7 +14,8 @@ class Peep:
 		self.availability = list(kwargs.get("availability", []))  # Ensure list format
 		self.event_limit = int(kwargs.get("event_limit", 0) or 0)
 		self.num_events = 0 # always start at 0, gets incremented during the run
-		#TODO: add self.cooldown that we will use instead of days_between_events global
+		self.min_interval_days = int(kwargs.get("min_interval_days", 0) or 0)
+		self.assigned_event_dates = []
 
 	def can_attend(self, event):
 		"""Checks if a peep can attend an event based on peep availability, role limit, and personal event limit."""
@@ -30,16 +31,25 @@ class Peep:
 		if self.num_events >= self.event_limit:
 			return False
 
+		for assigned_date in self.assigned_event_dates:
+		# Calculate days difference based on calendar days
+			days_gap = abs((event.date.date() - assigned_date.date()).days)
+			if days_gap < self.min_interval_days:
+				return False
+
 		return True
 
 	@staticmethod
-	def update_event_attendees(peeps, winners):
+	def update_event_attendees(peeps, winners, event):
 		"""For all successful attendees, reset priority and send to the back of the line."""
 		for peep in winners:
 			peep.num_events += 1
 			peep.priority = 0  # Reset priority after successful attendance
+			peep.assigned_event_dates.append(event.date)
+
+			# Move successful peeps to the end of the list
 			peeps.remove(peep)
-			peeps.append(peep)  # Move successful peeps to the end
+			peeps.append(peep) 
 
 	@classmethod
 	def generate_test_peep(cls, id, index, event_count):
@@ -221,13 +231,6 @@ class Event:
 		logging.info(f"Final event count: {len(events)}.")
 		return events
 
-	@staticmethod
-	def events_conflict(event1, event2, days_between_events):
-		hours_gap = (days_between_events * 24) - 1 # allow event at the same time with proper days apart
-		"""Returns True if events are too close together based on the required gap."""
-		date_gap_hours = abs((event1.date - event2.date) /datetime.timedelta(hours=1))
-		return date_gap_hours < hours_gap
-
 	def __repr__(self):
 		""" Used for logging at DEBUG level - detailed format """
 		return (f"Event(event_id={self.id}, date={self.date}, "
@@ -256,15 +259,6 @@ class EventSequence:
 		self.system_weight = 0
 		self.valid_events = []
 
-	def has_conflict(self, days_between_events):
-		events = self.valid_events
-		for i, event_a in enumerate(events):
-			other_events = events[:i] + events[i + 1:]
-			for event_b in other_events:
-				if Event.events_conflict(event_a, event_b, days_between_events):
-					return True
-		return False
-
 	def finalize(self):
 		"""Finalizes a sequence by increasing priority for unsuccessful peeps and tracking metrics."""
 		for peep in self.peeps:
@@ -281,18 +275,6 @@ class EventSequence:
 		Returns a list of unique EventSequences based on their valid events.
 		"""
 		return list({sequence: sequence for sequence in sequences}.values())
-
-	@staticmethod
-	def pop_until_no_conflict(sequences, days_between_events):
-		"""Pops event sequences with conflicts until one without conflict is found.
-
-		This method pops event sequences from the front of the list while they contain
-		conflicting events, and stops once a sequence without conflicts is found.
-		"""
-		removed = []
-		while sequences and EventSequence.has_conflict(sequences[0], days_between_events):
-			removed.append(sequences.pop(0))
-		return removed
 
 	def __key__(self):
 		"""

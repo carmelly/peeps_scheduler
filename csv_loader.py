@@ -36,6 +36,8 @@ def convert_to_json(responses_file, members_file, output_file):
 	# Process members data
 	for row in peeps_data:
 		id, name, role, index, priority, total_attended = row['id'], row['Name'].strip(), row['Role'], row['Index'], row['Priority'], row['Total Attended']
+		
+
 		if id not in unique_peeps:
 			unique_peeps[id] = {
 				"id": id,
@@ -45,12 +47,12 @@ def convert_to_json(responses_file, members_file, output_file):
 				"priority": int(priority),
 				"total_attended": int(total_attended),
 				"availability": [],
-				"event_limit": 0
 			}
 
 	# Process responses
 	for row in responses_data:
 		name, preferred_role, max_sessions, available_dates = row['Name'].strip(), row['Preferred Role'], row['Max Sessions'], row['Availability']
+		min_interval_days = int(row.get('Min Interval Days', 0))  # Default to 0 if not specified
 		matched_peeps = [peep for peep in unique_peeps.values() if peep['name'].lower() == name.lower()]
 
 		if not matched_peeps:
@@ -59,6 +61,7 @@ def convert_to_json(responses_file, members_file, output_file):
 		if len(matched_peeps) == 1:
 			peep = matched_peeps[0]
 			peep['event_limit'] = max_sessions
+			peep['min_interval_days'] = min_interval_days	
 
 			event_ids = []
 			for event in available_dates.split(', '):
