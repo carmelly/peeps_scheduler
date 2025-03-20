@@ -1,13 +1,18 @@
 import datetime
 import random
 import logging
-from globals import Globals
+from enum import Enum
+
+class Role(Enum):
+	LEADER = "Leader"
+	FOLLOWER = "Follower"
 
 class Peep:
 	def __init__(self, **kwargs):
 		self.id = str(kwargs.get("id", "")).strip()  # Ensure ID is a string and trimmed
 		self.name = str(kwargs.get("name", "")).strip()
-		self.role = str(kwargs.get("role", ""))
+		role_str = str(kwargs.get("role", ""))
+		self.role = Role(role_str) if isinstance(role_str, str) else role_str
 		self.index = int(kwargs.get("index", 0) or 0)  # Handles empty or missing values
 		self.priority = int(kwargs.get("priority", 0) or 0)
 		self.total_attended = int(kwargs.get("total_attended", 0) or 0)
@@ -24,7 +29,7 @@ class Peep:
 			return False
 
 		# space for the role
-		if len(event.role(self.role)) >= event.max_role:
+		if len(event.get_attendees_by_role(self.role)) >= event.max_role:
 			return False
 
 		# personal limit for the month
@@ -60,9 +65,8 @@ class Peep:
 			"index": index,
 			"name": f"Person{id}",
 			"priority": random.randint(0, 3),# Priority between 0 and 3
-			# "availability": sorted(random.sample(range(event_count), random.randint(0, event_count))),
 			"event_limit": random.randint(1, 3),
-			"role": random.choice([Globals.leader, Globals.follower])
+			"role": random.choice([Role.LEADER, Role.FOLLOWER])
 		}
 
 		# Generate random event availability
@@ -83,13 +87,13 @@ class Peep:
 	# full representation of a Peep, can be used as a constructor
 	def __repr__(self):
 		return (f"Peep(id={self.id}, name='{self.name}', priority={self.priority}, "
-				f"availability={self.availability}, event_limit={self.event_limit}, role={self.role}, "
+				f"availability={self.availability}, event_limit={self.event_limit}, role={self.role.name}, "
 				f"total_attended={self.total_attended}, "
 				f"num_events={self.num_events}, index={self.index})")
 
 	# Simplified tostring for easier testing
 	def __str__(self):
-		role_str = "L" if self.role == Globals.leader else "F"
+		role_str = "L" if self.role == Role.LEADER else "F"
 		return (f"Peep({self.id:>3}): p: {self.priority}, limit: {self.event_limit}, "
 				f"role: {role_str}, a: {self.availability}")
 
@@ -99,16 +103,25 @@ class Event:
 		self.date = kwargs.get("date", None)
 		self.min_role = kwargs.get("min_role", 5)
 		self.max_role = kwargs.get("max_role", 8)
-		self.leaders = []
-		self.followers = []
-		#TODO: use attendees list instead of separate leaders and followers?
+		self.attendees = []
 
-	def role(self, key):
-		return self.leaders if key == Globals.leader else self.followers
+	@property
+	def leaders(self):
+		return self.get_attendees_by_role(Role.LEADER)
+
+	@property
+	def followers(self):
+		return self.get_attendees_by_role(Role.FOLLOWER)
+
+	def get_attendees_by_role(self, role): 
+		return [p for p, r in self.attendees if r == role]
+
+	def add_attendee(self, peep):
+		self.attendees.append((peep, peep.role))
 
 	def is_valid(self):
 		""" Event is valid if we have enough leaders and enough followers to fill the minimum per role """
-		return( len(self.leaders) >= self.min_role and len(self.followers) >= self.min_role)
+		return( len( self.leaders) >= self.min_role and len(self.followers) >= self.min_role)
 
 	def to_dict(self):
 		return {
@@ -154,8 +167,8 @@ class Event:
 		valid_events = []
 		removed_events = []
 		for event in events:
-			num_leaders = sum(1 for peep in peeps if event.id in peep.availability and peep.role == Globals.leader)
-			num_followers = sum(1 for peep in peeps if event.id in peep.availability and peep.role == Globals.follower)
+			num_leaders = sum(1 for peep in peeps if event.id in peep.availability and peep.role == Role.LEADER)
+			num_followers = sum(1 for peep in peeps if event.id in peep.availability and peep.role == Role.FOLLOWER)
 
 			if num_leaders >= event.min_role and num_followers >= event.min_role:
 				valid_events.append(event)
@@ -194,7 +207,7 @@ class Event:
 
 					# Count shared peeps who are available for both events
 					shared_peeps = sum(1 for peep in peeps if
-									event_a.id in peep_event_map[peep.id] and event_b.id in peep_event_map[peep.id])
+						event_a.id in peep_event_map[peep.id] and event_b.id in peep_event_map[peep.id])
 
 					overlap_scores[event_a.id] += shared_peeps
 					overlap_scores[event_b.id] += shared_peeps
@@ -235,22 +248,20 @@ class Event:
 		""" Used for logging at DEBUG level - detailed format """
 		return (f"Event(event_id={self.id}, date={self.date}, "
 				f"min_role={self.min_role}, max_role={self.max_role}, "
-				f"leaders=[{self.get_leaders_str()}], followers=[{self.get_leaders_str()}])")
+				f"attendees={[peep.name for peep, _ in self.attendees]})")
 
 	def __str__(self):
 		""" Used for logging at INFO level - concise format """
 		return f"Event {self.id} on {self.date.strftime('%Y-%m-%d %H:%M')}"
 
 	def get_leaders_str(self):
-		"""Returns a comma-separated string of first names of leaders."""
-		leaders = [attendee.name.split()[0] for attendee in self.leaders]
-		return f"Leaders({len(self.leaders)}): " + ", ".join(leaders)
+		leaders = [peep.name.split()[0] for peep, role in self.attendees if role == Role.LEADER]
+		return f"Leaders({len(leaders)}): " + ", ".join(leaders)
 
 	def get_followers_str(self):
-		"""Returns a comma-separated string of first names of followers."""
-		followers = [attendee.name.split()[0] for attendee in self.followers]
-		return  f"Followers({len(self.followers)}): " + ", ".join(followers)
-
+		followers = [peep.name.split()[0] for peep, role in self.attendees if role == Role.FOLLOWER]
+		return  f"Followers({len(followers)}): " + ", ".join(followers)
+	
 class EventSequence:
 	def __init__(self, events, peeps):
 		self.events = events
@@ -291,8 +302,13 @@ class EventSequence:
 		Returns:
 			tuple: A tuple of (event ID, sorted leader IDs, sorted follower IDs) for each event in the sequence.
 		"""
+	
 		return tuple(
-			(event.id, tuple(sorted(peep.id for peep in event.leaders)), tuple(sorted(peep.id for peep in event.followers)))
+			(
+			event.id, 
+			tuple(sorted(peep.id for peep in event.leaders)), 
+			tuple(sorted(peep.id for peep in event.followers))
+			)
 			for event in self.valid_events
 		)
 
@@ -320,4 +336,4 @@ class EventSequence:
 			result += f"\n\t  {event.get_leaders_str()}"
 			result += f"\n\t  {event.get_followers_str()}"
 
-		return result
+		return result	

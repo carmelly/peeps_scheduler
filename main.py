@@ -2,7 +2,7 @@ import copy
 import logging
 import time
 from globals import Globals
-from models import Peep, Event, EventSequence
+from models import Role, Peep, Event, EventSequence
 import utils
 
 def evaluate_all_event_sequences(og_peeps, og_events):
@@ -10,14 +10,18 @@ def evaluate_all_event_sequences(og_peeps, og_events):
 
 	def balance_roles(event, winners):
 		"""Ensures leaders and followers are balanced within an event."""
-		if len(event.leaders) != len(event.followers):
-			larger_group = event.leaders if len(event.leaders) > len(event.followers) else event.followers
-			while len(event.leaders) != len(event.followers):
+		leaders = event.leaders
+		followers = event.followers
+		if len(leaders) != len(followers):
+			larger_group = leaders if len(leaders) > len(followers) else followers
+			while len(leaders) != len(followers):
 				if not larger_group:
 					logging.warning(f"Unable to balance roles for event {event.id}.")
 					break
 				#TODO: save removed to an alternates list
-				winners.remove(larger_group.pop())
+				peep_to_remove = larger_group.pop()
+				event.attendees = [entry for entry in event.attendees if entry[0] != peep_to_remove]
+				winners.remove(peep_to_remove)
 
 		assert len(event.leaders) == len(event.followers) >= event.min_role
 		assert len(event.leaders) <= event.max_role
@@ -31,7 +35,7 @@ def evaluate_all_event_sequences(og_peeps, og_events):
 			# Add peeps to event
 			for peep in sequence.peeps:
 				if peep.can_attend(event):
-					event.role(peep.role).append(peep)
+					event.add_attendee(peep)
 					winners.append(peep)
 				else:
 					losers.append(peep)
@@ -41,8 +45,7 @@ def evaluate_all_event_sequences(og_peeps, og_events):
 				Peep.update_event_attendees(sequence.peeps, winners, event)
 				sequence.valid_events.append(event)
 			else:
-				event.leaders.clear()
-				event.followers.clear()
+				event.attendees.clear()
 
 		# End of sequence, update peeps who didn't make it
 		sequence.finalize()

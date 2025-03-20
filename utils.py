@@ -1,6 +1,6 @@
 import json
 import logging
-from models import Peep, Event
+from models import Peep, Event, Role
 import datetime
 import itertools
 
@@ -27,7 +27,7 @@ def initialize_data (generate_events=True, generate_peeps=True):
 		events = [Event.generate_test_event(i, start_date) for i in range(num_events)]
 		save_json([event.to_dict() for event in events], event_filename)
 		logging.info(f"Saved {len(events)} Events to {event_filename}.\n"
-		 	f"Rename before next run if you want to keep this generated test data.")
+		  f"Rename before next run if you want to keep this generated test data.")
 	else:
 		event_data = load_json(event_filename)
 		events = [Event.from_dict(e) for e in event_data] if event_data else []
@@ -35,9 +35,19 @@ def initialize_data (generate_events=True, generate_peeps=True):
 	# Load or generate peeps
 	if generate_peeps:
 		peeps = [Peep.generate_test_peep(i, i - 1, num_events) for i in range(num_peeps)]
-		save_json([peep.__dict__ for peep in peeps], peep_filename)
+		save_json([{
+				"id": peep.id,
+				"name": peep.name,
+				"role": peep.role.value,
+				"index": peep.index,
+				"priority": peep.priority,
+				"total_attended": peep.total_attended,
+				"availability": peep.availability,
+				"event_limit": peep.event_limit,
+				"min_interval_days": peep.min_interval_days
+			} for peep in peeps], peep_filename)
 		logging.info(f"Saved {len(peeps)} Peeps to {peep_filename}.\n"
-		 	f"Rename before next run if you want to keep this generated test data.")
+		  f"Rename before next run if you want to keep this generated test data.")
 	else:
 		peep_data = load_json(peep_filename)
 		peeps = [Peep(**p) for p in peep_data] if peep_data else []
@@ -80,11 +90,11 @@ def load_json(filename):
 
 def setup_logging():
 	logging.basicConfig(level=logging.DEBUG,
-				format='%(asctime)s - %(levelname)s - %(message)s',
-				handlers=[
-					logging.StreamHandler(),
-					logging.FileHandler('debug.log')
-				])
+			format='%(asctime)s - %(levelname)s - %(message)s',
+			handlers=[
+				logging.StreamHandler(),
+				logging.FileHandler('debug.log')
+			])
 
 	logging.getLogger().handlers[0].setLevel(logging.INFO)
 	logging.getLogger().handlers[1].setLevel(logging.DEBUG)
