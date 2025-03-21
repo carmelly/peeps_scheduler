@@ -3,6 +3,8 @@ import random
 import logging
 from enum import Enum
 
+from globals import Globals
+
 class Role(Enum):
 	LEADER = "Leader"
 	FOLLOWER = "Follower"
@@ -22,6 +24,12 @@ class Peep:
 		self.min_interval_days = int(kwargs.get("min_interval_days", 0) or 0)
 		self.assigned_event_dates = []
 
+	def to_dict(self):
+		return {
+			**self.__dict__,
+			"role": self.role.value if hasattr(self.role, "value") else self.role
+		}
+	
 	def can_attend(self, event):
 		"""Checks if a peep can attend an event based on peep availability, role limit, and personal event limit."""
 		# meets the person's availability
@@ -57,7 +65,7 @@ class Peep:
 			peeps.append(peep) 
 
 	@classmethod
-	def generate_test_peep(cls, id, index, event_count):
+	def generate_test_peep(cls, id, index, event_ids):
 
 		"""Generate a test Peep with random values"""
 		data = {
@@ -66,13 +74,13 @@ class Peep:
 			"name": f"Person{id}",
 			"priority": random.randint(0, 3),# Priority between 0 and 3
 			"event_limit": random.randint(1, 3),
-			"role": random.choice([Role.LEADER, Role.FOLLOWER])
+			"role": random.choice([Role.LEADER.value, Role.FOLLOWER.value]), 
+			"min_interval_days": random.choice([0, 1, 2, 3]),
+			"total_attended": random.randint(0, 5)
 		}
 
 		# Generate random event availability
-		available_events = list(range(event_count))  # Event indices (0, 1, 2, ...)
-		random.shuffle(available_events)
-		availability = sorted(available_events[:random.randint(0, event_count)])  # Random subset
+		availability = sorted(random.sample(event_ids, random.randint(1, len(event_ids))))
 		data.update({"availability": availability})
 
 		return cls(**data)
@@ -101,10 +109,15 @@ class Event:
 	def __init__(self, **kwargs):
 		self.id = kwargs.get("id", 0)
 		self.date = kwargs.get("date", None)
-		self.min_role = kwargs.get("min_role", 5)
+		self.min_role = kwargs.get("min_role", 4)
 		self.max_role = kwargs.get("max_role", 8)
 		self.attendees = []
 
+	def to_dict(self):
+		return {
+			**self.__dict__,
+		}
+	
 	@property
 	def leaders(self):
 		return self.get_attendees_by_role(Role.LEADER)
@@ -122,19 +135,11 @@ class Event:
 	def is_valid(self):
 		""" Event is valid if we have enough leaders and enough followers to fill the minimum per role """
 		return( len( self.leaders) >= self.min_role and len(self.followers) >= self.min_role)
-
-	def to_dict(self):
-		return {
-			"id": self.id,
-			"date": self.date.strftime("%Y-%m-%d %H:%M"),
-			"min_role": self.min_role,
-			"max_role": self.max_role,
-		}
-
+	
 	@classmethod
 	def from_dict(cls, data):
 		"""Convert dictionary data back into an Event object."""
-		data["date"] = datetime.datetime.strptime(data["date"], "%Y-%m-%d %H:%M")
+		data["date"] = datetime.datetime.strptime(data["date"], Globals.date_format)
 		return cls(**data)
 
 	@classmethod

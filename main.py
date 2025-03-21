@@ -70,23 +70,33 @@ def evaluate_all_event_sequences(og_peeps, og_events):
 	return event_sequences
 
 def main():
+	generate_test_data = False 
+	load_from_csv = False 
+	
 	utils.setup_logging()
 
 	# should we generate new lists? otherwise read from file
-	generate_events = False
-	generate_peeps = False
-
-	# peeps, events = utils.initialize_data(generate_events, generate_peeps)
-	peeps, events = utils.initialize_data_from_json(Globals.data_folder)
-
-	# Sort peeps by priority (descending)
-	# TODO: the list should already come in from the file correctly sorted,
-	# need to check for this once we finalize how the import works
-	peeps = sorted(peeps, reverse=True, key=lambda peep: peep.priority)
+	data_folder = Globals.data_folder
+	output_json = f'data/{data_folder}/output.json'
+	if generate_test_data: 
+		output_json = f'data/test_data/output.json'
+		logging.info(f"Generating test data and saving to {output_json}")
+		utils.generate_test_data(5, 30, output_json)
+	elif load_from_csv: 
+		responses_csv = f'data/{Globals.data_folder}/responses.csv'
+		peeps_csv = f'data/{Globals.data_folder}/members.csv'
+		output_json = f'data/{Globals.data_folder}/output.json'
+		logging.info(f"Loading data from {peeps_csv} and {responses_csv} and saving to {output_json}")
+		utils.convert_to_json(responses_csv, peeps_csv, output_json)
+		
+	# load from json, which already sorts by index and checks priority order
+	logging.info(f"Loading data from {output_json}")
+	peeps, events = utils.load_data_from_json(output_json)
 
 	logging.debug("Initial Peeps")
 	logging.debug(Peep.peeps_str(peeps))
 
+	# remove events from consideration that dont have enough peeps with availability 
 	sanitized_events = Event.sanitize_events(events, peeps)
 	logging.info(f"Sanitized Events: {len(sanitized_events)}/{len(events)}")
 
@@ -105,11 +115,12 @@ def main():
 	elapsed_time = end_time - start_time
 	logging.info(f"Evaluation complete. Elapsed time: {elapsed_time:.2f} seconds")
 
-	# remove duplicates:sequences with the same valid event ids in the same order, and the same leader/followers assigned
+	# remove duplicate sequences
 	unique_sequences = EventSequence.get_unique_sequences(event_sequences)
 	logging.info(f"Found {len(unique_sequences)} unique sequences")
 
 	# sort by unique attendees (desc) and system weight (desc)
+	#TODO: another tiebreaker could be total spaces filled, because peeps that get to go more than once wouldn't be counted in unique_attendees 
 	sorted_unique = sorted(unique_sequences, key=lambda sequence: (-sequence.num_unique_attendees, -sequence.system_weight))
 
 	best_sequence = sorted_unique[0] if sorted_unique else None
@@ -125,5 +136,4 @@ def main():
 	#TODO: add a way to apply final_results.json to members.csv to import to google sheet
 
 if __name__ == "__main__":
-	for i in range(1):
-		main()
+	main()

@@ -1,8 +1,100 @@
 import json
+import csv
 import logging
+from globals import Globals
 from models import Peep, Event, Role
-import datetime
+import datetime 
 import itertools
+
+def parse_event_date(date_str):
+	"""
+	Parse an event date string and return a formatted datetime string.
+	Assumes the event is in the current year.
+	TODO: fix for next year if date has passed, but right now we're testing
+	with old dates.
+	TODO: Add weekday to expected date format
+
+	Expected input format: "Month Day - H[AM/PM]" (e.g., "March 5 - 4PM")
+	Output format: "YYYY-MM-DD HH:MM"
+	"""
+	current_year = datetime.datetime.now().year
+	dt = datetime.datetime.strptime(f"{current_year} {date_str}",f"%Y {Globals.datestr_format}" )
+	return dt.strftime("%Y-%m-%d %H:%M")
+
+# Load CSV data
+def load_csv(filename):
+	with open(filename, newline='', encoding='utf-8') as csvfile:
+		return list(csv.DictReader(csvfile))
+
+def convert_to_json(responses_file, members_file, output_file):
+	peeps_data = load_csv(members_file)
+	responses_data = load_csv(responses_file)
+
+	unique_peeps = {}
+	unique_events = {}
+	jsonData = []
+	event_counter = 0
+
+	# Process members data
+	for row in peeps_data:
+		id, name, role, index, priority, total_attended = row['id'], row['Name'].strip(), row['Role'], row['Index'], row['Priority'], row['Total Attended']
+		
+
+		if id not in unique_peeps:
+			unique_peeps[id] = {
+				"id": id,
+				"name": name,
+				"role": role,
+				"index": int(index),
+				"priority": int(priority),
+				"total_attended": int(total_attended),
+				"availability": [],
+			}
+
+	# Process responses
+	for row in responses_data:
+		name, preferred_role, max_sessions, available_dates = row['Name'].strip(), row['Preferred Role'], row['Max Sessions'], row['Availability']
+		min_interval_days = int(row.get('Min Interval Days', 0))  # Default to 0 if not specified
+		matched_peeps = [peep for peep in unique_peeps.values() if peep['name'].lower() == name.lower()]
+
+		if not matched_peeps:
+			matched_peeps = [peep for peep in unique_peeps.values() if peep['name'].split()[0].lower() == name.split()[0].lower()]
+
+		if len(matched_peeps) == 1:
+			peep = matched_peeps[0]
+			peep['event_limit'] = max_sessions
+			peep['min_interval_days'] = min_interval_days	
+
+			event_ids = []
+			for event in available_dates.split(', '):
+				if event:
+					if event not in unique_events:
+						unique_events[event] = {
+							"id": event_counter,
+							"date": parse_event_date(event),
+						}
+						event_counter += 1
+					event_ids.append(unique_events[event]['id'])
+
+			peep['availability'] = list(set(peep['availability'] + event_ids))
+			jsonData.append({
+				"timestamp": row['Timestamp'],
+				"name": name,
+				"preferred_role": preferred_role,
+				"max_sessions": max_sessions,
+				"available_dates": available_dates.split(', '),
+			})
+		else:
+			print(f"Error: {len(matched_peeps)} matches found for '{name}', skipping.")
+
+	output = {
+		"responses": jsonData,
+		"events": list(unique_events.values()),
+		"peeps": list(unique_peeps.values())
+	}
+
+	with open(output_file, 'w', encoding='utf-8') as f:
+		json.dump(output, f, indent=2)
 
 def generate_event_permutations(events):
 	"""Generates all possible permutations of event sequences as a list of event ids."""
@@ -15,51 +107,43 @@ def generate_event_permutations(events):
 	logging.debug(f"Total permutations: {len(index_sequences)}")
 	return index_sequences
 
-def initialize_data (generate_events=True, generate_peeps=True):
-	num_events = 10
-	num_peeps = 30
-	event_filename = "test_events.json"
-	peep_filename = "test_peeps.json"
+def generate_test_data(num_events, num_peeps, output_filename):
 
-  # Load or generate events
-	if generate_events:
-		start_date = datetime.date.today()
-		events = [Event.generate_test_event(i, start_date) for i in range(num_events)]
-		save_json([event.to_dict() for event in events], event_filename)
-		logging.info(f"Saved {len(events)} Events to {event_filename}.\n"
-		  f"Rename before next run if you want to keep this generated test data.")
-	else:
-		event_data = load_json(event_filename)
-		events = [Event.from_dict(e) for e in event_data] if event_data else []
+	# Generate events
+	start_date = datetime.date.today()
+	events = [Event.generate_test_event(i, start_date) for i in range(num_events)]
+	event_ids = [event.id for event in events]
 
-	# Load or generate peeps
-	if generate_peeps:
-		peeps = [Peep.generate_test_peep(i, i - 1, num_events) for i in range(num_peeps)]
-		save_json([{
-				"id": peep.id,
-				"name": peep.name,
-				"role": peep.role.value,
-				"index": peep.index,
-				"priority": peep.priority,
-				"total_attended": peep.total_attended,
-				"availability": peep.availability,
-				"event_limit": peep.event_limit,
-				"min_interval_days": peep.min_interval_days
-			} for peep in peeps], peep_filename)
-		logging.info(f"Saved {len(peeps)} Peeps to {peep_filename}.\n"
-		  f"Rename before next run if you want to keep this generated test data.")
-	else:
-		peep_data = load_json(peep_filename)
-		peeps = [Peep(**p) for p in peep_data] if peep_data else []
+	# Generate peeps
+	peeps = [Peep.generate_test_peep(i, i-1, event_ids) for i in range(num_peeps)]
+	# sort by priority and fix index 
+	peeps = sorted(peeps, reverse=True, key=lambda peep: peep.priority)
+	for i, peep in enumerate(peeps): 
+		peep.index = i 
 
-	sorted_peeps = sorted(peeps, reverse=True, key=lambda peep: peep.priority)
-	return sorted_peeps, events
+	# Generate dummy responses (optional, for completeness)
+	responses = []
+	for peep in peeps:
+		responses.append({
+			"timestamp": datetime.datetime.now().isoformat(),
+			"name": peep.name,
+			"preferred_role": peep.role,
+			"max_sessions": peep.event_limit,
+			"available_dates": [event.date.strftime(Globals.datestr_format) for event in events if event.id in peep.availability],
+		})
 
-def initialize_data_from_json(data_folder):
+	# Format output JSON (matches output.json structure)
+	output = {
+		"responses": responses,
+		"events": [event.to_dict() for event in events],
+		"peeps": [peep.to_dict() for peep in peeps]
+	}
 
-	output_json = f'data/{data_folder}/output.json'
+	save_json(output, output_filename)
+	logging.info(f"Generated test data saved to {output_filename}.")
 
-	json_data = load_json(output_json)
+def load_data_from_json(filename):
+	json_data = load_json(filename)
 	response_data = json_data['responses'] # don't really need this but could help debugging
 	event_data = json_data['events']
 	peeps_data = json_data['peeps']
@@ -69,14 +153,27 @@ def initialize_data_from_json(data_folder):
 
 	# sort peeps by their current index from the csv, which represents
 	# their current order in the priority queue
-	# TODO: if we want to be super crazy we can check that the priorities are in descending order
 	sorted_peeps = sorted(peeps, key=lambda peep: peep.index)
+	assert is_sorted_by_priority(peeps), "Peeps are not sorted by priority; check input file." 
+
 	return sorted_peeps, events
 
+def is_sorted_by_priority(peeps): 
+	 return all(peeps[i].priority >= peeps[i + 1].priority for i in range(len(peeps)-1))
+
 def save_json(data, filename):
-	"""Save data to a JSON file."""
+	"""Save data to a JSON file, handling Enums and datetime."""
+	def custom_serializer(obj):
+		if hasattr(obj, "value"):  # For Enums like Role
+			return obj.value
+		if isinstance(obj, datetime.datetime):
+			return obj.strftime(Globals.date_format)
+		if isinstance(obj, datetime.date):
+			return obj.isoformat()
+		return str(obj)  # Fallback for other non-serializable objects
+	
 	with open(filename, "w") as f:
-		json.dump(data, f, indent=4)
+		json.dump(data, f, indent=4, default=custom_serializer)
 
 
 def load_json(filename):
