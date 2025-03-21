@@ -126,14 +126,20 @@ def main():
 	best_sequence = sorted_unique[0] if sorted_unique else None
 	if best_sequence:
 		logging.info(f"Best {best_sequence}")
+		# Save results
+		result_json = f"data/{data_folder}/results.json"
+		utils.save_event_sequence(best_sequence, result_json)
+
+		# Apply results to fresh member list
+		updated_peeps = utils.apply_event_results(f"data/{data_folder}/members.csv", result_json)
+		utils.save_peeps_csv(updated_peeps, f"data/{data_folder}/members_updated.csv")
+
+		logging.info("Updated members.csv ready for Google Sheets upload.")
 
 		logging.debug("Final Peeps:")
 		logging.debug(Peep.peeps_str(best_sequence.peeps))
 	else:
 		logging.info(f"No sequence found; couldn't fill any events.")
-
-	#TODO: output to results.json.
-	#TODO: add a way to apply final_results.json to members.csv to import to google sheet
 
 if __name__ == "__main__":
 	main()

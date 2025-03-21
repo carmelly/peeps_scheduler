@@ -280,8 +280,10 @@ class EventSequence:
 		self.events = events
 		self.peeps = peeps
 		self.num_unique_attendees = 0
+		self.total_attendees = 0
 		self.system_weight = 0
 		self.valid_events = []
+		
 
 	def finalize(self):
 		"""Finalizes a sequence by increasing priority for unsuccessful peeps and tracking metrics."""
@@ -289,9 +291,19 @@ class EventSequence:
 			if peep.num_events == 0:
 				peep.priority += 1  # Increase priority if not assigned to any event
 			else:
+				peep.total_attended += peep.num_events 	# keep track of peep total in csv
+				self.total_attendees += peep.num_events # count people who went more than once as a backup metric
 				self.num_unique_attendees += 1
+				
 
 			self.system_weight += peep.priority  # Track total system priority weight
+
+		# Sort peeps by priority descending
+		self.peeps.sort(key=lambda p: p.priority, reverse=True)
+
+		# Reassign index based on sorted order
+		for i, peep in enumerate(self.peeps):
+			peep.index = i
 
 	@staticmethod
 	def get_unique_sequences(sequences):

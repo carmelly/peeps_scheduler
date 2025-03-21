@@ -2,7 +2,7 @@ import json
 import csv
 import logging
 from globals import Globals
-from models import Peep, Event, Role
+from models import EventSequence, Peep, Event, Role
 import datetime 
 import itertools
 
@@ -194,3 +194,90 @@ def setup_logging():
 
 	logging.getLogger().handlers[0].setLevel(logging.INFO)
 	logging.getLogger().handlers[1].setLevel(logging.DEBUG)
+
+def save_event_sequence(sequence, filename):
+	data = {
+		"valid_events": [
+			{
+				"id": event.id,
+				"date": event.date.strftime(Globals.date_format),
+				"attendees": [
+					{
+						"id": peep.id,
+						"name": peep.name,
+						"role": peep.role.value
+					}
+					for peep, _ in event.attendees
+				],
+			}
+			for event in sequence.valid_events
+		],
+		"peeps": [peep.to_dict() for peep in sequence.peeps],
+		"num_unique_attendees": sequence.num_unique_attendees,
+		"system_weight": sequence.system_weight
+	}
+	save_json(data, filename)
+	logging.info(f"Saved event sequence to {filename}")
+
+def apply_event_results(members_csv, result_json):
+	from models import Peep, Event
+
+	peep_rows = load_csv(members_csv)
+	fresh_peeps = []
+	for row in peep_rows:
+		peep = Peep(
+			id=row['id'],
+			name=row['Name'],
+			role=row['Role'],
+			index=int(row['Index']),
+			priority=int(row['Priority']),
+			total_attended=int(row['Total Attended']),
+			availability=[],
+			event_limit=0,
+			min_interval_days=0
+		)
+		fresh_peeps.append(peep)
+
+	with open(result_json, "r") as f:
+		result_data = json.load(f)
+
+	event_data = result_data['valid_events']
+	events = []
+	for e in event_data:
+		event = Event(
+			id=e['id'],
+			date=datetime.datetime.strptime(e['date'], Globals.date_format),
+			min_role=0,
+			max_role=0
+		)
+		for peep_info in e['attendees']:
+			for peep in fresh_peeps:
+				if peep.id == peep_info['id']:
+					event.add_attendee(peep)
+		events.append(event)
+
+	sequence = EventSequence(events, fresh_peeps)
+	sequence.valid_events = events  # Mark them valid (since they came from results.json)
+	
+	for event in sequence.valid_events:
+		winners = [peep for peep, _ in event.attendees]
+		Peep.update_event_attendees(fresh_peeps, winners, event)
+	sequence.finalize() 
+	
+	return sequence.peeps
+
+def save_peeps_csv(peeps, filename):
+	fieldnames = ['id', 'Name', 'Role', 'Index', 'Priority', 'Total Attended']
+	with open(filename, "w", newline='', encoding='utf-8') as csvfile:
+		writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+		writer.writeheader()
+		for peep in peeps:
+			writer.writerow({
+				'id': peep.id,
+				'Name': peep.name,
+				'Role': peep.role.value,
+				'Index': peep.index,
+				'Priority': peep.priority,
+				'Total Attended': peep.total_attended
+			})
+	logging.info(f"Updated peeps saved to {filename}")
