@@ -12,13 +12,12 @@ def parse_event_date(date_str):
 	Assumes the event is in the current year.
 	TODO: fix for next year if date has passed, but right now we're testing
 	with old dates.
-	TODO: Add weekday to expected date format
 
-	Expected input format: "Month Day - H[AM/PM]" (e.g., "March 5 - 4PM")
+	Expected input format: "Weeday Month Day - H[AM/PM]" (e.g., "March 5 - 4PM")
 	Output format: "YYYY-MM-DD HH:MM"
 	"""
-	current_year = datetime.datetime.now().year
-	dt = datetime.datetime.strptime(f"{current_year} {date_str}",f"%Y {Globals.datestr_format}" )
+	dt = datetime.datetime.strptime(f"{date_str}",f"{Globals.datestr_format}" )
+	dt = dt.replace(year=datetime.datetime.now().year)
 	return dt.strftime("%Y-%m-%d %H:%M")
 
 # Load CSV data
@@ -125,11 +124,11 @@ def generate_test_data(num_events, num_peeps, output_filename):
 	responses = []
 	for peep in peeps:
 		responses.append({
-			"timestamp": datetime.datetime.now().isoformat(),
+			"timestamp": datetime.datetime.now().strftime(Globals.date_format),
 			"name": peep.name,
 			"preferred_role": peep.role,
 			"max_sessions": peep.event_limit,
-			"available_dates": [event.date.strftime(Globals.datestr_format) for event in events if event.id in peep.availability],
+			"available_dates": [event.formatted_date() for event in events if event.id in peep.availability],
 		})
 
 	# Format output JSON (matches output.json structure)

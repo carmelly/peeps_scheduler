@@ -249,6 +249,14 @@ class Event:
 		logging.info(f"Final event count: {len(events)}.")
 		return events
 
+	def formatted_date(self):
+		dt = self.date
+		formatted = dt.strftime(Globals.datestr_format if hasattr(dt, 'strftime') else "")
+		# For Unix systems, remove leading zeros manually (since %#I doesn't work)
+		formatted = formatted.replace(" 0", " ")
+		formatted = formatted[:-2] + formatted[-2:].lower()  # Lowercase am/pm
+		return formatted
+	
 	def __repr__(self):
 		""" Used for logging at DEBUG level - detailed format """
 		return (f"Event(event_id={self.id}, date={self.date}, "
@@ -257,7 +265,7 @@ class Event:
 
 	def __str__(self):
 		""" Used for logging at INFO level - concise format """
-		return f"Event {self.id} on {self.date.strftime('%Y-%m-%d %H:%M')}"
+		return f"Event {self.id} on {self.formatted_date()}"
 
 	def get_leaders_str(self):
 		leaders = [peep.name.split()[0] for peep, role in self.attendees if role == Role.LEADER]
