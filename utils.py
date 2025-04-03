@@ -1,6 +1,7 @@
 import json
 import csv
 import logging
+import os
 from globals import Globals
 from models import EventSequence, Peep, Event, Role
 import datetime 
@@ -219,7 +220,7 @@ def save_event_sequence(sequence, filename):
 	save_json(data, filename)
 	logging.info(f"Saved event sequence to {filename}")
 
-def apply_event_results(members_csv, result_json):
+def apply_event_results( result_json, members_csv):
 	from models import Peep, Event
 
 	peep_rows = load_csv(members_csv)
@@ -267,6 +268,9 @@ def apply_event_results(members_csv, result_json):
 	return sequence.peeps
 
 def save_peeps_csv(peeps, filename):
+	"""Save updated peeps to a new CSV called members_updated.csv in the same folder as the original."""
+	filename = os.path.join(os.path.dirname(filename), "members_updated.csv")
+	
 	fieldnames = ['id', 'Name', 'Role', 'Index', 'Priority', 'Total Attended']
 	with open(filename, "w", newline='', encoding='utf-8') as csvfile:
 		writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
