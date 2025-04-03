@@ -13,8 +13,8 @@ class Peep:
 	def __init__(self, **kwargs):
 		self.id = str(kwargs.get("id", "")).strip()  # Ensure ID is a string and trimmed
 		self.name = str(kwargs.get("name", "")).strip()
-		role_str = str(kwargs.get("role", ""))
-		self.role = Role(role_str) if isinstance(role_str, str) else role_str
+		role = kwargs.get("role", "") 
+		self.role = role if isinstance(role, Role) else Role(role)
 		self.index = int(kwargs.get("index", 0) or 0)  # Handles empty or missing values
 		self.priority = int(kwargs.get("priority", 0) or 0)
 		self.total_attended = int(kwargs.get("total_attended", 0) or 0)
@@ -72,6 +72,7 @@ class Peep:
 			"id": id,
 			"index": index,
 			"name": f"Person{id}",
+			"email": f"person{id}@example.com", 
 			"priority": random.randint(0, 3),# Priority between 0 and 3
 			"event_limit": random.randint(1, 3),
 			"role": random.choice([Role.LEADER.value, Role.FOLLOWER.value]), 
