@@ -2,6 +2,7 @@ import json
 import csv
 import logging
 import os
+import sys
 from globals import Globals
 from models import EventSequence, Peep, Event, Role
 import datetime 
@@ -37,13 +38,14 @@ def convert_to_json(responses_file, members_file, output_file):
 
 	# Process members data
 	for row in peeps_data:
-		id, name, role, index, priority, total_attended = row['id'], row['Name'].strip(), row['Role'], row['Index'], row['Priority'], row['Total Attended']
+		id, name, email, role, index, priority, total_attended = row['id'], row['Name'].strip(), row['Email Address'], row['Role'], row['Index'], row['Priority'], row['Total Attended']
 		
 
 		if id not in unique_peeps:
 			unique_peeps[id] = {
 				"id": id,
 				"name": name,
+				'email': email, 
 				"role": role,
 				"index": int(index),
 				"priority": int(priority),
@@ -53,40 +55,37 @@ def convert_to_json(responses_file, members_file, output_file):
 
 	# Process responses
 	for row in responses_data:
-		name, preferred_role, max_sessions, available_dates = row['Name'].strip(), row['Preferred Role'], row['Max Sessions'], row['Availability']
+		name, email, role, max_sessions, available_dates = row['Name'].strip(), row['Email Address'].strip(), row['Role'], row['Max Sessions'], row['Availability']
 		min_interval_days = int(row.get('Min Interval Days', 0))  # Default to 0 if not specified
-		matched_peeps = [peep for peep in unique_peeps.values() if peep['name'].lower() == name.lower()]
+		peep  = Peep.find_matching_peep(unique_peeps, name, email )
+		
+		if not peep: 
+			logging.critical(f"Couldn't match all responses to peeps. Please check data and try again.")
+			sys.exit() 
 
-		if not matched_peeps:
-			matched_peeps = [peep for peep in unique_peeps.values() if peep['name'].split()[0].lower() == name.split()[0].lower()]
+		peep['event_limit'] = max_sessions
+		peep['min_interval_days'] = min_interval_days	
 
-		if len(matched_peeps) == 1:
-			peep = matched_peeps[0]
-			peep['event_limit'] = max_sessions
-			peep['min_interval_days'] = min_interval_days	
+		event_ids = []
+		for event in available_dates.split(', '):
+			if event:
+				if event not in unique_events:
+					unique_events[event] = {
+						"id": event_counter,
+						"date": parse_event_date(event),
+					}
+					event_counter += 1
+				event_ids.append(unique_events[event]['id'])
 
-			event_ids = []
-			for event in available_dates.split(', '):
-				if event:
-					if event not in unique_events:
-						unique_events[event] = {
-							"id": event_counter,
-							"date": parse_event_date(event),
-						}
-						event_counter += 1
-					event_ids.append(unique_events[event]['id'])
-
-			peep['availability'] = list(set(peep['availability'] + event_ids))
-			jsonData.append({
-				"timestamp": row['Timestamp'],
-				"name": name,
-				"preferred_role": preferred_role,
-				"max_sessions": max_sessions,
-				"available_dates": available_dates.split(', '),
-			})
-		else:
-			print(f"Error: {len(matched_peeps)} matches found for '{name}', skipping.")
-
+		peep['availability'] = list(set(peep['availability'] + event_ids))
+		jsonData.append({
+			"timestamp": row['Timestamp'],
+			"name": name,
+			"role": role,
+			"max_sessions": max_sessions,
+			"available_dates": available_dates.split(', '),
+		})
+		
 	output = {
 		"responses": jsonData,
 		"events": list(unique_events.values()),
@@ -271,7 +270,7 @@ def save_peeps_csv(peeps, filename):
 	"""Save updated peeps to a new CSV called members_updated.csv in the same folder as the original."""
 	filename = os.path.join(os.path.dirname(filename), "members_updated.csv")
 	
-	fieldnames = ['id', 'Name', 'Role', 'Index', 'Priority', 'Total Attended']
+	fieldnames = ['id', 'Name', 'Email Address', 'Role', 'Index', 'Priority', 'Total Attended']
 	with open(filename, "w", newline='', encoding='utf-8') as csvfile:
 		writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 		writer.writeheader()
@@ -279,6 +278,7 @@ def save_peeps_csv(peeps, filename):
 			writer.writerow({
 				'id': peep.id,
 				'Name': peep.name,
+				'Email Address': peep.email, 
 				'Role': peep.role.value,
 				'Index': peep.index,
 				'Priority': peep.priority,

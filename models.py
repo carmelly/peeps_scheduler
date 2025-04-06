@@ -13,6 +13,7 @@ class Peep:
 	def __init__(self, **kwargs):
 		self.id = str(kwargs.get("id", "")).strip()  # Ensure ID is a string and trimmed
 		self.name = str(kwargs.get("name", "")).strip()
+		self.email = str(kwargs.get("email", "")).strip()
 		role = kwargs.get("role", "") 
 		self.role = role if isinstance(role, Role) else Role(role)
 		self.index = int(kwargs.get("index", 0) or 0)  # Handles empty or missing values
@@ -51,6 +52,20 @@ class Peep:
 				return False
 
 		return True
+
+	@staticmethod
+	def find_matching_peep(peeps, name, email): 
+		if email:
+			matched_peeps = [peep for peep in peeps.values() if peep.get("email", "").lower() == email.lower()]
+			
+		if not matched_peeps: 
+			logging.error(f"No matching peeps for {name} ({email}). Please check input data.")
+			return None 
+		elif len(matched_peeps) > 1: 
+			logging.error(f"More than one matching peep for {name} ({email}). Please check input data.")
+			return None 
+		
+		return matched_peeps[0]
 
 	@staticmethod
 	def update_event_attendees(peeps, winners, event):
