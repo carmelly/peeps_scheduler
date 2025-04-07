@@ -63,8 +63,8 @@ def convert_to_json(responses_file, members_file, output_file):
 			logging.critical(f"Couldn't match all responses to peeps. Please check data and try again.")
 			sys.exit() 
 
-		peep['event_limit'] = max_sessions
-		peep['min_interval_days'] = min_interval_days	
+		peep['event_limit'] = int(max_sessions)
+		peep['min_interval_days'] = int(min_interval_days)
 
 		event_ids = []
 		for event in available_dates.split(', '):
@@ -207,8 +207,19 @@ def save_event_sequence(sequence, filename):
 						"name": peep.name,
 						"role": peep.role.value
 					}
-					for peep, _ in event.attendees
+					for peep in event.attendees
 				],
+				"alternates": [
+					{
+						"id": peep.id,
+						"name": peep.name,
+						"role": peep.role.value
+					}
+					for peep in event.alternates
+				],
+				"leaders_string": event.get_leaders_str(), 
+				"followers_string": event.get_followers_str(), 
+
 			}
 			for event in sequence.valid_events
 		],
@@ -228,6 +239,7 @@ def apply_event_results( result_json, members_csv):
 		peep = Peep(
 			id=row['id'],
 			name=row['Name'],
+			email=row['Email Address'],
 			role=row['Role'],
 			index=int(row['Index']),
 			priority=int(row['Priority']),
@@ -259,9 +271,9 @@ def apply_event_results( result_json, members_csv):
 	sequence = EventSequence(events, fresh_peeps)
 	sequence.valid_events = events  # Mark them valid (since they came from results.json)
 	
+	# Only update actual attendees, alts are not considered now 
 	for event in sequence.valid_events:
-		winners = [peep for peep, _ in event.attendees]
-		Peep.update_event_attendees(fresh_peeps, winners, event)
+		Peep.update_event_attendees(fresh_peeps, event)
 	sequence.finalize() 
 	
 	return sequence.peeps

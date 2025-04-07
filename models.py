@@ -32,13 +32,10 @@ class Peep:
 		}
 	
 	def can_attend(self, event):
-		"""Checks if a peep can attend an event based on peep availability, role limit, and personal event limit."""
+		"""Checks if a peep can attend an event based on peep availability, event limit, and interval. 
+		   Does not take into account role limit, so that we can add this peep as an alternate if needed """
 		# meets the person's availability
 		if event.id not in self.availability:
-			return False
-
-		# space for the role
-		if len(event.get_attendees_by_role(self.role)) >= event.max_role:
 			return False
 
 		# personal limit for the month
@@ -55,6 +52,7 @@ class Peep:
 
 	@staticmethod
 	def find_matching_peep(peeps, name, email): 
+		matched_peeps = []
 		if email:
 			matched_peeps = [peep for peep in peeps.values() if peep.get("email", "").lower() == email.lower()]
 			
@@ -68,9 +66,9 @@ class Peep:
 		return matched_peeps[0]
 
 	@staticmethod
-	def update_event_attendees(peeps, winners, event):
+	def update_event_attendees(peeps, event):
 		"""For all successful attendees, reset priority and send to the back of the line."""
-		for peep in winners:
+		for peep in event.attendees:
 			peep.num_events += 1
 			peep.priority = 0  # Reset priority after successful attendance
 			peep.assigned_event_dates.append(event.date)
@@ -125,9 +123,10 @@ class Event:
 	def __init__(self, **kwargs):
 		self.id = kwargs.get("id", 0)
 		self.date = kwargs.get("date", None)
-		self.min_role = kwargs.get("min_role", 4)
-		self.max_role = kwargs.get("max_role", 8)
+		self.min_role = kwargs.get("min_role", 5)
+		self.max_role = kwargs.get("max_role", 6)
 		self.attendees = []
+		self.alternates = []
 
 	def to_dict(self):
 		return {
@@ -141,12 +140,26 @@ class Event:
 	@property
 	def followers(self):
 		return self.get_attendees_by_role(Role.FOLLOWER)
+	
+	@property
+	def alt_leaders(self):
+		return self.get_alternates_by_role(Role.LEADER)
+
+	@property
+	def alt_followers(self):
+		return self.get_alternates_by_role(Role.FOLLOWER)
 
 	def get_attendees_by_role(self, role): 
-		return [p for p, r in self.attendees if r == role]
+		return [p for p in self.attendees if p.role == role]
+	
+	def get_alternates_by_role(self, role): 
+		return [p for p in self.alternates if p.role == role]
 
 	def add_attendee(self, peep):
-		self.attendees.append((peep, peep.role))
+		self.attendees.append(peep)
+
+	def add_alternate(self, peep): 
+		self.alternates.append(peep)
 
 	def is_valid(self):
 		""" Event is valid if we have enough leaders and enough followers to fill the minimum per role """
@@ -277,19 +290,21 @@ class Event:
 		""" Used for logging at DEBUG level - detailed format """
 		return (f"Event(event_id={self.id}, date={self.date}, "
 				f"min_role={self.min_role}, max_role={self.max_role}, "
-				f"attendees={[peep.name for peep, _ in self.attendees]})")
+				f"attendees={[peep.name for peep in self.attendees]})")
 
 	def __str__(self):
 		""" Used for logging at INFO level - concise format """
 		return f"Event {self.id} on {self.formatted_date()}"
 
 	def get_leaders_str(self):
-		leaders = [peep.name.split()[0] for peep, role in self.attendees if role == Role.LEADER]
-		return f"Leaders({len(leaders)}): " + ", ".join(leaders)
+		names = ', '.join([peep.name.split()[0] for peep in self.leaders])
+		alt_names = ', '.join([peep.name.split()[0] for peep in self.alt_leaders])
+		return f"Leaders({len(self.leaders)}): {names}" + (f" [alt: {alt_names}]" if alt_names else "")
 
 	def get_followers_str(self):
-		followers = [peep.name.split()[0] for peep, role in self.attendees if role == Role.FOLLOWER]
-		return  f"Followers({len(followers)}): " + ", ".join(followers)
+		names = ', '.join([peep.name.split()[0] for peep in self.followers])
+		alt_names = ', '.join([peep.name.split()[0] for peep in self.alt_followers])
+		return f"Followers({len(self.followers)}): {names}" + (f" [alt: {alt_names}]" if alt_names else "")
 	
 class EventSequence:
 	def __init__(self, events, peeps):
@@ -300,6 +315,14 @@ class EventSequence:
 		self.system_weight = 0
 		self.valid_events = []
 		
+	def validate_alternates(self): 
+		""" Removes alternates that can no longer attend an event due to personal limits """
+		for event in self.valid_events: 
+			valid_alternates = [] 
+			for peep in event.alternates: 
+				if peep.can_attend(event): 
+					valid_alternates.append(peep)
+			event.alternates = valid_alternates 
 
 	def finalize(self):
 		"""Finalizes a sequence by increasing priority for unsuccessful peeps and tracking metrics."""
@@ -369,7 +392,8 @@ class EventSequence:
 	def __str__(self):
 		result = (f"EventSequence: "
 			f"valid events: {{ {', '.join(str(event.id) for event in self.valid_events)} }}, "
-			f"unique_peeps {self.num_unique_attendees}/{len(self.peeps)}, system_weight {self.system_weight}"
+			f"unique_peeps {self.num_unique_attendees}/{len(self.peeps)}, " 
+			f"total_attendance {self.total_attendees}, system_weight {self.system_weight}"
 		)
 		result += f"\t"
 		for event in self.valid_events:

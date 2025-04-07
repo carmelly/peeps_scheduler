@@ -8,9 +8,8 @@ import utils
 
 def evaluate_all_event_sequences(og_peeps, og_events):
 	"""Generates and evaluates all possible event sequences based on peep availability and role limits."""
-
-	def balance_roles(event, winners):
-		"""Ensures leaders and followers are balanced within an event."""
+	def balance_roles(event):
+		"""Ensures leaders and followers are balanced within an event. """
 		leaders = event.leaders
 		followers = event.followers
 		if len(leaders) != len(followers):
@@ -19,10 +18,10 @@ def evaluate_all_event_sequences(og_peeps, og_events):
 				if not larger_group:
 					logging.warning(f"Unable to balance roles for event {event.id}.")
 					break
-				#TODO: save removed to an alternates list
-				peep_to_remove = larger_group.pop()
-				event.attendees = [entry for entry in event.attendees if entry[0] != peep_to_remove]
-				winners.remove(peep_to_remove)
+				# Save peeps removed for balance as alternates
+				alt_peep = larger_group.pop()
+				event.attendees.remove(alt_peep)
+				event.add_alternate(alt_peep)
 
 		assert len(event.leaders) == len(event.followers) >= event.min_role
 		assert len(event.leaders) <= event.max_role
@@ -30,25 +29,24 @@ def evaluate_all_event_sequences(og_peeps, og_events):
 	def evaluate_sequence(sequence):
 		"""Evaluates an event sequence by assigning peeps to events and updating priorities and list order."""
 		for event in sequence.events:
-			winners = []
-			losers = []
-
 			# Add peeps to event
 			for peep in sequence.peeps:
 				if peep.can_attend(event):
-					event.add_attendee(peep)
-					winners.append(peep)
-				else:
-					losers.append(peep)
+					# if there is space for the role, add as attendee
+					if len(event.get_attendees_by_role(peep.role)) < event.max_role:
+						event.add_attendee(peep)
+					else: # otherwise, add as alternate 
+						event.add_alternate(peep)
 
 			if event.is_valid():  # If we have enough to fill the event
-				balance_roles(event, winners)
-				Peep.update_event_attendees(sequence.peeps, winners, event)
+				balance_roles(event)
+				Peep.update_event_attendees(sequence.peeps, event)
 				sequence.valid_events.append(event)
 			else:
 				event.attendees.clear()
 
 		# End of sequence, update peeps who didn't make it
+		sequence.validate_alternates()
 		sequence.finalize()
 
 	# Create all event permutations
