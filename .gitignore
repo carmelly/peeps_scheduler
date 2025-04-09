@@ -31,3 +31,4 @@ db/backups/*
 
 # Repo zip for easy upload
 repo-*.zip
+**/sqlite3.exe
