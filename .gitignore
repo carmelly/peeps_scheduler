@@ -1,6 +1,23 @@
+# Log files
 debug.log
-data/*
+
+# Python cache and compiled files
 __pycache__/
 *.pyc
+
+# VS Code editor settings
 .vscode/
+
+# Temporary files
 .tmp.driveupload/*
+
+# Data directories and historical data
+data/*
+db/historical_data/*
+
+# SQLite database files and related artifacts
+db/*.db
+db/*.db-journal
+db/*.sqbpro
+db/backups/*
+**/sqlite3.exe
