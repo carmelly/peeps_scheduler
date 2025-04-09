@@ -2,8 +2,7 @@ import datetime
 import random
 import logging
 from enum import Enum
-
-from globals import Globals
+from constants import DATE_FORMAT, DATESTR_FORMAT
 
 class Role(Enum):
 	LEADER = "Leader"
@@ -187,7 +186,7 @@ class Event:
 	@classmethod
 	def from_dict(cls, data):
 		"""Convert dictionary data back into an Event object."""
-		data["date"] = datetime.datetime.strptime(data["date"], Globals.date_format)
+		data["date"] = datetime.datetime.strptime(data["date"], DATE_FORMAT)
 		return cls(**data)
 
 	@classmethod
@@ -216,7 +215,7 @@ class Event:
 
 	def formatted_date(self):
 		dt = self.date
-		formatted = dt.strftime(Globals.datestr_format if hasattr(dt, 'strftime') else "")
+		formatted = dt.strftime(DATESTR_FORMAT if hasattr(dt, 'strftime') else "")
 		# For Unix systems, remove leading zeros manually (since %#I doesn't work)
 		formatted = formatted.replace(" 0", " ")
 		formatted = formatted[:-2] + formatted[-2:].lower()  # Lowercase am/pm

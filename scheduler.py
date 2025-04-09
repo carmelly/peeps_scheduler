@@ -5,13 +5,11 @@ from models import Event, EventSequence, Peep, Role
 import utils
 
 class Scheduler:
-	def __init__(self, data_folder, max_events=7):
+	def __init__(self, data_folder, max_events):
 		self.data_folder = data_folder
 		self.max_events = max_events
 		self.output_json = f'data/{data_folder}/output.json'
 		self.result_json = f'data/{data_folder}/results.json'
-
-	
 
 	def sanitize_events(self, events, peeps):
 		"""Sanitize events to ensure there are enough leaders and followers to fill roles."""

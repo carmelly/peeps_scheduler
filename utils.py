@@ -3,10 +3,10 @@ import csv
 import logging
 import os
 import sys
-from globals import Globals
-from models import EventSequence, Peep, Event, Role
 import datetime 
 import itertools
+from constants import DATE_FORMAT, DATESTR_FORMAT
+from models import EventSequence, Peep, Event
 
 def parse_event_date(date_str):
 	"""
@@ -18,7 +18,7 @@ def parse_event_date(date_str):
 	Expected input format: "Weeday Month Day - H[AM/PM]" (e.g., "March 5 - 4PM")
 	Output format: "YYYY-MM-DD HH:MM"
 	"""
-	dt = datetime.datetime.strptime(f"{date_str}",f"{Globals.datestr_format}" )
+	dt = datetime.datetime.strptime(f"{date_str}",f"{DATESTR_FORMAT}" )
 	dt = dt.replace(year=datetime.datetime.now().year)
 	return dt.strftime("%Y-%m-%d %H:%M")
 
@@ -124,7 +124,7 @@ def generate_test_data(num_events, num_peeps, output_filename):
 	responses = []
 	for peep in peeps:
 		responses.append({
-			"timestamp": datetime.datetime.now().strftime(Globals.date_format),
+			"timestamp": datetime.datetime.now().strftime(DATE_FORMAT),
 			"name": peep.name,
 			"preferred_role": peep.role,
 			"max_sessions": peep.event_limit,
@@ -166,7 +166,7 @@ def save_json(data, filename):
 		if hasattr(obj, "value"):  # For Enums like Role
 			return obj.value
 		if isinstance(obj, datetime.datetime):
-			return obj.strftime(Globals.date_format)
+			return obj.strftime(DATE_FORMAT)
 		if isinstance(obj, datetime.date):
 			return obj.isoformat()
 		return str(obj)  # Fallback for other non-serializable objects
@@ -200,7 +200,7 @@ def save_event_sequence(sequence, filename):
 		"valid_events": [
 			{
 				"id": event.id,
-				"date": event.date.strftime(Globals.date_format),
+				"date": event.date.strftime(DATE_FORMAT),
 				"attendees": [
 					{
 						"id": peep.id,
@@ -258,7 +258,7 @@ def apply_event_results( result_json, members_csv):
 	for e in event_data:
 		event = Event(
 			id=e['id'],
-			date=datetime.datetime.strptime(e['date'], Globals.date_format),
+			date=datetime.datetime.strptime(e['date'], DATE_FORMAT),
 			min_role=0,
 			max_role=0
 		)
