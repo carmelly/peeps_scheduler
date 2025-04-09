@@ -12,12 +12,14 @@ def apply_results(results_file, members_file):
 	logging.info("Updated members.csv ready for Google Sheets upload.")
 
 def main():
-	utils.setup_logging() 
+	
 	
 	# Default from environment if available
 	default_data_folder = os.getenv("DATA_FOLDER")
 
 	parser = argparse.ArgumentParser(description="Peeps Event Scheduler CLI")
+	parser.add_argument('--verbose', action='store_true', help='Enable verbose (DEBUG) logging')
+	
 	subparsers = parser.add_subparsers(dest='command')
 	
 	# Run command
@@ -33,6 +35,7 @@ def main():
 	apply_parser.add_argument('--members-file', required=True, help='Path to members CSV')
 
 	args = parser.parse_args()
+	utils.setup_logging(verbose=args.verbose)
 
 	# Routing logic
 	if args.command == 'run':

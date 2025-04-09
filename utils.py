@@ -184,15 +184,17 @@ def load_json(filename):
 		return None
 
 
-def setup_logging():
-	logging.basicConfig(level=logging.DEBUG,
-			format='%(asctime)s - %(levelname)s - %(message)s',
-			handlers=[
-				logging.StreamHandler(),
-				logging.FileHandler('debug.log')
-			])
+def setup_logging(verbose=False):
+	log_level = logging.DEBUG if verbose else logging.INFO
+	logging.basicConfig(
+		level=log_level,
+		format='%(asctime)s - %(levelname)s - %(message)s',
+		handlers=[
+			logging.StreamHandler(),
+			logging.FileHandler('debug.log')
+		])
 
-	logging.getLogger().handlers[0].setLevel(logging.INFO)
+	# always log DEBUG level to file 
 	logging.getLogger().handlers[1].setLevel(logging.DEBUG)
 
 def save_event_sequence(sequence, filename):
