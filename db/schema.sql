@@ -8,14 +8,14 @@ CREATE TABLE Peeps (
 , active BOOLEAN DEFAULT 1);
 CREATE TABLE Events (
 	id INTEGER PRIMARY KEY,
-	schedule_id INTEGER NOT NULL REFERENCES "_SchedulePeriods_old"(id),
+	schedule_id INTEGER NOT NULL REFERENCES SchedulePeriod(id),
 	name TEXT,
 	datetime DATETIME NOT NULL,    -- ISO format datetime
 	duration_minutes INTEGER DEFAULT 120,
 	min_per_role INTEGER NOT NULL,
 	max_per_role INTEGER NOT NULL
 );
-CREATE TABLE IF NOT EXISTS "AttendanceRecords" (
+CREATE TABLE AttendanceRecord (
 	id INTEGER PRIMARY KEY,
 	event_id INTEGER NOT NULL REFERENCES Events(id),
 	peep_id INTEGER NOT NULL REFERENCES Peeps(id),
@@ -23,25 +23,6 @@ CREATE TABLE IF NOT EXISTS "AttendanceRecords" (
 	status TEXT NOT NULL CHECK (status IN ('preliminary', 'confirmed', 'absent', 'alternate', 'skipped')),
 	UNIQUE(event_id, peep_id)
 );
-CREATE INDEX idx_attendance_event ON "AttendanceRecords"(event_id);
-CREATE TABLE __migrations_applied__ (
-			filename TEXT PRIMARY KEY,
-			applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
-		);
-CREATE TABLE Responses (
-	id INTEGER PRIMARY KEY AUTOINCREMENT,
-	scheduleperiod_id INTEGER NOT NULL,
-	peep_id INTEGER NOT NULL,
-	timestamp TEXT,
-	role TEXT,
-	availability TEXT,
-	min_interval_days INTEGER,
-	max_sessions INTEGER,
-	raw_data TEXT,
-	FOREIGN KEY(scheduleperiod_id) REFERENCES scheduleperiod(id),
-	FOREIGN KEY(peep_id) REFERENCES peeps(id)
-);
-CREATE TABLE sqlite_sequence(name,seq);
 CREATE TABLE PeepOrderSnapshots (
 	id INTEGER PRIMARY KEY,
 	timestamp DATETIME NOT NULL,
@@ -59,3 +40,25 @@ CREATE TABLE SchedulePeriods (
 	snapshot_after_id INTEGER REFERENCES PeepOrderSnapshots(id),
 	snapshot_final_id INTEGER REFERENCES PeepOrderSnapshots(id)
 );
+CREATE TABLE Responses (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	scheduleperiod_id INTEGER NOT NULL,
+	peep_id INTEGER NOT NULL,
+	timestamp TEXT,
+	role TEXT,
+	availability TEXT,
+	min_interval_days INTEGER,
+	max_sessions INTEGER,
+	raw_data TEXT,
+	FOREIGN KEY(scheduleperiod_id) REFERENCES scheduleperiod(id),
+	FOREIGN KEY(peep_id) REFERENCES peeps(id)
+);
+CREATE TABLE sqlite_sequence(name,seq);
+
+
+CREATE INDEX idx_responses_schedule ON Responses(schedule_id);
+CREATE INDEX idx_attendance_event ON AttendanceRecord(event_id);
+CREATE TABLE __migrations_applied__ (
+			filename TEXT PRIMARY KEY,
+			applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		);
