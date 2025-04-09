@@ -165,6 +165,25 @@ class Event:
 		""" Event is valid if we have enough leaders and enough followers to fill the minimum per role """
 		return( len( self.leaders) >= self.min_role and len(self.followers) >= self.min_role)
 	
+	def balance_roles(self):
+		"""
+		Ensures leaders and followers are balanced within an event.
+		If one group is larger, remove from attendees and add to alternates until balanced. 
+		"""
+		leaders = self.leaders
+		followers = self.followers
+		if len(leaders) != len(followers):
+			larger_group = leaders if len(leaders) > len(followers) else followers
+			while len(leaders) != len(followers):
+				if not larger_group:
+					logging.warning(f"Unable to balance roles for event {self.id}.")
+					break
+				alt_peep = larger_group.pop()
+				self.attendees.remove(alt_peep)
+				self.add_alternate(alt_peep)
+		assert len(self.leaders) == len(self.followers) >= self.min_role
+		assert len(self.leaders) <= self.max_role
+
 	@classmethod
 	def from_dict(cls, data):
 		"""Convert dictionary data back into an Event object."""
@@ -194,89 +213,6 @@ class Event:
 			min_role=random.randint(3, 5),
 			max_role=random.randint(6, 8),
 		)
-
-	@staticmethod
-	def sanitize_events(events, peeps):
-		"""Sanitize events to ensure there are enough leaders and followers to fill roles."""
-		valid_events = []
-		removed_events = []
-		for event in events:
-			num_leaders = sum(1 for peep in peeps if event.id in peep.availability and peep.role == Role.LEADER)
-			num_followers = sum(1 for peep in peeps if event.id in peep.availability and peep.role == Role.FOLLOWER)
-
-			if num_leaders >= event.min_role and num_followers >= event.min_role:
-				valid_events.append(event)
-			else:
-				removed_events.append(event)
-
-		return valid_events
-
-	@staticmethod
-	def remove_high_overlap_events(events, peeps, max_events):
-		"""
-		Remove events that have the highest participant overlap with all other events in the list,
-		until we have no more than max_events in the list. If overlap is the same, remove the lowest-weighted event.
-		Returns a new list.
-		"""
-
-		def find_overlapping_events(events, peeps):
-			"""
-			Identify the event with the highest participant overlap.
-
-			Overlap is calculated by counting the number of shared participants between each pair of events.
-			If a peep is available for both event A and event B, they contribute to the overlap score for both events.
-			"""
-			overlap_scores = {event.id: 0 for event in events}
-
-			logging.debug("Computing event overlap...")
-
-			# Create a lookup for peep availability
-			peep_event_map = {peep.id: set(peep.availability) for peep in peeps}
-
-			# Compute event overlap
-			for i, event_a in enumerate(events):
-				for j, event_b in enumerate(events):
-					if i >= j:
-						continue  # Avoid redundant checks
-
-					# Count shared peeps who are available for both events
-					shared_peeps = sum(1 for peep in peeps if
-						event_a.id in peep_event_map[peep.id] and event_b.id in peep_event_map[peep.id])
-
-					overlap_scores[event_a.id] += shared_peeps
-					overlap_scores[event_b.id] += shared_peeps
-
-			logging.debug(f"Overlap scores: {overlap_scores}")
-			return overlap_scores
-
-		def find_event_to_remove(events, peeps):
-			"""
-			Find the event with the highest overlap. If there's a tie, remove the event with the lowest weight.
-			"""
-			overlap_scores = find_overlapping_events(events, peeps)
-			max_overlap = max(overlap_scores.values())
-			candidates = [event for event in events if overlap_scores[event.id] == max_overlap]
-
-			logging.debug(f"Events with max overlap ({max_overlap}): {[event.id for event in candidates]}")
-
-			if len(candidates) == 1:
-				return candidates[0]
-
-			# Use weight as a tiebreaker
-			event_weights = {event: sum(peep.priority for peep in peeps if event.id in peep.availability) for event in candidates}
-			event_to_remove = min(event_weights, key=event_weights.get)
-
-			logging.debug(f"Tie on overlap. Removing event based on lowest weight")
-			return event_to_remove
-
-		logging.debug(f"Initial event count: {len(events)}. Target event count: {max_events}.")
-		while len(events) > max_events:
-			event_to_remove = find_event_to_remove(events, peeps)
-			logging.debug(f"Removing event: Event({event_to_remove.id}) Date: {event_to_remove.date}. Remaining events: {len(events) - 1}.")
-			events = [event for event in events if event.id != event_to_remove.id]
-
-		logging.info(f"Final event count: {len(events)}.")
-		return events
 
 	def formatted_date(self):
 		dt = self.date
