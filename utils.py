@@ -3,10 +3,10 @@ import csv
 import logging
 import os
 import sys
-from globals import Globals
-from models import EventSequence, Peep, Event, Role
 import datetime 
 import itertools
+from constants import DATE_FORMAT, DATESTR_FORMAT
+from models import EventSequence, Peep, Event
 
 def parse_event_date(date_str):
 	"""
@@ -18,18 +18,26 @@ def parse_event_date(date_str):
 	Expected input format: "Weeday Month Day - H[AM/PM]" (e.g., "March 5 - 4PM")
 	Output format: "YYYY-MM-DD HH:MM"
 	"""
-	dt = datetime.datetime.strptime(f"{date_str}",f"{Globals.datestr_format}" )
+	dt = datetime.datetime.strptime(f"{date_str}",f"{DATESTR_FORMAT}" )
 	dt = dt.replace(year=datetime.datetime.now().year)
 	return dt.strftime("%Y-%m-%d %H:%M")
 
 # Load CSV data
-def load_csv(filename):
+def load_csv(filename, required_columns=None):
+	
 	with open(filename, newline='', encoding='utf-8') as csvfile:
-		return list(csv.DictReader(csvfile))
+		reader = csv.DictReader(csvfile)
+		missing = set(required_columns) - set(reader.fieldnames)
+		if required_columns: 
+			if missing:
+				logging.critical(f"Missing required columns in {filename}: {missing}")
+				sys.exit() 
+		return list(reader)
 
 def convert_to_json(responses_file, members_file, output_file):
-	peeps_data = load_csv(members_file)
-	responses_data = load_csv(responses_file)
+		
+	peeps_data = load_csv(members_file, ['id','Name','Email Address','Role','Index','Priority','Total Attended'])
+	responses_data = load_csv(responses_file, ['Name','Email Address','Role','Max Sessions','Availability','Min Interval Days'])
 
 	unique_peeps = {}
 	unique_events = {}
@@ -39,7 +47,6 @@ def convert_to_json(responses_file, members_file, output_file):
 	# Process members data
 	for row in peeps_data:
 		id, name, email, role, index, priority, total_attended = row['id'], row['Name'].strip(), row['Email Address'], row['Role'], row['Index'], row['Priority'], row['Total Attended']
-		
 
 		if id not in unique_peeps:
 			unique_peeps[id] = {
@@ -58,7 +65,7 @@ def convert_to_json(responses_file, members_file, output_file):
 		name, email, role, max_sessions, available_dates = row['Name'].strip(), row['Email Address'].strip(), row['Role'], row['Max Sessions'], row['Availability']
 		min_interval_days = int(row.get('Min Interval Days', 0))  # Default to 0 if not specified
 		peep  = Peep.find_matching_peep(unique_peeps, name, email )
-		
+
 		if not peep: 
 			logging.critical(f"Couldn't match all responses to peeps. Please check data and try again.")
 			sys.exit() 
@@ -124,7 +131,7 @@ def generate_test_data(num_events, num_peeps, output_filename):
 	responses = []
 	for peep in peeps:
 		responses.append({
-			"timestamp": datetime.datetime.now().strftime(Globals.date_format),
+			"timestamp": datetime.datetime.now().strftime(DATE_FORMAT),
 			"name": peep.name,
 			"preferred_role": peep.role,
 			"max_sessions": peep.event_limit,
@@ -166,7 +173,7 @@ def save_json(data, filename):
 		if hasattr(obj, "value"):  # For Enums like Role
 			return obj.value
 		if isinstance(obj, datetime.datetime):
-			return obj.strftime(Globals.date_format)
+			return obj.strftime(DATE_FORMAT)
 		if isinstance(obj, datetime.date):
 			return obj.isoformat()
 		return str(obj)  # Fallback for other non-serializable objects
@@ -184,15 +191,17 @@ def load_json(filename):
 		return None
 
 
-def setup_logging():
-	logging.basicConfig(level=logging.DEBUG,
-			format='%(asctime)s - %(levelname)s - %(message)s',
-			handlers=[
-				logging.StreamHandler(),
-				logging.FileHandler('debug.log')
-			])
+def setup_logging(verbose=False):
+	log_level = logging.DEBUG if verbose else logging.INFO
+	logging.basicConfig(
+		level=log_level,
+		format='%(asctime)s - %(levelname)s - %(message)s',
+		handlers=[
+			logging.StreamHandler(),
+			logging.FileHandler('debug.log')
+		])
 
-	logging.getLogger().handlers[0].setLevel(logging.INFO)
+	# always log DEBUG level to file 
 	logging.getLogger().handlers[1].setLevel(logging.DEBUG)
 
 def save_event_sequence(sequence, filename):
@@ -200,7 +209,7 @@ def save_event_sequence(sequence, filename):
 		"valid_events": [
 			{
 				"id": event.id,
-				"date": event.date.strftime(Globals.date_format),
+				"date": event.date.strftime(DATE_FORMAT),
 				"attendees": [
 					{
 						"id": peep.id,
@@ -246,7 +255,9 @@ def apply_event_results( result_json, members_csv):
 			total_attended=int(row['Total Attended']),
 			availability=[],
 			event_limit=0,
-			min_interval_days=0
+			min_interval_days=0, 
+			active = row['Active'], 
+			date_joined = row['Date Joined']
 		)
 		fresh_peeps.append(peep)
 
@@ -258,7 +269,7 @@ def apply_event_results( result_json, members_csv):
 	for e in event_data:
 		event = Event(
 			id=e['id'],
-			date=datetime.datetime.strptime(e['date'], Globals.date_format),
+			date=datetime.datetime.strptime(e['date'], DATE_FORMAT),
 			min_role=0,
 			max_role=0
 		)
@@ -282,7 +293,7 @@ def save_peeps_csv(peeps, filename):
 	"""Save updated peeps to a new CSV called members_updated.csv in the same folder as the original."""
 	filename = os.path.join(os.path.dirname(filename), "members_updated.csv")
 	
-	fieldnames = ['id', 'Name', 'Email Address', 'Role', 'Index', 'Priority', 'Total Attended']
+	fieldnames = ['id', 'Name', 'Email Address', 'Role', 'Index', 'Priority', 'Total Attended', 'Active', 'Date Joined']
 	with open(filename, "w", newline='', encoding='utf-8') as csvfile:
 		writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 		writer.writeheader()
@@ -294,6 +305,8 @@ def save_peeps_csv(peeps, filename):
 				'Role': peep.role.value,
 				'Index': peep.index,
 				'Priority': peep.priority,
-				'Total Attended': peep.total_attended
+				'Total Attended': peep.total_attended, 
+				'Active': peep.active,
+				'Date Joined': peep.date_joined
 			})
 	logging.info(f"Updated peeps saved to {filename}")
