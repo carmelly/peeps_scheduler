@@ -23,13 +23,21 @@ def parse_event_date(date_str):
 	return dt.strftime("%Y-%m-%d %H:%M")
 
 # Load CSV data
-def load_csv(filename):
+def load_csv(filename, required_columns=None):
+	
 	with open(filename, newline='', encoding='utf-8') as csvfile:
-		return list(csv.DictReader(csvfile))
+		reader = csv.DictReader(csvfile)
+		missing = set(required_columns) - set(reader.fieldnames)
+		if required_columns: 
+			if missing:
+				logging.critical(f"Missing required columns in {filename}: {missing}")
+				sys.exit() 
+		return list(reader)
 
 def convert_to_json(responses_file, members_file, output_file):
-	peeps_data = load_csv(members_file)
-	responses_data = load_csv(responses_file)
+		
+	peeps_data = load_csv(members_file, ['id','Name','Email Address','Role','Index','Priority','Total Attended'])
+	responses_data = load_csv(responses_file, ['Name','Email Address','Role','Max Sessions','Availability','Min Interval Days'])
 
 	unique_peeps = {}
 	unique_events = {}
@@ -39,7 +47,6 @@ def convert_to_json(responses_file, members_file, output_file):
 	# Process members data
 	for row in peeps_data:
 		id, name, email, role, index, priority, total_attended = row['id'], row['Name'].strip(), row['Email Address'], row['Role'], row['Index'], row['Priority'], row['Total Attended']
-		
 
 		if id not in unique_peeps:
 			unique_peeps[id] = {
@@ -58,7 +65,7 @@ def convert_to_json(responses_file, members_file, output_file):
 		name, email, role, max_sessions, available_dates = row['Name'].strip(), row['Email Address'].strip(), row['Role'], row['Max Sessions'], row['Availability']
 		min_interval_days = int(row.get('Min Interval Days', 0))  # Default to 0 if not specified
 		peep  = Peep.find_matching_peep(unique_peeps, name, email )
-		
+
 		if not peep: 
 			logging.critical(f"Couldn't match all responses to peeps. Please check data and try again.")
 			sys.exit() 
