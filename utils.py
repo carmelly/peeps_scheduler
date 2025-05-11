@@ -248,7 +248,9 @@ def apply_event_results( result_json, members_csv):
 			total_attended=int(row['Total Attended']),
 			availability=[],
 			event_limit=0,
-			min_interval_days=0
+			min_interval_days=0, 
+			active = row['Active'], 
+			date_joined = row['Date Joined']
 		)
 		fresh_peeps.append(peep)
 
@@ -284,7 +286,7 @@ def save_peeps_csv(peeps, filename):
 	"""Save updated peeps to a new CSV called members_updated.csv in the same folder as the original."""
 	filename = os.path.join(os.path.dirname(filename), "members_updated.csv")
 	
-	fieldnames = ['id', 'Name', 'Email Address', 'Role', 'Index', 'Priority', 'Total Attended']
+	fieldnames = ['id', 'Name', 'Email Address', 'Role', 'Index', 'Priority', 'Total Attended', 'Active', 'Date Joined']
 	with open(filename, "w", newline='', encoding='utf-8') as csvfile:
 		writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 		writer.writeheader()
@@ -296,6 +298,8 @@ def save_peeps_csv(peeps, filename):
 				'Role': peep.role.value,
 				'Index': peep.index,
 				'Priority': peep.priority,
-				'Total Attended': peep.total_attended
+				'Total Attended': peep.total_attended, 
+				'Active': peep.active,
+				'Date Joined': peep.date_joined
 			})
 	logging.info(f"Updated peeps saved to {filename}")

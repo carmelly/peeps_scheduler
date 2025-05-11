@@ -22,7 +22,10 @@ class Peep:
 		self.event_limit = int(kwargs.get("event_limit", 0) or 0)
 		self.num_events = 0 # always start at 0, gets incremented during the run
 		self.min_interval_days = int(kwargs.get("min_interval_days", 0) or 0)
-		self.assigned_event_dates = []
+		self.assigned_event_dates = [] 
+		# keep these as strings, just to print back to updated members csv
+		self.active =  kwargs.get('active')
+		self.date_joined = kwargs.get('date_joined')
 
 	def to_dict(self):
 		return {
