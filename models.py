@@ -10,7 +10,7 @@ class Role(Enum):
 
 class Peep:
 	def __init__(self, **kwargs):
-		self.id = str(kwargs.get("id", "")).strip()  # Ensure ID is a string and trimmed
+		self.id = int(kwargs.get("id"))
 		self.name = str(kwargs.get("name", "")).strip()
 		self.email = str(kwargs.get("email", "")).strip()
 		role = kwargs.get("role", "") 

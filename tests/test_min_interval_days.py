@@ -1,7 +1,6 @@
 import datetime
 import pytest
 from models import Peep, Event, Role
-from globals import Globals
 
 @pytest.fixture
 def common_dates():
