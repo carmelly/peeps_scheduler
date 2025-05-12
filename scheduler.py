@@ -64,7 +64,7 @@ class Scheduler:
 		logging.info(f"Evaluation complete. Elapsed time: {end_time - start_time:.2f}s")
 		return sequences
 	
-	def remove_high_overlap_events(events, peeps, max_events):
+	def remove_high_overlap_events(self, events, peeps, max_events):
 		"""
 		Remove events that have the highest participant overlap with all other events in the list,
 		until we have no more than max_events in the list. If overlap is the same, remove the lowest-weighted event.
@@ -130,6 +130,22 @@ class Scheduler:
 		logging.info(f"Final event count: {len(events)}.")
 		return events
 
+	def get_best_sequence(self, events, peeps): 
+		sanitized_events = self.sanitize_events(events, peeps)
+		logging.info(f"Sanitized Events: {len(sanitized_events)}/{len(events)}")
+
+		if len(sanitized_events) > self.max_events:
+			logging.warning(f"Too many valid events. Trimming to {self.max_events} based on overlap.")
+			sanitized_events = self.remove_high_overlap_events(sanitized_events, peeps, self.max_events)
+
+		event_sequences = self.evaluate_all_event_sequences(peeps, sanitized_events)
+		unique_sequences = EventSequence.get_unique_sequences(event_sequences)
+		logging.info(f"Found {len(unique_sequences)} unique sequences")
+
+		sorted_unique = sorted(unique_sequences, key=lambda s: (-s.num_unique_attendees, -s.system_weight))
+		top_sequence = sorted_unique[0] if sorted_unique else None
+		return top_sequence
+
 	def run(self, generate_test_data=False, load_from_csv=False):
 		if generate_test_data:
 			logging.info(f"Generating test data and saving to {self.output_json}")
@@ -145,20 +161,25 @@ class Scheduler:
 		logging.debug("Initial Peeps")
 		logging.debug(Peep.peeps_str(peeps))
 
-		sanitized_events = self.sanitize_events(events, peeps)
-		logging.info(f"Sanitized Events: {len(sanitized_events)}/{len(events)}")
+		# Try events with different min/max per role to get the *actual* best sequence
+		# TODO: make the ultimate min and max configurable
+		# TODO: handle ties and/or show multiple possibilities before choosing one
+		top_sequences = []
+		for min_role in [4, 5, 6]: 
+			for max_role in range(min_role, 9):  # up to 8
+				# Update all events with current min/max
+				for event in events:
+					event.min_role = min_role
+					event.max_role = max_role
+				
+				top = self.get_best_sequence(copy.deepcopy(events), copy.deepcopy(peeps))
+				if top: 
+					top_sequences.append(top)
 
-		if len(sanitized_events) > self.max_events:
-			logging.warning(f"Too many valid events. Trimming to {self.max_events} based on overlap.")
-			sanitized_events = self.remove_high_overlap_events(sanitized_events, peeps, self.max_events)
-
-		event_sequences = self.evaluate_all_event_sequences(peeps, sanitized_events)
-		unique_sequences = EventSequence.get_unique_sequences(event_sequences)
-		logging.info(f"Found {len(unique_sequences)} unique sequences")
-
+		unique_sequences = EventSequence.get_unique_sequences(top_sequences)
 		sorted_unique = sorted(unique_sequences, key=lambda s: (-s.num_unique_attendees, -s.system_weight))
+		
 		best_sequence = sorted_unique[0] if sorted_unique else None
-
 		if best_sequence:
 			logging.info(f"Best {best_sequence}")
 			utils.save_event_sequence(best_sequence, self.result_json)
