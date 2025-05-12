@@ -5,8 +5,8 @@ from enum import Enum
 from constants import DATE_FORMAT, DATESTR_FORMAT
 
 class Role(Enum):
-	LEADER = "Leader"
-	FOLLOWER = "Follower"
+	LEADER = "leader"
+	FOLLOWER = "follower"
 
 class Peep:
 	def __init__(self, **kwargs):
@@ -340,3 +340,4 @@ class EventSequence:
 			result += f"\n\t  {event.get_followers_str()}"
 
 		return result	
+
