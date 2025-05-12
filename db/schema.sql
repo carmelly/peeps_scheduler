@@ -42,6 +42,11 @@ CREATE TABLE Responses (
 	FOREIGN KEY(peep_id) REFERENCES peeps(id)
 );
 CREATE TABLE sqlite_sequence(name,seq);
+CREATE TABLE PeepOrderSnapshots (
+	id INTEGER PRIMARY KEY,
+	timestamp DATETIME NOT NULL,
+	data TEXT NOT NULL
+);
 CREATE TABLE SchedulePeriods (
 	id INTEGER PRIMARY KEY,
 	name TEXT NOT NULL,
@@ -50,7 +55,7 @@ CREATE TABLE SchedulePeriods (
 	timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
 	finalized BOOLEAN DEFAULT 0,
 	notes TEXT,
-	snapshot_before TEXT,
-	snapshot_after TEXT,
-	snapshot_final TEXT
+	snapshot_before_id INTEGER REFERENCES PeepOrderSnapshots(id),
+	snapshot_after_id INTEGER REFERENCES PeepOrderSnapshots(id),
+	snapshot_final_id INTEGER REFERENCES PeepOrderSnapshots(id)
 );
