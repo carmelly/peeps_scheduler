@@ -8,14 +8,14 @@ CREATE TABLE Peeps (
 , active BOOLEAN DEFAULT 1);
 CREATE TABLE Events (
 	id INTEGER PRIMARY KEY,
-	schedule_id INTEGER NOT NULL REFERENCES SchedulePeriod(id),
+	schedule_id INTEGER NOT NULL REFERENCES "SchedulePeriods"(id),
 	name TEXT,
 	datetime DATETIME NOT NULL,    -- ISO format datetime
 	duration_minutes INTEGER DEFAULT 120,
 	min_per_role INTEGER NOT NULL,
 	max_per_role INTEGER NOT NULL
 );
-CREATE TABLE AttendanceRecord (
+CREATE TABLE IF NOT EXISTS "AttendanceRecords" (
 	id INTEGER PRIMARY KEY,
 	event_id INTEGER NOT NULL REFERENCES Events(id),
 	peep_id INTEGER NOT NULL REFERENCES Peeps(id),
@@ -54,8 +54,6 @@ CREATE TABLE Responses (
 	FOREIGN KEY(peep_id) REFERENCES peeps(id)
 );
 CREATE TABLE sqlite_sequence(name,seq);
-
-
 CREATE INDEX idx_responses_schedule ON Responses(schedule_id);
 CREATE INDEX idx_attendance_event ON AttendanceRecord(event_id);
 CREATE TABLE __migrations_applied__ (
