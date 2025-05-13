@@ -192,17 +192,21 @@ def load_json(filename):
 
 
 def setup_logging(verbose=False):
-	log_level = logging.DEBUG if verbose else logging.INFO
-	logging.basicConfig(
-		level=log_level,
-		format='%(asctime)s - %(levelname)s - %(message)s',
-		handlers=[
-			logging.StreamHandler(),
-			logging.FileHandler('debug.log')
-		])
+	stream_log_level = logging.DEBUG if verbose else logging.INFO
+	
+	# stream level is set by the verbose arg 
+	stream_handler = logging.StreamHandler()
+	stream_handler.setLevel(stream_log_level)
 
-	# always log DEBUG level to file 
-	logging.getLogger().handlers[1].setLevel(logging.DEBUG)
+	# file level is alway DEBUG
+	file_handler = logging.FileHandler('debug.log')
+	file_handler.setLevel(logging.DEBUG)
+
+	logging.basicConfig(
+		level=logging.DEBUG,
+		format='%(asctime)s - %(levelname)s - %(message)s',
+		handlers=[stream_handler, file_handler]
+		)
 
 def save_event_sequence(sequence, filename):
 	data = {

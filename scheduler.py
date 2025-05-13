@@ -61,7 +61,7 @@ class Scheduler:
 				sequences.append(sequence)
 		end_time = time.perf_counter()
 
-		logging.info(f"Evaluation complete. Elapsed time: {end_time - start_time:.2f}s")
+		logging.debug(f"Evaluation complete. Elapsed time: {end_time - start_time:.2f}s")
 		return sequences
 	
 	def remove_high_overlap_events(self, events, peeps, max_events):
@@ -127,12 +127,12 @@ class Scheduler:
 			logging.debug(f"Removing event: Event({event_to_remove.id}) Date: {event_to_remove.date}. Remaining events: {len(events) - 1}.")
 			events = [event for event in events if event.id != event_to_remove.id]
 
-		logging.info(f"Final event count: {len(events)}.")
+		logging.debug(f"Final event count: {len(events)}.")
 		return events
 
 	def get_best_sequence(self, events, peeps): 
 		sanitized_events = self.sanitize_events(events, peeps)
-		logging.info(f"Sanitized Events: {len(sanitized_events)}/{len(events)}")
+		logging.debug(f"Sanitized Events: {len(sanitized_events)}/{len(events)}")
 
 		if len(sanitized_events) > self.max_events:
 			logging.warning(f"Too many valid events. Trimming to {self.max_events} based on overlap.")
@@ -140,7 +140,7 @@ class Scheduler:
 
 		event_sequences = self.evaluate_all_event_sequences(peeps, sanitized_events)
 		unique_sequences = EventSequence.get_unique_sequences(event_sequences)
-		logging.info(f"Found {len(unique_sequences)} unique sequences")
+		logging.debug(f"Found {len(unique_sequences)} unique sequences")
 
 		sorted_unique = sorted(unique_sequences, key=lambda s: (-s.num_unique_attendees, -s.system_weight))
 		top_sequence = sorted_unique[0] if sorted_unique else None
