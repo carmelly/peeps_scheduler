@@ -26,14 +26,14 @@ def parse_availability(responses_file, members_file):
 
 		# Identify responders with no availability 
 		if not dates: 
-			unavailable.append(member["Name"])
+			unavailable.append(member["Display Name"])
 
 		for date in dates:
-			availability[date][role].append(member["Name"])
+			availability[date][role].append(member["Display Name"])
 
 	# Identify non-responders
 	non_responders = [
-		member["Name"] for email, member in members.items()
+		member["Display Name"] for email, member in members.items()
 		if email not in responders and member.get("Active", "TRUE").upper() == "TRUE"
 	]
 
