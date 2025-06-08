@@ -235,13 +235,13 @@ class Event:
 		return f"Event {self.id} on {self.formatted_date()}"
 
 	def get_leaders_str(self):
-		names = ', '.join([peep.name.split()[0] for peep in self.leaders])
-		alt_names = ', '.join([peep.name.split()[0] for peep in self.alt_leaders])
+		names = ', '.join([peep.name for peep in sorted(self.leaders, key=lambda p: p.name )])
+		alt_names = ', '.join([peep.name for peep in self.alt_leaders])
 		return f"Leaders({len(self.leaders)}): {names}" + (f" [alt: {alt_names}]" if alt_names else "")
 
 	def get_followers_str(self):
-		names = ', '.join([peep.name.split()[0] for peep in self.followers])
-		alt_names = ', '.join([peep.name.split()[0] for peep in self.alt_followers])
+		names = ', '.join([peep.name for peep in sorted(self.followers, key=lambda p: p.name )])
+		alt_names = ', '.join([peep.name for peep in self.alt_followers])
 		return f"Followers({len(self.followers)}): {names}" + (f" [alt: {alt_names}]" if alt_names else "")
 	
 class EventSequence:
@@ -267,11 +267,11 @@ class EventSequence:
 		for peep in self.peeps:
 			if peep.num_events == 0:
 				peep.priority += 1  # Increase priority if not assigned to any event
+				# TODO: priority should only be increased if the peep submitted a response for this schedule period
 			else:
 				peep.total_attended += peep.num_events 	# keep track of peep total in csv
 				self.total_attendees += peep.num_events # count people who went more than once as a backup metric
 				self.num_unique_attendees += 1
-				
 
 			self.system_weight += peep.priority  # Track total system priority weight
 
@@ -328,13 +328,14 @@ class EventSequence:
 		return (', '.join(str(event.id) for event in self.events))
 
 	def __str__(self):
+		sorted_events = sorted(self.valid_events, key=lambda e: (e.id))
 		result = (f"EventSequence: "
-			f"valid events: {{ {', '.join(str(event.id) for event in self.valid_events)} }}, "
+			f"valid events: {{ {', '.join(str(event.id) for event in sorted_events)} }}, "
 			f"unique_peeps {self.num_unique_attendees}/{len(self.peeps)}, " 
 			f"total_attendance {self.total_attendees}, system_weight {self.system_weight}"
 		)
 		result += f"\t"
-		for event in self.valid_events:
+		for event in sorted_events:
 			result += f"\n\t{event}"
 			result += f"\n\t  {event.get_leaders_str()}"
 			result += f"\n\t  {event.get_followers_str()}"
