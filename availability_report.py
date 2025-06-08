@@ -9,19 +9,24 @@ def load_csv(filename):
 def parse_availability(responses_file, members_file):
 	members = {row["Email Address"].strip().lower(): row for row in load_csv(members_file)}
 	availability = defaultdict(lambda: {"Lead": [], "Follow": []})
+	unavailable = []
 	responders = set()
 
 	for row in load_csv(responses_file):
 		email = row["Email Address"].strip().lower()
 		role = row["Role"].strip()
 		dates = [d.strip() for d in row["Availability"].split(",") if d.strip()]
-		
+
 		member = members.get(email)
 		if not member:
 			print(f"⚠️ Skipping unmatched email: {email}")
 			continue
 
 		responders.add(email)
+
+		# Identify responders with no availability 
+		if not dates: 
+			unavailable.append(member["Name"])
 
 		for date in dates:
 			availability[date][role].append(member["Name"])
@@ -32,20 +37,26 @@ def parse_availability(responses_file, members_file):
 		if email not in responders and member.get("Active", "TRUE").upper() == "TRUE"
 	]
 
-	return availability, non_responders
+	
 
-def print_availability(availability, non_responders):
+	return availability, unavailable, non_responders
+
+def print_availability(availability, unavailable, non_responders):
 	for date in sorted(availability.keys()):
 		print(f"\n📅 {date}")
 		print(f"  Leaders  ({len(availability[date]['Lead'])}): {', '.join(availability[date]['Lead'])}")
 		print(f"  Followers({len(availability[date]['Follow'])}): {', '.join(availability[date]['Follow'])}")
 	
-	print("\n🚫 Did not respond:")
+	print("\n🚫 No availability:")
+	for name in sorted(unavailable):
+		print(f"  - {name}")
+
+	print("\n❌ Did not respond:")
 	for name in sorted(non_responders):
 		print(f"  - {name}")
 
 if __name__ == "__main__":
-	responses_file = "data/2025-06/responses.csv"
-	members_file = "data/2025-06/members.csv"
-	availability, non_responders = parse_availability(responses_file, members_file)
-	print_availability(availability, non_responders)
+	responses_file = "data/2025-07/responses.csv"
+	members_file = "data/2025-07/members.csv"
+	availability, unavailable, non_responders = parse_availability(responses_file, members_file)
+	print_availability(availability, unavailable, non_responders)
