@@ -22,7 +22,7 @@ class Role(Enum):
 class Peep:
 	def __init__(self, **kwargs):
 		self.id = int(kwargs.get("id"))
-		self.name = str(kwargs.get("name", "")).strip()
+		self.full_name = str(kwargs.get("name", "")).strip()
 		self.display_name = str(kwargs.get("display_name", "")).strip()
 		self.email = str(kwargs.get("email", "")).strip()
 		self.role = Role.from_string(kwargs.get("role", ""))
@@ -38,6 +38,10 @@ class Peep:
 		self.active =  kwargs.get('active')
 		self.date_joined = kwargs.get('date_joined')
 
+	@property
+	def name(self): 
+		return self.display_name 
+	
 	def to_dict(self):
 		return {
 			**self.__dict__,
