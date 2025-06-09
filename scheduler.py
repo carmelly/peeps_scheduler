@@ -137,21 +137,20 @@ class Scheduler:
 		if not unique:
 			return []
 
+		# sort by each metric in order of importance
 		sorted_unique = sorted(unique, key=lambda s: (
 			-s.num_unique_attendees,      # Maximize how many got in
-			s.system_weight,              # Favor overdue people
-			-s.total_attendees            # Use up capacity well
+			-s.priority_fulfilled,        # Favor overdue people
+			-s.normalized_utilization	  # Capacity usage per-person
+			-s.total_attendees            # Overall capacity usage
 		))
 
 		best_unique = sorted_unique[0].num_unique_attendees
-		best_weight = sorted_unique[0].system_weight
-		best_total = sorted_unique[0].total_attendees
 
+		# return all sequences tied by unique attendees
 		return [
 			s for s in sorted_unique
-			if s.num_unique_attendees == best_unique and
-			s.system_weight == best_weight and 
-			s.total_attendees == best_total
+			if s.num_unique_attendees == best_unique 
 		]
 
 	def get_sequences_for_class_size(self, og_events, og_peeps, min_role, max_role): 
@@ -215,7 +214,7 @@ class Scheduler:
 			logging.debug("Final Peeps:")
 			logging.debug(Peep.peeps_str(best_sequence.peeps))
 		else:
-			print(f"Found {len(best)} tied top sequences with {best[0].num_unique_attendees} unique attendees and weight {best[0].system_weight}:")
+			print(f"Found {len(best)} tied top sequences with {best[0].num_unique_attendees} unique attendees:")
 			for i, seq in enumerate(best):
 				print(f"[{i}] {seq}")
 

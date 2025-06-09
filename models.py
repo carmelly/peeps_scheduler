@@ -28,6 +28,7 @@ class Peep:
 		self.role = Role.from_string(kwargs.get("role", ""))
 		self.index = int(kwargs.get("index", 0) or 0)  # Handles empty or missing values
 		self.priority = int(kwargs.get("priority", 0) or 0)
+		self.original_priority = self.priority
 		self.total_attended = int(kwargs.get("total_attended", 0) or 0)
 		self.availability = list(kwargs.get("availability", []))  # Ensure list format
 		self.event_limit = int(kwargs.get("event_limit", 0) or 0)
@@ -37,6 +38,7 @@ class Peep:
 		# keep these as strings, just to print back to updated members csv
 		self.active =  kwargs.get('active')
 		self.date_joined = kwargs.get('date_joined')
+		self.responded = kwargs.get('responded', False)
 
 	@property
 	def name(self): 
@@ -266,6 +268,8 @@ class EventSequence:
 		self.num_unique_attendees = 0
 		self.total_attendees = 0
 		self.system_weight = 0
+		self.priority_fulfilled = 0 
+		self.normalized_utilization = 0 
 		self.valid_events = []
 		
 	def validate_alternates(self): 
@@ -280,15 +284,20 @@ class EventSequence:
 	def finalize(self):
 		"""Finalizes a sequence by increasing priority for unsuccessful peeps and tracking metrics."""
 		for peep in self.peeps:
-			if peep.num_events == 0:
-				peep.priority += 1  # Increase priority if not assigned to any event
-				# TODO: priority should only be increased if the peep submitted a response for this schedule period
-			else:
-				peep.total_attended += peep.num_events 	# keep track of peep total in csv
-				self.total_attendees += peep.num_events # count people who went more than once as a backup metric
-				self.num_unique_attendees += 1
-
-			self.system_weight += peep.priority  # Track total system priority weight
+			# Update peep stats 
+			if peep.num_events == 0: 
+				# increase priority if peep responded but was not scheduled this period
+				if peep.responded: 
+					peep.priority += 1  # Increase priority if not assigned to any event
+			else: # peep was scheduled to at least one event 
+				peep.total_attended += peep.num_events 	
+				
+			# Track sequence efficiency metrics 
+			self.num_unique_attendees += 1 if peep.num_events > 0 else 0 
+			self.priority_fulfilled += peep.original_priority if peep.num_events > 0 else 0
+			self.normalized_utilization += peep.num_events / peep.event_limit if peep.event_limit > 0 else 0
+			self.total_attendees += peep.num_events 
+			self.system_weight += peep.priority  
 
 		# Sort peeps by priority descending
 		self.peeps.sort(key=lambda p: p.priority, reverse=True)
@@ -346,8 +355,11 @@ class EventSequence:
 		sorted_events = sorted(self.valid_events, key=lambda e: (e.id))
 		result = (f"EventSequence: "
 			f"valid events: {{ {', '.join(str(event.id) for event in sorted_events)} }}, "
-			f"unique_peeps {self.num_unique_attendees}/{len(self.peeps)}, " 
-			f"total_attendance {self.total_attendees}, system_weight {self.system_weight}"
+			f"unique attendees {self.num_unique_attendees}/{len(self.peeps)}, " 
+			f"priority fulfilled {self.priority_fulfilled}, "
+			f"normalized utilization {self.normalized_utilization:.2f}, "
+			f"total attendees {self.total_attendees}, "
+			f"system_weight {self.system_weight}"
 		)
 		result += f"\t"
 		for event in sorted_events:
