@@ -23,7 +23,7 @@ def parse_event_date(date_str):
 	return dt.strftime("%Y-%m-%d %H:%M")
 
 # Load CSV data
-def load_csv(filename, required_columns=None):
+def load_csv(filename, required_columns=[]):
 	
 	with open(filename, newline='', encoding='utf-8') as csvfile:
 		reader = csv.DictReader(csvfile)
@@ -252,6 +252,7 @@ def apply_event_results( result_json, members_csv):
 		peep = Peep(
 			id=row['id'],
 			name=row['Name'],
+			display_name=row['Display Name'],
 			email=row['Email Address'],
 			role=row['Role'],
 			index=int(row['Index']),
@@ -297,7 +298,7 @@ def save_peeps_csv(peeps, filename):
 	"""Save updated peeps to a new CSV called members_updated.csv in the same folder as the original."""
 	filename = os.path.join(os.path.dirname(filename), "members_updated.csv")
 	
-	fieldnames = ['id', 'Name', 'Email Address', 'Role', 'Index', 'Priority', 'Total Attended', 'Active', 'Date Joined']
+	fieldnames = ['id', 'Name', 'Display Name', 'Email Address', 'Role', 'Index', 'Priority', 'Total Attended', 'Active', 'Date Joined']
 	with open(filename, "w", newline='', encoding='utf-8') as csvfile:
 		writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 		writer.writeheader()
@@ -305,6 +306,7 @@ def save_peeps_csv(peeps, filename):
 			writer.writerow({
 				'id': peep.id,
 				'Name': peep.name,
+				'Display Name': peep.display_name, 
 				'Email Address': peep.email, 
 				'Role': peep.role.value,
 				'Index': peep.index,

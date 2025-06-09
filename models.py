@@ -12,6 +12,7 @@ class Peep:
 	def __init__(self, **kwargs):
 		self.id = int(kwargs.get("id"))
 		self.name = str(kwargs.get("name", "")).strip()
+		self.display_name = str(kwargs.get("display_name", "")).strip()
 		self.email = str(kwargs.get("email", "")).strip()
 		role = kwargs.get("role", "") 
 		self.role = role if isinstance(role, Role) else Role(role)
