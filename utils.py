@@ -6,7 +6,7 @@ import sys
 import datetime 
 import itertools
 from constants import DATE_FORMAT, DATESTR_FORMAT
-from models import EventSequence, Peep, Event
+from models import EventSequence, Peep, Event, Role
 
 def parse_event_date(date_str):
 	"""
@@ -23,7 +23,7 @@ def parse_event_date(date_str):
 	return dt.strftime("%Y-%m-%d %H:%M")
 
 # Load CSV data
-def load_csv(filename, required_columns=None):
+def load_csv(filename, required_columns=[]):
 	
 	with open(filename, newline='', encoding='utf-8') as csvfile:
 		reader = csv.DictReader(csvfile)
@@ -36,7 +36,7 @@ def load_csv(filename, required_columns=None):
 
 def convert_to_json(responses_file, members_file, output_file):
 		
-	peeps_data = load_csv(members_file, ['id','Name','Email Address','Role','Index','Priority','Total Attended'])
+	peeps_data = load_csv(members_file, ['id','Name','Display Name','Email Address','Role','Index','Priority','Total Attended'])
 	responses_data = load_csv(responses_file, ['Name','Email Address','Role','Max Sessions','Availability','Min Interval Days'])
 
 	unique_peeps = {}
@@ -46,12 +46,13 @@ def convert_to_json(responses_file, members_file, output_file):
 
 	# Process members data
 	for row in peeps_data:
-		id, name, email, role, index, priority, total_attended = row['id'], row['Name'].strip(), row['Email Address'], row['Role'], row['Index'], row['Priority'], row['Total Attended']
+		id, name, display_name, email, role, index, priority, total_attended = row['id'], row['Name'].strip(), row['Display Name'].strip(), row['Email Address'], row['Role'], row['Index'], row['Priority'], row['Total Attended']
 
 		if id not in unique_peeps:
 			unique_peeps[id] = {
 				"id": id,
 				"name": name,
+				"display_name": display_name,
 				'email': email, 
 				"role": role,
 				"index": int(index),
@@ -65,6 +66,7 @@ def convert_to_json(responses_file, members_file, output_file):
 		name, email, role, max_sessions, available_dates = row['Name'].strip(), row['Email Address'].strip(), row['Role'], row['Max Sessions'], row['Availability']
 		min_interval_days = int(row.get('Min Interval Days', 0))  # Default to 0 if not specified
 		peep  = Peep.find_matching_peep(unique_peeps, name, email )
+		peep['role'] = Role.from_string(role).value # allow response role to override peep main role (TODO: do we even need main role?)
 
 		if not peep: 
 			logging.critical(f"Couldn't match all responses to peeps. Please check data and try again.")
@@ -192,17 +194,21 @@ def load_json(filename):
 
 
 def setup_logging(verbose=False):
-	log_level = logging.DEBUG if verbose else logging.INFO
-	logging.basicConfig(
-		level=log_level,
-		format='%(asctime)s - %(levelname)s - %(message)s',
-		handlers=[
-			logging.StreamHandler(),
-			logging.FileHandler('debug.log')
-		])
+	stream_log_level = logging.DEBUG if verbose else logging.INFO
+	
+	# stream level is set by the verbose arg 
+	stream_handler = logging.StreamHandler()
+	stream_handler.setLevel(stream_log_level)
 
-	# always log DEBUG level to file 
-	logging.getLogger().handlers[1].setLevel(logging.DEBUG)
+	# file level is alway DEBUG
+	file_handler = logging.FileHandler('debug.log')
+	file_handler.setLevel(logging.DEBUG)
+
+	logging.basicConfig(
+		level=logging.DEBUG,
+		format='%(asctime)s - %(levelname)s - %(message)s',
+		handlers=[stream_handler, file_handler]
+		)
 
 def save_event_sequence(sequence, filename):
 	data = {
@@ -248,6 +254,7 @@ def apply_event_results( result_json, members_csv):
 		peep = Peep(
 			id=row['id'],
 			name=row['Name'],
+			display_name=row['Display Name'],
 			email=row['Email Address'],
 			role=row['Role'],
 			index=int(row['Index']),
@@ -293,7 +300,7 @@ def save_peeps_csv(peeps, filename):
 	"""Save updated peeps to a new CSV called members_updated.csv in the same folder as the original."""
 	filename = os.path.join(os.path.dirname(filename), "members_updated.csv")
 	
-	fieldnames = ['id', 'Name', 'Email Address', 'Role', 'Index', 'Priority', 'Total Attended', 'Active', 'Date Joined']
+	fieldnames = ['id', 'Name', 'Display Name', 'Email Address', 'Role', 'Index', 'Priority', 'Total Attended', 'Active', 'Date Joined']
 	with open(filename, "w", newline='', encoding='utf-8') as csvfile:
 		writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 		writer.writeheader()
@@ -301,6 +308,7 @@ def save_peeps_csv(peeps, filename):
 			writer.writerow({
 				'id': peep.id,
 				'Name': peep.name,
+				'Display Name': peep.display_name, 
 				'Email Address': peep.email, 
 				'Role': peep.role.value,
 				'Index': peep.index,

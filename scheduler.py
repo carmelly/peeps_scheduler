@@ -61,10 +61,10 @@ class Scheduler:
 				sequences.append(sequence)
 		end_time = time.perf_counter()
 
-		logging.info(f"Evaluation complete. Elapsed time: {end_time - start_time:.2f}s")
+		logging.debug(f"Evaluation complete. Elapsed time: {end_time - start_time:.2f}s")
 		return sequences
 	
-	def remove_high_overlap_events(events, peeps, max_events):
+	def remove_high_overlap_events(self, events, peeps, max_events):
 		"""
 		Remove events that have the highest participant overlap with all other events in the list,
 		until we have no more than max_events in the list. If overlap is the same, remove the lowest-weighted event.
@@ -127,8 +127,56 @@ class Scheduler:
 			logging.debug(f"Removing event: Event({event_to_remove.id}) Date: {event_to_remove.date}. Remaining events: {len(events) - 1}.")
 			events = [event for event in events if event.id != event_to_remove.id]
 
-		logging.info(f"Final event count: {len(events)}.")
+		logging.debug(f"Final event count: {len(events)}.")
 		return events
+	
+	def get_top_sequences(self, sequences):
+		logging.debug(f"Evaluating {len(sequences)} total sequences")
+
+		unique = EventSequence.get_unique_sequences(sequences)
+		if not unique:
+			return []
+
+		sorted_unique = sorted(unique, key=lambda s: (
+			-s.num_unique_attendees,      # Maximize how many got in
+			s.system_weight,              # Favor overdue people
+			-s.total_attendees            # Use up capacity well
+		))
+
+		best_unique = sorted_unique[0].num_unique_attendees
+		best_weight = sorted_unique[0].system_weight
+		best_total = sorted_unique[0].total_attendees
+
+		return [
+			s for s in sorted_unique
+			if s.num_unique_attendees == best_unique and
+			s.system_weight == best_weight and 
+			s.total_attendees == best_total
+		]
+
+	def get_sequences_for_class_size(self, og_events, og_peeps, min_role, max_role): 
+		logging.debug(f"Finding best sequences for min of {min_role} and max of {max_role} per role.")
+		
+		# copy the events and peeps list for this iteration
+		events = copy.deepcopy(og_events)
+		peeps = copy.deepcopy(og_peeps)
+		
+		# set class size for all events
+		for event in events:
+			event.min_role = min_role
+			event.max_role = max_role
+		
+		return self.get_valid_sequences(events, peeps)
+
+	def get_valid_sequences(self, events, peeps): 
+		sanitized_events = self.sanitize_events(events, peeps)
+		logging.debug(f"Sanitized Events: {len(sanitized_events)}/{len(events)}")
+
+		if len(sanitized_events) > self.max_events:
+			logging.warning(f"Too many valid events. Trimming to {self.max_events} based on overlap.")
+			sanitized_events = self.remove_high_overlap_events(sanitized_events, peeps, self.max_events)
+
+		return self.evaluate_all_event_sequences(peeps, sanitized_events)
 
 	def run(self, generate_test_data=False, load_from_csv=False):
 		if generate_test_data:
@@ -145,24 +193,39 @@ class Scheduler:
 		logging.debug("Initial Peeps")
 		logging.debug(Peep.peeps_str(peeps))
 
-		sanitized_events = self.sanitize_events(events, peeps)
-		logging.info(f"Sanitized Events: {len(sanitized_events)}/{len(events)}")
+		# Try events with different min/max per role to get the *actual* best sequence
+		# TODO: make the ultimate min and max configurable
+		# TODO: handle ties and/or show multiple possibilities before choosing one
+		all_sequences = []
+		for min_role in [ 4, 5, 6]: 
+			for max_role in range(min_role, 9):  # up to 8
+				seqs = self.get_sequences_for_class_size(copy.deepcopy(events),copy.deepcopy(peeps), min_role, max_role)
+				all_sequences.extend(seqs)
 
-		if len(sanitized_events) > self.max_events:
-			logging.warning(f"Too many valid events. Trimming to {self.max_events} based on overlap.")
-			sanitized_events = self.remove_high_overlap_events(sanitized_events, peeps, self.max_events)
+		best = self.get_top_sequences(all_sequences)
+		if not best:
+			logging.info("No sequence could fill any events.")
+			return
 
-		event_sequences = self.evaluate_all_event_sequences(peeps, sanitized_events)
-		unique_sequences = EventSequence.get_unique_sequences(event_sequences)
-		logging.info(f"Found {len(unique_sequences)} unique sequences")
 
-		sorted_unique = sorted(unique_sequences, key=lambda s: (-s.num_unique_attendees, -s.system_weight))
-		best_sequence = sorted_unique[0] if sorted_unique else None
-
-		if best_sequence:
-			logging.info(f"Best {best_sequence}")
+		if len(best) == 1:
+			best_sequence = best[0]
+			logging.info(f"Auto-selected best sequence: {best_sequence}")
 			utils.save_event_sequence(best_sequence, self.result_json)
 			logging.debug("Final Peeps:")
 			logging.debug(Peep.peeps_str(best_sequence.peeps))
 		else:
-			logging.info("No sequence could fill any events.")
+			print(f"Found {len(best)} tied top sequences with {best[0].num_unique_attendees} unique attendees and weight {best[0].system_weight}:")
+			for i, seq in enumerate(best):
+				print(f"[{i}] {seq}")
+
+			choice = input(f"Enter the index of the sequence to save (0-{len(best) - 1}): ")
+			try:
+				chosen_index = int(choice)
+				best_sequence = best[chosen_index]
+				logging.info(f"Selected {best_sequence}")
+				utils.save_event_sequence(best_sequence, self.result_json)
+				logging.debug("Final Peeps:")
+				logging.debug(Peep.peeps_str(best_sequence.peeps))
+			except (ValueError, IndexError):
+				logging.error("Invalid choice. No sequence was saved.")
