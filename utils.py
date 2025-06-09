@@ -65,6 +65,7 @@ def convert_to_json(responses_file, members_file, output_file):
 		name, email, role, max_sessions, available_dates = row['Name'].strip(), row['Email Address'].strip(), row['Role'], row['Max Sessions'], row['Availability']
 		min_interval_days = int(row.get('Min Interval Days', 0))  # Default to 0 if not specified
 		peep  = Peep.find_matching_peep(unique_peeps, name, email )
+		peep['role'] = role.lower() # allow response role to override peep main role (TODO: do we even need main role?)
 
 		if not peep: 
 			logging.critical(f"Couldn't match all responses to peeps. Please check data and try again.")

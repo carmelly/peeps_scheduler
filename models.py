@@ -8,14 +8,24 @@ class Role(Enum):
 	LEADER = "Leader"
 	FOLLOWER = "Follower"
 
+	@classmethod
+	def from_string(cls, value):
+		#TODO: fix response form using "lead" and "follow" instead of "leader" and "follower"
+		value = value.strip().lower()
+		if value in ["lead", "leader"]:
+			return cls.LEADER
+		elif value in ["follow", "follower"]:
+			return cls.FOLLOWER
+		else:
+			raise ValueError(f"Unknown role: {value}")
+
 class Peep:
 	def __init__(self, **kwargs):
 		self.id = int(kwargs.get("id"))
 		self.name = str(kwargs.get("name", "")).strip()
 		self.display_name = str(kwargs.get("display_name", "")).strip()
 		self.email = str(kwargs.get("email", "")).strip()
-		role = kwargs.get("role", "") 
-		self.role = role if isinstance(role, Role) else Role(role)
+		self.role = Role.from_string(kwargs.get("role", ""))
 		self.index = int(kwargs.get("index", 0) or 0)  # Handles empty or missing values
 		self.priority = int(kwargs.get("priority", 0) or 0)
 		self.total_attended = int(kwargs.get("total_attended", 0) or 0)
