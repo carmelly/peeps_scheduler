@@ -146,11 +146,17 @@ class Scheduler:
 		))
 
 		best_unique = sorted_unique[0].num_unique_attendees
+		best_priority = sorted_unique[0].priority_fulfilled 
+		best_util = sorted_unique[0].normalized_utilization
+		best_total = sorted_unique[0].total_attendees
 
 		# return all sequences tied by unique attendees
 		return [
-			s for s in sorted_unique
+			s for s in sorted_unique 
 			if s.num_unique_attendees == best_unique 
+			and s.priority_fulfilled == best_priority 
+			and s.normalized_utilization == best_util 
+			# and s.total_attendees == best_total 
 		]
 
 	def get_sequences_for_class_size(self, og_events, og_peeps, min_role, max_role): 
