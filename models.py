@@ -2,7 +2,7 @@ import datetime
 import random
 import logging
 from enum import Enum
-from constants import DATE_FORMAT, DATESTR_FORMAT
+from constants import ABS_MIN_ROLE, CLASS_CONFIG, DATE_FORMAT, DATESTR_FORMAT
 
 class Role(Enum):
 	LEADER = "Leader"
@@ -142,16 +142,35 @@ class Event:
 	def __init__(self, **kwargs):
 		self.id = kwargs.get("id", 0)
 		self.date = kwargs.get("date", None)
-		self.min_role = kwargs.get("min_role", 5)
-		self.max_role = kwargs.get("max_role", 6)
-		self.attendees = []
-		self.alternates = []
+		
+		self.duration_minutes = kwargs.get("duration_minutes")
+		if self.duration_minutes not in CLASS_CONFIG:
+			raise ValueError(f"Unknown event duration: {self.duration_minutes}")
 
-	def to_dict(self):
-		return {
-			**self.__dict__,
-		}
+		self.attendees = []
+		self.alternates = []	
 	
+	@property
+	def config(self):
+		return CLASS_CONFIG[self.duration_minutes]
+
+	@property
+	def min_role(self):
+		return self.config["min_role"]
+
+	@property
+	def max_role(self):
+		return self.config["max_role"]
+
+	@property
+	def price(self):
+		return self.config["price"]
+	
+	@property
+	def price_per_person(self):
+		num_people = len(self.attendees)
+		return round(self.price / num_people, 0) if num_people else None
+
 	@property
 	def leaders(self):
 		return self.get_attendees_by_role(Role.LEADER)
@@ -168,6 +187,11 @@ class Event:
 	def alt_followers(self):
 		return self.get_alternates_by_role(Role.FOLLOWER)
 
+	def to_dict(self):
+		return {
+			**self.__dict__,
+		}
+
 	def get_attendees_by_role(self, role): 
 		return [p for p in self.attendees if p.role == role]
 	
@@ -181,8 +205,11 @@ class Event:
 		self.alternates.append(peep)
 
 	def is_valid(self):
-		""" Event is valid if we have enough leaders and enough followers to fill the minimum per role """
-		return( len( self.leaders) >= self.min_role and len(self.followers) >= self.min_role)
+		""" Event is valid if we have enough leaders and enough followers to fill the absolute minimum per role """
+		return (
+			len(self.leaders) == len(self.followers)
+			and len(self.leaders) >= ABS_MIN_ROLE
+		)
 	
 	def balance_roles(self):
 		"""
@@ -200,9 +227,23 @@ class Event:
 				alt_peep = larger_group.pop()
 				self.attendees.remove(alt_peep)
 				self.add_alternate(alt_peep)
-		assert len(self.leaders) == len(self.followers) >= self.min_role
+		
+		assert len(self.leaders) == len(self.followers) >= ABS_MIN_ROLE
 		assert len(self.leaders) <= self.max_role
 
+		# Downgrade event duration if needed based on final class size
+		count_per_role = len(self.leaders)
+		if count_per_role < self.min_role: 
+			logging.debug(f"Downgrading Event {self.id} due to underfill ({count_per_role}/role)")
+			for duration in sorted(CLASS_CONFIG.keys()):
+				config = CLASS_CONFIG[duration]
+				if config["min_role"] <= count_per_role <= config["max_role"]:
+					self.duration_minutes = duration
+					break
+			else:
+				logging.warning(f"No valid duration found for balanced count {count_per_role} in event {self.id}.")
+
+		
 	@classmethod
 	def from_dict(cls, data):
 		"""Convert dictionary data back into an Event object."""
@@ -263,15 +304,18 @@ class Event:
 	
 class EventSequence:
 	def __init__(self, events, peeps):
+		# Needed for evaluation
 		self.events = events
 		self.peeps = peeps
+		self.valid_events = []
+
+		# Efficiency metrics 
 		self.num_unique_attendees = 0
 		self.total_attendees = 0
 		self.system_weight = 0
 		self.priority_fulfilled = 0 
 		self.normalized_utilization = 0 
-		self.valid_events = []
-		
+				
 	def validate_alternates(self): 
 		""" Removes alternates that can no longer attend an event due to personal limits """
 		for event in self.valid_events: 
@@ -363,7 +407,7 @@ class EventSequence:
 		)
 		result += f"\t"
 		for event in sorted_events:
-			result += f"\n\t{event}"
+			result += f"\n\t{event}, {event.duration_minutes} mins, ${event.price_per_person:.0f}/person"
 			result += f"\n\t  {event.get_leaders_str()}"
 			result += f"\n\t  {event.get_followers_str()}"
 

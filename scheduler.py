@@ -1,6 +1,7 @@
 import copy
 import logging
 import time
+from constants import ABS_MAX_ROLE, ABS_MIN_ROLE
 from models import Event, EventSequence, Peep, Role
 import utils
 
@@ -10,6 +11,7 @@ class Scheduler:
 		self.max_events = max_events
 		self.output_json = f'data/{data_folder}/output.json'
 		self.result_json = f'data/{data_folder}/results.json'
+		self.target_max = None # max per role used for each run 
 
 	def sanitize_events(self, events, peeps):
 		"""Sanitize events to ensure there are enough leaders and followers to fill roles."""
@@ -19,7 +21,7 @@ class Scheduler:
 			num_leaders = sum(1 for peep in peeps if event.id in peep.availability and peep.role == Role.LEADER)
 			num_followers = sum(1 for peep in peeps if event.id in peep.availability and peep.role == Role.FOLLOWER)
 
-			if num_leaders >= event.min_role and num_followers >= event.min_role:
+			if num_leaders >= ABS_MIN_ROLE and num_followers >= ABS_MIN_ROLE:
 				valid_events.append(event)
 			else:
 				removed_events.append(event)
@@ -29,9 +31,11 @@ class Scheduler:
 	def evaluate_sequence(self, sequence):
 		"Evaluates an event sequence by assigning peeps to events and updating priorities and list order."""
 		for event in sequence.events:
+			effective_max_role = min(event.max_role, self.target_max or event.max_role)
+
 			for peep in sequence.peeps:
 				if peep.can_attend(event):
-					if len(event.get_attendees_by_role(peep.role)) < event.max_role:
+					if len(event.get_attendees_by_role(peep.role)) < effective_max_role:
 						event.add_attendee(peep)
 					else:
 						event.add_alternate(peep)
@@ -159,30 +163,6 @@ class Scheduler:
 			# and s.total_attendees == best_total 
 		]
 
-	def get_sequences_for_class_size(self, og_events, og_peeps, min_role, max_role): 
-		logging.debug(f"Finding best sequences for min of {min_role} and max of {max_role} per role.")
-		
-		# copy the events and peeps list for this iteration
-		events = copy.deepcopy(og_events)
-		peeps = copy.deepcopy(og_peeps)
-		
-		# set class size for all events
-		for event in events:
-			event.min_role = min_role
-			event.max_role = max_role
-		
-		return self.get_valid_sequences(events, peeps)
-
-	def get_valid_sequences(self, events, peeps): 
-		sanitized_events = self.sanitize_events(events, peeps)
-		logging.debug(f"Sanitized Events: {len(sanitized_events)}/{len(events)}")
-
-		if len(sanitized_events) > self.max_events:
-			logging.warning(f"Too many valid events. Trimming to {self.max_events} based on overlap.")
-			sanitized_events = self.remove_high_overlap_events(sanitized_events, peeps, self.max_events)
-
-		return self.evaluate_all_event_sequences(peeps, sanitized_events)
-
 	def run(self, generate_test_data=False, load_from_csv=False):
 		if generate_test_data:
 			logging.info(f"Generating test data and saving to {self.output_json}")
@@ -198,20 +178,26 @@ class Scheduler:
 		logging.debug("Initial Peeps")
 		logging.debug(Peep.peeps_str(peeps))
 
-		# Try events with different min/max per role to get the *actual* best sequence
-		# TODO: make the ultimate min and max configurable
-		# TODO: handle ties and/or show multiple possibilities before choosing one
+		# Get all events that can be filled to the minimum 
+		sanitized_events = self.sanitize_events(events, peeps)
+		logging.debug(f"Sanitized Events: {len(sanitized_events)}/{len(events)}")
+
+		# If too many events, remove some 
+		if len(sanitized_events) > self.max_events:
+			logging.warning(f"Too many valid events. Trimming to {self.max_events} based on overlap.")
+			sanitized_events = self.remove_high_overlap_events(sanitized_events, peeps, self.max_events)
+
+		# Try events with different max per role to get the *actual* best sequence
 		all_sequences = []
-		for min_role in [ 4, 5, 6]: 
-			for max_role in range(min_role, 9):  # up to 8
-				seqs = self.get_sequences_for_class_size(copy.deepcopy(events),copy.deepcopy(peeps), min_role, max_role)
-				all_sequences.extend(seqs)
+		for target_max in range(ABS_MIN_ROLE, ABS_MAX_ROLE + 1):  
+			self.target_max = target_max
+			sequences = self.evaluate_all_event_sequences(peeps, sanitized_events)
+			all_sequences.extend(sequences)
 
 		best = self.get_top_sequences(all_sequences)
 		if not best:
 			logging.info("No sequence could fill any events.")
 			return
-
 
 		if len(best) == 1:
 			best_sequence = best[0]
