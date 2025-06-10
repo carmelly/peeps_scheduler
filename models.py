@@ -411,4 +411,7 @@ class EventSequence:
 			result += f"\n\t  {event.get_leaders_str()}"
 			result += f"\n\t  {event.get_followers_str()}"
 
+		unassigned = [p.name for p in self.peeps if p.responded and p.availability and p.num_events == 0]
+		result += f"\n\tUnscheduled Peeps ({len(unassigned)}): {', '.join(sorted(unassigned)) if unassigned else 'None'}"
+
 		return result	

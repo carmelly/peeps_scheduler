@@ -174,7 +174,17 @@ class Scheduler:
 			utils.convert_to_json(responses_csv, peeps_csv, self.output_json)
 
 		logging.info(f"Loading data from {self.output_json}")
+		
 		peeps, events = utils.load_data_from_json(self.output_json)
+		responders = [p for p in peeps if p.responded]
+		no_availability = [p.name for p in responders if not p.availability]
+		non_responders = [p.name for p in peeps if not p.responded]
+		num_available = len([p for p in responders if p.availability])
+		print(f"\n📋 Mini Availability Report: {len(responders)} responses /  {num_available} available / {len(peeps)} total")
+		print("  🚫  No availability:", ", ".join(sorted(no_availability)) if no_availability else "None")
+		print("  ❌  Did not respond:", ", ".join(sorted(non_responders)) if non_responders else "None")
+		print()
+		
 		logging.debug("Initial Peeps")
 		logging.debug(Peep.peeps_str(peeps))
 
