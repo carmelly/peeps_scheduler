@@ -224,7 +224,7 @@ class Event:
 					break
 				alt_peep = larger_group.pop()
 				self.attendees.remove(alt_peep)
-				self.add_alternate(alt_peep)
+				self.alternates.insert(0, alt_peep)
 		
 		assert len(self.leaders) == len(self.followers) >= ABS_MIN_ROLE
 		assert len(self.leaders) <= self.max_role
