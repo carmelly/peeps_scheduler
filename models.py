@@ -206,10 +206,8 @@ class Event:
 
 	def is_valid(self):
 		""" Event is valid if we have enough leaders and enough followers to fill the absolute minimum per role """
-		return (
-			len(self.leaders) == len(self.followers)
-			and len(self.leaders) >= ABS_MIN_ROLE
-		)
+		return( len( self.leaders) >= ABS_MIN_ROLE and len(self.followers) >= ABS_MIN_ROLE)
+
 	
 	def balance_roles(self):
 		"""
