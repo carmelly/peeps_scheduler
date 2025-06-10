@@ -19,9 +19,11 @@ def parse_availability(responses_file, members_file):
 
 		member = members.get(email)
 		if not member:
-			print(f"⚠️ Skipping unmatched email: {email}")
+			print(f"⚠️  Skipping unmatched email: {email}")
 			continue
-
+		if email in responders: 
+			print(f"⚠️  Duplicate email: {email}")
+			continue
 		responders.add(email)
 
 		# Identify responders with no availability 
@@ -43,15 +45,15 @@ def parse_availability(responses_file, members_file):
 
 def print_availability(availability, unavailable, non_responders):
 	for date in sorted(availability.keys()):
-		print(f"\n📅 {date}")
-		print(f"  Leaders  ({len(availability[date]['Lead'])}): {', '.join(availability[date]['Lead'])}")
-		print(f"  Followers({len(availability[date]['Follow'])}): {', '.join(availability[date]['Follow'])}")
+		print(f"\n📅  {date}")
+		print(f"    Leaders  ({len(availability[date]['Lead'])}): {', '.join(availability[date]['Lead'])}")
+		print(f"    Followers({len(availability[date]['Follow'])}): {', '.join(availability[date]['Follow'])}")
 	
-	print("\n🚫 No availability:")
+	print("\n🚫  No availability:")
 	for name in sorted(unavailable):
 		print(f"  - {name}")
 
-	print("\n❌ Did not respond:")
+	print("\n❌  Did not respond:")
 	for name in sorted(non_responders):
 		print(f"  - {name}")
 
