@@ -310,7 +310,7 @@ def save_peeps_csv(peeps, filename):
 		for peep in peeps:
 			writer.writerow({
 				'id': peep.id,
-				'Name': peep.name,
+				'Name': peep.full_name,
 				'Display Name': peep.display_name, 
 				'Email Address': peep.email, 
 				'Role': peep.role.value,
