@@ -15,11 +15,18 @@ def parse_event_date(date_str):
 	TODO: fix for next year if date has passed, but right now we're testing
 	with old dates.
 
-	Expected input format: "Weeday Month Day - H[AM/PM]" (e.g., "March 5 - 4PM")
+	Expected input format: "Weekday Month Day - H[AM/PM]" (e.g., "March 5 - 4PM")
 	Output format: "YYYY-MM-DD HH:MM"
 	"""
-	dt = datetime.datetime.strptime(f"{date_str}",f"{DATESTR_FORMAT}" )
+	# Strip out any parenthetical content
+	date_str = date_str.split('(')[0].strip()
+
+	# Parse the cleaned string
+	dt = datetime.datetime.strptime(date_str, DATESTR_FORMAT)
+
+	# Use current year
 	dt = dt.replace(year=datetime.datetime.now().year)
+
 	return dt.strftime("%Y-%m-%d %H:%M")
 
 # Load CSV data
@@ -37,7 +44,7 @@ def load_csv(filename, required_columns=[]):
 def convert_to_json(responses_file, members_file, output_file):
 		
 	peeps_data = load_csv(members_file, ['id','Name','Display Name','Email Address','Role','Index','Priority','Total Attended'])
-	responses_data = load_csv(responses_file, ['Name','Email Address','Role','Max Sessions','Availability','Min Interval Days'])
+	responses_data = load_csv(responses_file, ['Name','Email Address','Primary Role','Secondary Role','Max Sessions','Availability','Min Interval Days'])
 
 	unique_peeps = {}
 	unique_events = {}
@@ -63,7 +70,7 @@ def convert_to_json(responses_file, members_file, output_file):
 
 	# Process responses
 	for row in responses_data:
-		name, email, role, max_sessions, available_dates = row['Name'].strip(), row['Email Address'].strip(), row['Role'], row['Max Sessions'], row['Availability']
+		name, email, role, max_sessions, available_dates = row['Name'].strip(), row['Email Address'].strip(), row['Primary Role'], row['Max Sessions'], row['Availability']
 		min_interval_days = int(row.get('Min Interval Days', 0))  # Default to 0 if not specified
 		peep  = Peep.find_matching_peep(unique_peeps, name, email )
 		peep['role'] = Role.from_string(role).value # allow response role to override peep main role (TODO: do we even need main role?)
