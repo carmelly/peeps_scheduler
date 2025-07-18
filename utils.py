@@ -217,6 +217,7 @@ def save_event_sequence(sequence, filename):
 			{
 				"id": event.id,
 				"date": event.date.strftime(DATE_FORMAT),
+				"duration_minutes": event.duration_minutes, 
 				"attendees": [
 					{
 						"id": peep.id,
@@ -277,6 +278,7 @@ def apply_event_results( result_json, members_csv):
 	for e in event_data:
 		event = Event(
 			id=e['id'],
+			duration_minutes=e['duration_minutes'], 
 			date=datetime.datetime.strptime(e['date'], DATE_FORMAT),
 			min_role=0,
 			max_role=0
