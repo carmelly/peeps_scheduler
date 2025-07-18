@@ -235,7 +235,8 @@ class Event:
 			logging.debug(f"Downgrading Event {self.id} due to underfill ({count_per_role}/role)")
 			for duration in sorted(CLASS_CONFIG.keys()):
 				config = CLASS_CONFIG[duration]
-				if config["min_role"] <= count_per_role <= config["max_role"]:
+				if (config["min_role"] <= count_per_role <= config["max_role"]) and config["allow_downgrade"]:
+
 					self.duration_minutes = duration
 					break
 			else:

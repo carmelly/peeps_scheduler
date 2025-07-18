@@ -6,17 +6,20 @@ CLASS_CONFIG = {
 		"price": 120.0, #TODO: Not sure if this is correct, or what the role limits should be 
 		"min_role": 2,
 		"max_role": 3,
+		"allow_downgrade": False
 	},
 	90: {
 		"price": 195.0,
 		"min_role": 4,
 		"max_role": 5,
+		"allow_downgrade": True
 	},
 	120: {
 		"price": 260.0,
 		"min_role": 6,
 		"max_role": 7,
+		"allow_downgrade": True
 	}
 }
-ABS_MIN_ROLE = min(config["min_role"] for config in CLASS_CONFIG.values())
+ABS_MIN_ROLE = min(config["min_role"] for config in CLASS_CONFIG.values() if config["allow_downgrade"])
 ABS_MAX_ROLE = max(config["max_role"] for config in CLASS_CONFIG.values())
