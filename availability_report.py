@@ -1,6 +1,7 @@
 import csv
 from collections import defaultdict
 from models import Role
+from utils import parse_event_date
 
 def load_csv(filename):
 	with open(filename, newline='', encoding='utf-8') as csvfile:
@@ -8,13 +9,13 @@ def load_csv(filename):
 
 def parse_availability(responses_file, members_file):
 	members = {row["Email Address"].strip().lower(): row for row in load_csv(members_file)}
-	availability = defaultdict(lambda: {"Lead": [], "Follow": []})
+	availability = defaultdict(lambda: {"Leader": [], "Follower": []})
 	unavailable = []
 	responders = set()
 
 	for row in load_csv(responses_file):
 		email = row["Email Address"].strip().lower()
-		role = row["Role"].strip()
+		role = row["Primary Role"].strip()
 		dates = [d.strip() for d in row["Availability"].split(",") if d.strip()]
 
 		member = members.get(email)
@@ -44,10 +45,11 @@ def parse_availability(responses_file, members_file):
 	return availability, unavailable, non_responders
 
 def print_availability(availability, unavailable, non_responders):
-	for date in sorted(availability.keys()):
+	
+	for date in sorted(availability.keys(), key=lambda d:parse_event_date(d)):
 		print(f"\n📅  {date}")
-		print(f"    Leaders  ({len(availability[date]['Lead'])}): {', '.join(availability[date]['Lead'])}")
-		print(f"    Followers({len(availability[date]['Follow'])}): {', '.join(availability[date]['Follow'])}")
+		print(f"    Leaders  ({len(availability[date]['Leader'])}): {', '.join(availability[date]['Leader'])}")
+		print(f"    Followers({len(availability[date]['Follower'])}): {', '.join(availability[date]['Follower'])}")
 	
 	print("\n🚫  No availability:")
 	for name in sorted(unavailable):
@@ -58,7 +60,7 @@ def print_availability(availability, unavailable, non_responders):
 		print(f"  - {name}")
 
 if __name__ == "__main__":
-	responses_file = "data/2025-07/responses.csv"
-	members_file = "data/2025-07/members.csv"
+	responses_file = "data/2025-09/responses.csv"
+	members_file = "data/2025-09/members.csv"
 	availability, unavailable, non_responders = parse_availability(responses_file, members_file)
 	print_availability(availability, unavailable, non_responders)
