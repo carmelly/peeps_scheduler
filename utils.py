@@ -218,7 +218,7 @@ def setup_logging(verbose=False):
 		handlers=[stream_handler, file_handler]
 		)
 
-def save_event_sequence(sequence, filename):
+def save_event_sequence(sequence: EventSequence, filename):
 	data = {
 		"valid_events": [
 			{
@@ -239,7 +239,7 @@ def save_event_sequence(sequence, filename):
 						"name": peep.name,
 						"role": peep.role.value
 					}
-					for peep in event.alternates
+					for peep in event.alt_leaders + event.alt_followers
 				],
 				"leaders_string": event.get_leaders_str(), 
 				"followers_string": event.get_followers_str(), 

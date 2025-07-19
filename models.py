@@ -147,8 +147,11 @@ class Event:
 		if self.duration_minutes not in CLASS_CONFIG:
 			raise ValueError(f"Unknown event duration: {self.duration_minutes}")
 
-		self.attendees = []
-		self.alternates = []	
+		self._leaders = [] 
+		self._followers = [] 
+		self._alt_leaders = [] 
+		self._alt_followers = [] 
+		self._attendee_order = [] #keep track of assignment order 
 	
 	@property
 	def config(self):
@@ -172,59 +175,99 @@ class Event:
 		return round(self.price / num_people, 0) if num_people else None
 
 	@property
-	def leaders(self):
-		return self.get_attendees_by_role(Role.LEADER)
+	def leaders(self) -> tuple[Peep, ...]:
+		return tuple(self._leaders)
 
 	@property
-	def followers(self):
-		return self.get_attendees_by_role(Role.FOLLOWER)
+	def followers(self) -> tuple[Peep, ...]:
+		return tuple(self._followers)
 	
 	@property
-	def alt_leaders(self):
-		return self.get_alternates_by_role(Role.LEADER)
+	def alt_leaders(self) -> tuple[Peep, ...]:
+		return tuple(self._alt_leaders)
 
 	@property
-	def alt_followers(self):
-		return self.get_alternates_by_role(Role.FOLLOWER)
+	def alt_followers(self) -> tuple[Peep, ...]:
+		return tuple(self._alt_followers)
+	
+	@property
+	def attendees(self) -> tuple[Peep, ...]:
+		return tuple(self._attendee_order)
 
+	def clear_participants(self): 
+		# clear all attendee and alternate lists 
+		self._leaders.clear() 
+		self._followers.clear() 
+		self._alt_leaders.clear() 
+		self._alt_followers.clear()
+		self._attendee_order.clear()
+
+	def get_attendees_by_role(self, role: Role) -> tuple[Peep, ...]:
+		if role == Role.LEADER: 
+			return self.leaders
+		else: 
+			return self.followers
+	
+	def get_alternates_by_role(self, role: Role) -> list[Peep]:
+		return self._alt_leaders if role == Role.LEADER else self._alt_followers
+
+	def set_alternates_by_role(self, role: Role, peeps: list[Peep]):
+		if role == Role.LEADER:
+			self._alt_leaders = peeps
+		else:
+			self._alt_followers = peeps
+	
 	def to_dict(self):
 		return {
 			**self.__dict__,
 		}
 
-	def get_attendees_by_role(self, role): 
-		return [p for p in self.attendees if p.role == role]
-	
-	def get_alternates_by_role(self, role): 
-		return [p for p in self.alternates if p.role == role]
+	def add_attendee(self, peep: Peep, role: Role):
+		if role == Role.LEADER: 
+			self._leaders.append(peep)
+		else: 
+			self._followers.append(peep)
+		self._attendee_order.append(peep)  # order preserved
 
-	def add_attendee(self, peep):
-		self.attendees.append(peep)
-
-	def add_alternate(self, peep): 
-		self.alternates.append(peep)
+	def add_alternate(self, peep: Peep, role: Role): 
+		if role == Role.LEADER: 
+			self._alt_leaders.append(peep)
+		else: 
+			self._alt_followers.append(peep)
 
 	def is_valid(self):
 		""" Event is valid if we have enough leaders and enough followers to fill the absolute minimum per role """
 		return( len( self.leaders) >= ABS_MIN_ROLE and len(self.followers) >= ABS_MIN_ROLE)
 
-	
+	def demote_attendee(self, peep: Peep, role: Role):
+		# Removes from attendee list and adds to alternates
+		if role == Role.LEADER:
+			self._leaders.remove(peep)
+			self._alt_leaders.insert(0, peep)
+		else:
+			self._followers.remove(peep)
+			self._alt_followers.insert(0, peep)
+
+		self._attendee_order.remove(peep) 
+
 	def balance_roles(self):
 		"""
 		Ensures leaders and followers are balanced within an event.
 		If one group is larger, remove from attendees and add to alternates until balanced. 
 		"""
-		leaders = self.leaders
-		followers = self.followers
+		leaders = list(self._leaders)
+		followers = list(self._followers)
+
 		if len(leaders) != len(followers):
-			larger_group = leaders if len(leaders) > len(followers) else followers
+			larger_role = Role.LEADER if len(leaders) > len(followers) else Role.FOLLOWER
+			larger_list = leaders if larger_role == Role.LEADER else followers
+			
 			while len(leaders) != len(followers):
-				if not larger_group:
+				if not larger_list:
 					logging.warning(f"Unable to balance roles for event {self.id}.")
 					break
-				alt_peep = larger_group.pop()
-				self.attendees.remove(alt_peep)
-				self.alternates.insert(0, alt_peep)
+				alt_peep = larger_list.pop()
+				self.demote_attendee(alt_peep, larger_role)
 		
 		assert len(self.leaders) == len(self.followers) >= ABS_MIN_ROLE
 		assert len(self.leaders) <= self.max_role
@@ -302,11 +345,11 @@ class Event:
 		return f"Followers({len(self.followers)}): {names}" + (f" [alt: {alt_names}]" if alt_names else "")
 	
 class EventSequence:
-	def __init__(self, events, peeps):
+	def __init__(self, events: list[Event], peeps: list[Peep]):
 		# Needed for evaluation
 		self.events = events
 		self.peeps = peeps
-		self.valid_events = []
+		self.valid_events: list[Event] = []
 
 		# Efficiency metrics 
 		self.num_unique_attendees = 0
@@ -316,13 +359,14 @@ class EventSequence:
 		self.normalized_utilization = 0 
 				
 	def validate_alternates(self): 
-		""" Removes alternates that can no longer attend an event due to personal limits """
-		for event in self.valid_events: 
-			valid_alternates = [] 
-			for peep in event.alternates: 
-				if peep.can_attend(event): 
-					valid_alternates.append(peep)
-			event.alternates = valid_alternates 
+		"""Removes alternates who can no longer attend due to personal limits."""
+		for event in self.valid_events:
+			for role in (Role.LEADER, Role.FOLLOWER):
+				valid = [
+					peep for peep in event.get_alternates_by_role(role)
+					if peep.can_attend(event)
+				]
+				event.set_alternates_by_role(role, valid)
 
 	def finalize(self):
 		"""Finalizes a sequence by increasing priority for unsuccessful peeps and tracking metrics."""

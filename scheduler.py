@@ -28,7 +28,7 @@ class Scheduler:
 
 		return valid_events
 	
-	def evaluate_sequence(self, sequence):
+	def evaluate_sequence(self, sequence: EventSequence):
 		"Evaluates an event sequence by assigning peeps to events and updating priorities and list order."""
 		for event in sequence.events:
 			effective_max_role = min(event.max_role, self.target_max or event.max_role)
@@ -36,16 +36,16 @@ class Scheduler:
 			for peep in sequence.peeps:
 				if peep.can_attend(event):
 					if len(event.get_attendees_by_role(peep.role)) < effective_max_role:
-						event.add_attendee(peep)
+						event.add_attendee(peep, peep.role)
 					else:
-						event.add_alternate(peep)
+						event.add_alternate(peep, peep.role)
 
 			if event.is_valid():
 				event.balance_roles()
 				Peep.update_event_attendees(sequence.peeps, event)
 				sequence.valid_events.append(event)
 			else:
-				event.attendees.clear()
+				event.clear_participants()
 
 		sequence.validate_alternates()
 		sequence.finalize()
