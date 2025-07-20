@@ -67,20 +67,17 @@ class Scheduler:
 			# 		- Use SWITCH_IF_PRIMARY_FULL peeps to allow a primary-role alternate into the event
 			# 		- Implement fallback logic for SWITCH_IF_NEEDED peeps to fill underfilled events
 
-			# TODO: In a future commit, enforce per-duration min_role thresholds after balancing
-			#       and apply downgrade logic only if necessary. For now, we preserve historical 
-			#       (bugged) behavior and allow events that meet ABS_MIN_ROLE per role, regardless 
-			# 		of duration.
-
 			# Only consider events that meet the absolute minimums
 			if event.meets_absolute_min():
 				# Balance roles (demoting extras if needed)
 				event.balance_roles()
 
-				# Downgrade if underfilled for current duration (best effort only)
-				event.downgrade_duration()
+				# If underfilled for event-specific duration, try to downgrade
+				if not event.meets_min():
+					event.downgrade_duration()
 
-				# Keep the event
+			# Only keep event if it now meets per-duration min_role
+			if event.meets_min():
 				Peep.update_event_attendees(sequence.peeps, event)
 				sequence.valid_events.append(event)
 			else:

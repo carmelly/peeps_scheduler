@@ -426,11 +426,10 @@ class Event:
 			logging.error(f"Cannot downgrade Event {self.id}: roles are unbalanced ({len(self.leaders)}L / {len(self.followers)}F)")
 			raise RuntimeError("Cannot downgrade unbalanced event")
 
-		# TODO: restore the check below after fixing bugged logic in evaluate_sequence
 		# Event must be underfilled for its current duration
-		# if self.meets_min():
-		# 	logging.error(f"Event {self.id} meets minimums; cannot downgrade")
-		# 	raise RuntimeError("Cannot downgrade: event is not underfilled")
+		if self.meets_min():
+			logging.error(f"Event {self.id} meets minimums; cannot downgrade")
+			raise RuntimeError("Cannot downgrade: event is not underfilled")
 
 		count_per_role = len(self.leaders)
 		logging.debug(f"Attempting to downgrade Event {self.id} due to underfill ({count_per_role}/role)")
