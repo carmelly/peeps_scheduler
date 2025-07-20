@@ -81,19 +81,19 @@ def test_event_is_valid(events, peeps):
 	followers = peeps[10:13]
 	for leader in leaders: event.add_attendee(leader, Role.LEADER)
 	for follower in followers: event.add_attendee(follower, Role.FOLLOWER)
-	assert event.is_valid()
+	assert event.meets_absolute_min()
 
 	# Case 2: Invalid event - not enough followers
 	event2 = events[1]
 	leaders2 = peeps[:3]
 	for leader in leaders2: event2.add_attendee(leader, Role.LEADER)
-	assert not event2.is_valid()
+	assert not event2.meets_absolute_min()
 
 	# Case 3: Invalid event - not enough leaders
 	event3 = events[2]
 	followers3 = peeps[10:13]
-	for follower in followers3: event3.add_attendee(leader, Role.FOLLOWER)
-	assert not event3.is_valid()
+	for follower in followers3: event3.add_attendee(follower, Role.FOLLOWER)
+	assert not event3.meets_absolute_min()
 
 def test_add_peeps_to_event(events, peeps):
 	events = copy.deepcopy(events)
@@ -112,9 +112,9 @@ def test_add_peeps_to_event(events, peeps):
 	leaders2 = peeps[:6]
 	followers2 = peeps[10:16]
 
-	with pytest.raises(AssertionError, match="Too many attendees in role Leader"):
+	with pytest.raises(RuntimeError, match="Too many attendees in role Leader"):
 		for leader in leaders2: event2.add_attendee(leader, Role.LEADER)
-	with pytest.raises(AssertionError, match="Too many attendees in role Follower"):
+	with pytest.raises(RuntimeError, match="Too many attendees in role Follower"):
 		for follower in followers2: event2.add_attendee(follower, Role.FOLLOWER)
 
 	# we should still only have the max allowed per role 

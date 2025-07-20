@@ -29,27 +29,29 @@ class Scheduler:
 		return valid_events
 	
 	def evaluate_sequence(self, sequence: EventSequence, keep_invalid=False):
-		"""Evaluates an event sequence by assigning peeps to events and updating their stats."""
+		"""
+		Evaluates an event sequence by assigning peeps to events and updating stats.
+		Respects role limits, peep availability, and switch preferences.
+		"""
 		for event in sequence.events:
-			# Max peeps allowed per role in this event
 			effective_max_role = min(event.max_role, self.target_max or event.max_role)
 
-			# Assign peeps to events based on primary/secondary role eligibility
+			# Attempt to assign each peep to this event
 			for peep in sequence.peeps:
 				if not peep.can_attend(event):
-					continue # Skip if peep is unavailable, over limit, or on cooldown
+					continue  # Skip if unavailable, over limit, or on cooldown
 
 				primary_role = peep.role
 				secondary_role = primary_role.opposite()
-				
-				# Try primary role first
-				if len(event.get_attendees_by_role(primary_role)) < effective_max_role:
+
+				# Try assigning in primary role
+				if event.num_attendees(primary_role) < effective_max_role:
 					event.add_attendee(peep, primary_role)
 
-				# If primary is full and peep is flexible, try assigning to their secondary role
+				# Try secondary role if flexible and primary is full
 				elif (
 					peep.switch_pref == SwitchPreference.SWITCH_IF_PRIMARY_FULL and
-					len(event.get_attendees_by_role(secondary_role)) < effective_max_role
+					event.num_attendees(secondary_role) < effective_max_role
 				):
 					event.add_attendee(peep, secondary_role)
 					logging.debug(
@@ -60,23 +62,36 @@ class Scheduler:
 				# Otherwise add as alternate in primary role
 				else:
 					event.add_alternate(peep, primary_role)
-					
-			# TODO: Implement advanced dual-role promotion:
-			# - Use SWITCH_IF_PRIMARY_FULL peeps to allow a primary-role alternate into the event
-			# - Implement fallback logic for SWITCH_IF_NEEDED peeps to fill underfilled events
 
-			# Finalize event only if it meets absolute minimums
-			if event.is_valid():
+			# TODO: Implement advanced dual-role promotion:
+			# 		- Use SWITCH_IF_PRIMARY_FULL peeps to allow a primary-role alternate into the event
+			# 		- Implement fallback logic for SWITCH_IF_NEEDED peeps to fill underfilled events
+
+			# TODO: In a future commit, enforce per-duration min_role thresholds after balancing
+			#       and apply downgrade logic only if necessary. For now, we preserve historical 
+			#       (bugged) behavior and allow events that meet ABS_MIN_ROLE per role, regardless 
+			# 		of duration.
+
+			# Only consider events that meet the absolute minimums
+			if event.meets_absolute_min():
+				# Balance roles (demoting extras if needed)
 				event.balance_roles()
+
+				# Downgrade if underfilled for current duration (best effort only)
+				event.downgrade_duration()
+
+				# Keep the event
 				Peep.update_event_attendees(sequence.peeps, event)
 				sequence.valid_events.append(event)
 			else:
-				if not keep_invalid: # in tests we need to keep invalid events for checking 
-					event.clear_participants() # Discard all attendees and alternates
+				if not keep_invalid:
+					event.clear_participants()
 
-		# Remove alternates who are now ineligible (due to events filled earlier)
-		sequence.validate_alternates()
-		# Update all stats 
+		# Remove any alternates who are now ineligible (e.g. due to attending another event)
+		for event in sequence.valid_events:
+			event.validate_alternates()
+
+		# Update peep stats and compute utilization metrics
 		sequence.finalize()
 
 	def evaluate_all_event_sequences(self, og_peeps, og_events):

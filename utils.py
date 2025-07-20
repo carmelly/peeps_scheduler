@@ -244,8 +244,8 @@ def save_event_sequence(sequence: EventSequence, filename):
 					}
 					for peep in event.alt_leaders + event.alt_followers
 				],
-				"leaders_string": event.get_leaders_str(), 
-				"followers_string": event.get_followers_str(), 
+				"leaders_string": event.get_participants_str(Role.LEADER), 
+				"followers_string": event.get_participants_str(Role.FOLLOWER), 
 
 			}
 			for event in sequence.valid_events

