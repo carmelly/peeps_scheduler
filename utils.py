@@ -296,7 +296,8 @@ def apply_event_results( result_json, members_csv):
 		for peep_info in e['attendees']:
 			for peep in fresh_peeps:
 				if peep.id == peep_info['id']:
-					event.add_attendee(peep)
+					role = Role.from_string(peep_info['role'])
+					event.add_attendee(peep, role)
 		events.append(event)
 
 	sequence = EventSequence(events, fresh_peeps)
