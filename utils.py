@@ -6,7 +6,7 @@ import sys
 import datetime 
 import itertools
 from constants import DATE_FORMAT, DATESTR_FORMAT
-from models import EventSequence, Peep, Event, Role
+from models import EventSequence, Peep, Event, Role, SwitchPreference
 
 def parse_event_date(date_str):
 	"""
@@ -53,18 +53,18 @@ def convert_to_json(responses_file, members_file, output_file):
 
 	# Process members data
 	for row in peeps_data:
-		id, name, display_name, email, role, index, priority, total_attended = row['id'], row['Name'].strip(), row['Display Name'].strip(), row['Email Address'], row['Role'], row['Index'], row['Priority'], row['Total Attended']
+		id = row['id']
 
 		if id not in unique_peeps:
 			unique_peeps[id] = {
 				"id": id,
-				"name": name,
-				"display_name": display_name,
-				'email': email, 
-				"role": role,
-				"index": int(index),
-				"priority": int(priority),
-				"total_attended": int(total_attended),
+				"name": row['Name'].strip(),
+				"display_name": row['Display Name'].strip(),
+				'email': row['Email Address'], 
+				"role": row['Role'],
+				"index": row['Index'],
+				"priority": row['Priority'],
+				"total_attended": row['Total Attended'],
 				"availability": [],
 			}
 
@@ -72,8 +72,10 @@ def convert_to_json(responses_file, members_file, output_file):
 	for row in responses_data:
 		name, email, role, max_sessions, available_dates = row['Name'].strip(), row['Email Address'].strip(), row['Primary Role'], row['Max Sessions'], row['Availability']
 		min_interval_days = int(row.get('Min Interval Days', 0))  # Default to 0 if not specified
+
 		peep  = Peep.find_matching_peep(unique_peeps, name, email )
 		peep['role'] = Role.from_string(role).value # allow response role to override peep main role (TODO: do we even need main role?)
+		peep['switch_pref'] = SwitchPreference.from_string(row['Secondary Role']).value
 		peep['responded'] = True 
 		
 		if not peep: 
@@ -99,6 +101,7 @@ def convert_to_json(responses_file, members_file, output_file):
 			"timestamp": row['Timestamp'],
 			"name": name,
 			"role": role,
+			"switch_pref": peep['switch_pref'], 
 			"max_sessions": max_sessions,
 			"available_dates": available_dates.split(', '),
 		})

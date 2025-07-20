@@ -8,6 +8,13 @@ class Role(Enum):
 	LEADER = "Leader"
 	FOLLOWER = "Follower"
 
+	def opposite(self):
+		if self == Role.LEADER:
+			return Role.FOLLOWER
+		elif self == Role.FOLLOWER:
+			return Role.LEADER
+		raise ValueError(f"No opposite defined for Role: {self}")
+	
 	@classmethod
 	def from_string(cls, value):
 		#TODO: fix response form using "lead" and "follow" instead of "leader" and "follower"
@@ -19,13 +26,36 @@ class Role(Enum):
 		else:
 			raise ValueError(f"Unknown role: {value}")
 
+class SwitchPreference(Enum): 
+	PRIMARY_ONLY = 1       # "I only want to be scheduled in my primary role"
+	SWITCH_IF_PRIMARY_FULL = 2  # "Happy to dance secondary if primary is full"
+	SWITCH_IF_NEEDED = 3  # "Only if needed to fill a session"
+
+	@classmethod
+	def from_string(cls, value):
+		value = value.strip()
+		if value == "I only want to be scheduled in my primary role": 
+			return cls.PRIMARY_ONLY
+		elif value == "I’m happy to dance my secondary role if it lets me attend when my primary is full": 
+			return cls.SWITCH_IF_PRIMARY_FULL
+		elif value == "I'm willing to dance my secondary role only if it's needed to enable filling a session": 
+			return cls.SWITCH_IF_NEEDED
+		else:
+			raise ValueError(f"Unknown role: {value}")
+
 class Peep:
 	def __init__(self, **kwargs):
 		self.id = int(kwargs.get("id"))
 		self.full_name = str(kwargs.get("name", "")).strip()
 		self.display_name = str(kwargs.get("display_name", "")).strip()
 		self.email = str(kwargs.get("email", "")).strip()
-		self.role = Role.from_string(kwargs.get("role", ""))
+
+		role_input = kwargs.get("role", "")
+		self.role = role_input if isinstance(role_input, Role) else Role.from_string(role_input)
+
+		switch_input = kwargs.get("switch_pref", SwitchPreference.PRIMARY_ONLY)
+		self.switch_pref = switch_input if isinstance(switch_input, SwitchPreference) else SwitchPreference(switch_input)
+		
 		self.index = int(kwargs.get("index", 0) or 0)  # Handles empty or missing values
 		self.priority = int(kwargs.get("priority", 0) or 0)
 		self.original_priority = self.priority
@@ -208,7 +238,7 @@ class Event:
 		else: 
 			return self.followers
 	
-	def get_alternates_by_role(self, role: Role) -> list[Peep]:
+	def get_alternates_by_role(self, role: Role) -> tuple[Peep, ...]:
 		return self._alt_leaders if role == Role.LEADER else self._alt_followers
 
 	def set_alternates_by_role(self, role: Role, peeps: list[Peep]):
@@ -223,6 +253,10 @@ class Event:
 		}
 
 	def add_attendee(self, peep: Peep, role: Role):
+		if len(self.get_attendees_by_role(role)) >= self.max_role:
+			logging.error(f"⚠️ Attempted to overfill {role.value} for Event {self.id}")
+			assert False, f"Too many attendees in role {role.value} for Event {self.id}"
+
 		if role == Role.LEADER: 
 			self._leaders.append(peep)
 		else: 
@@ -269,9 +303,6 @@ class Event:
 				alt_peep = larger_list.pop()
 				self.demote_attendee(alt_peep, larger_role)
 		
-		assert len(self.leaders) == len(self.followers) >= ABS_MIN_ROLE
-		assert len(self.leaders) <= self.max_role
-
 		# Downgrade event duration if needed based on final class size
 		count_per_role = len(self.leaders)
 		if count_per_role < self.min_role: 
@@ -284,6 +315,9 @@ class Event:
 					break
 			else:
 				logging.warning(f"No valid duration found for balanced count {count_per_role} in event {self.id}.")
+
+		assert len(self.leaders) == len(self.followers) >= self.min_role
+		assert len(self.leaders) <= self.max_role
 
 		
 	@classmethod
@@ -318,7 +352,7 @@ class Event:
 
 	def formatted_date(self):
 		dt = self.date
-		formatted = dt.strftime(DATESTR_FORMAT if hasattr(dt, 'strftime') else "")
+		formatted = dt.strftime(DATESTR_FORMAT) 
 		# For Unix systems, remove leading zeros manually (since %#I doesn't work)
 		formatted = formatted.replace(" 0", " ")
 		formatted = formatted[:-2] + formatted[-2:].lower()  # Lowercase am/pm
@@ -335,13 +369,25 @@ class Event:
 		return f"Event {self.id} on {self.formatted_date()}"
 
 	def get_leaders_str(self):
-		names = ', '.join([peep.name for peep in sorted(self.leaders, key=lambda p: p.name )])
-		alt_names = ', '.join([peep.name for peep in self.alt_leaders])
+		names = ', '.join(
+			f"*{peep.name}" if peep.role != Role.LEADER else peep.name
+			for peep in sorted(self.leaders, key=lambda p: p.name)
+		)
+		alt_names = ', '.join(
+			f"*{peep.name}" if peep.role != Role.LEADER else peep.name
+			for peep in sorted(self.alt_leaders, key=lambda p: p.name)
+		)
 		return f"Leaders({len(self.leaders)}): {names}" + (f" [alt: {alt_names}]" if alt_names else "")
 
 	def get_followers_str(self):
-		names = ', '.join([peep.name for peep in sorted(self.followers, key=lambda p: p.name )])
-		alt_names = ', '.join([peep.name for peep in self.alt_followers])
+		names = ', '.join(
+			f"*{peep.name}" if peep.role != Role.FOLLOWER else peep.name
+			for peep in sorted(self.followers, key=lambda p: p.name)
+		)
+		alt_names = ', '.join(
+			f"*{peep.name}" if peep.role != Role.FOLLOWER else peep.name
+			for peep in sorted(self.alt_followers, key=lambda p: p.name)
+		)
 		return f"Followers({len(self.followers)}): {names}" + (f" [alt: {alt_names}]" if alt_names else "")
 	
 class EventSequence:
@@ -438,8 +484,8 @@ class EventSequence:
 	def __repr__(self):
 		return (', '.join(str(event.id) for event in self.events))
 
-	def __str__(self):
-		sorted_events = sorted(self.valid_events, key=lambda e: (e.id))
+	def  __str__(self):
+		sorted_events:list[Event] = sorted(self.valid_events, key=lambda e: (e.id))
 		result = (f"EventSequence: "
 			f"valid events: {{ {', '.join(str(event.id) for event in sorted_events)} }}, "
 			f"unique attendees {self.num_unique_attendees}/{len(self.peeps)}, " 

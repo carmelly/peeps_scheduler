@@ -1,6 +1,6 @@
 import csv
 from collections import defaultdict
-from models import Role
+from models import Role, SwitchPreference
 from utils import parse_event_date
 
 def load_csv(filename):
@@ -9,13 +9,14 @@ def load_csv(filename):
 
 def parse_availability(responses_file, members_file):
 	members = {row["Email Address"].strip().lower(): row for row in load_csv(members_file)}
-	availability = defaultdict(lambda: {"Leader": [], "Follower": []})
+	availability = defaultdict(lambda: {"Leader": [], "Follower": [], "Leader_fill": [], "Follower_fill": []})
 	unavailable = []
 	responders = set()
 
 	for row in load_csv(responses_file):
 		email = row["Email Address"].strip().lower()
-		role = row["Primary Role"].strip()
+		role = Role(row["Primary Role"].strip())
+		switch_pref = SwitchPreference.from_string(row["Secondary Role"].strip())
 		dates = [d.strip() for d in row["Availability"].split(",") if d.strip()]
 
 		member = members.get(email)
@@ -32,24 +33,23 @@ def parse_availability(responses_file, members_file):
 			unavailable.append(member["Display Name"])
 
 		for date in dates:
-			availability[date][role].append(member["Display Name"])
+			availability[date][role.value].append(member["Display Name"])
+			if switch_pref != SwitchPreference.PRIMARY_ONLY: 
+				availability[date][f"{role.opposite().value}_fill"].append(member["Display Name"])
 
 	# Identify non-responders
 	non_responders = [
 		member["Display Name"] for email, member in members.items()
 		if email not in responders and member.get("Active", "TRUE").upper() == "TRUE"
 	]
-
-	
-
 	return availability, unavailable, non_responders
 
 def print_availability(availability, unavailable, non_responders):
 	
 	for date in sorted(availability.keys(), key=lambda d:parse_event_date(d)):
 		print(f"\n📅  {date}")
-		print(f"    Leaders  ({len(availability[date]['Leader'])}): {', '.join(availability[date]['Leader'])}")
-		print(f"    Followers({len(availability[date]['Follower'])}): {', '.join(availability[date]['Follower'])}")
+		print(f"    Leaders  ({len(availability[date]['Leader'])}): {', '.join(availability[date]['Leader'])} ( + {', '.join(availability[date]['Leader_fill'])})")
+		print(f"    Followers({len(availability[date]['Follower'])}): {', '.join(availability[date]['Follower'])} ( + {', '.join(availability[date]['Follower_fill'])})")
 	
 	print("\n🚫  No availability:")
 	for name in sorted(unavailable):
