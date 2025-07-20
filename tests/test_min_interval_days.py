@@ -15,8 +15,8 @@ def common_dates():
 
 def test_zero_interval_days(common_dates):
 	peep = Peep(id="1", name="P1", role=Role.LEADER, availability=[1, 2], event_limit=5, priority=1, min_interval_days=0)
-	event1 = Event(id=1, date=common_dates["date1"])
-	event2 = Event(id=2, date=common_dates["date2"])
+	event1 = Event(id=1, date=common_dates["date1"],duration_minutes=120)
+	event2 = Event(id=2, date=common_dates["date2"],duration_minutes=120)
 
 	assert peep.can_attend(event1)
 	peep.assigned_event_dates.append(event1.date)
@@ -24,9 +24,9 @@ def test_zero_interval_days(common_dates):
 
 def test_one_interval_day(common_dates):
 	peep = Peep(id="2", name="P2", role=Role.FOLLOWER, availability=[1, 2, 3], event_limit=5, priority=1, min_interval_days=1)
-	event1 = Event(id=1, date=common_dates["date1"])
-	event2 = Event(id=2, date=common_dates["date2"])
-	event3 = Event(id=3, date=common_dates["date3"])
+	event1 = Event(id=1, date=common_dates["date1"],duration_minutes=120)
+	event2 = Event(id=2, date=common_dates["date2"],duration_minutes=120)
+	event3 = Event(id=3, date=common_dates["date3"],duration_minutes=120)
 
 	assert peep.can_attend(event1)
 	peep.assigned_event_dates.append(event1.date)
@@ -35,9 +35,9 @@ def test_one_interval_day(common_dates):
 
 def test_seven_interval_days(common_dates):
 	peep = Peep(id="3", name="P3", role=Role.LEADER, availability=[1, 4], event_limit=5, priority=1, min_interval_days=7)
-	event1 = Event(id=1, date=common_dates["date1"])
-	event4 = Event(id=4, date=common_dates["date4"])
-	event_near = Event(id=5, date=common_dates["date_near"])
+	event1 = Event(id=1, date=common_dates["date1"],duration_minutes=120)
+	event4 = Event(id=4, date=common_dates["date4"],duration_minutes=120)
+	event_near = Event(id=5, date=common_dates["date_near"],duration_minutes=120)
 
 	assert peep.can_attend(event1)
 	peep.assigned_event_dates.append(event1.date)
@@ -46,8 +46,8 @@ def test_seven_interval_days(common_dates):
 
 def test_seven_days_apart_earlier_time(common_dates):
 	peep = Peep(id="4", name="P4", role=Role.FOLLOWER, availability=[1, 6], event_limit=5, priority=1, min_interval_days=7)
-	event1 = Event(id=1, date=common_dates["date1"])
-	event4_early = Event(id=6, date=common_dates["date4_early"])
+	event1 = Event(id=1, date=common_dates["date1"],duration_minutes=120)
+	event4_early = Event(id=6, date=common_dates["date4_early"],duration_minutes=120)
 
 	assert peep.can_attend(event1)
 	peep.assigned_event_dates.append(event1.date)
@@ -55,8 +55,8 @@ def test_seven_days_apart_earlier_time(common_dates):
 
 def test_assign_out_of_order_pass(common_dates):
 	peep = Peep(id="5", name="P5", role=Role.LEADER, availability=[1, 4], event_limit=5, priority=1, min_interval_days=7)
-	event4 = Event(id=4, date=common_dates["date4"])  # March 8
-	event1 = Event(id=1, date=common_dates["date1"])  # March 1
+	event4 = Event(id=4, date=common_dates["date4"],duration_minutes=120)  # March 8
+	event1 = Event(id=1, date=common_dates["date1"],duration_minutes=120)  # March 1
 
 	assert peep.can_attend(event4)
 	peep.assigned_event_dates.append(event4.date)
@@ -64,8 +64,8 @@ def test_assign_out_of_order_pass(common_dates):
 
 def test_assign_out_of_order_fail(common_dates):
 	peep = Peep(id="6", name="P6", role=Role.FOLLOWER, availability=[1, 5], event_limit=5, priority=1, min_interval_days=7)
-	event_near = Event(id=5, date=common_dates["date_near"])  # March 6
-	event1 = Event(id=1, date=common_dates["date1"])  # March 1
+	event_near = Event(id=5, date=common_dates["date_near"],duration_minutes=120)  # March 6
+	event1 = Event(id=1, date=common_dates["date1"],duration_minutes=120)  # March 1
 
 	assert peep.can_attend(event_near)
 	peep.assigned_event_dates.append(event_near.date)

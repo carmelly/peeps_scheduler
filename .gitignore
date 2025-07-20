@@ -21,3 +21,6 @@ db/*.db-journal
 db/*.sqbpro
 db/backups/*
 **/sqlite3.exe
+
+# Test coverage report 
+.coverage 

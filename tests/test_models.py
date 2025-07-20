@@ -2,19 +2,40 @@ import copy
 import pytest
 import datetime
 from models import Peep, Event, EventSequence, Role
+import constants
+
+@pytest.fixture(autouse=True)
+def patch_constants(monkeypatch):
+	monkeypatch.setattr("models.ABS_MIN_ROLE", 2)
+
+
+# TODO: Make peeps and events using a fixture factory instead
+# @pytest.fixture
+# def make_event():
+# 	def _make_event(**kwargs):
+# 		return Event(id=kwargs.get("id", 1), ...)
+# 	return _make_event
 
 @pytest.fixture(scope="module")
 def events():
+	
+	constants.CLASS_CONFIG[999] = {
+		"price": 0,
+		"min_role": 3,
+		"max_role": 5,
+		"allow_downgrade": False
+	}
+
 	# Define 8 specific events, varying times and days, including same day and early times
 	return [
-		Event(id=0, date=datetime.datetime(2025, 3, 21, 16), min_role=3, max_role=5),  # Friday 4 PM
-		Event(id=1, date=datetime.datetime(2025, 3, 21, 19), min_role=3, max_role=5),  # Friday 7 PM same day
-		Event(id=2, date=datetime.datetime(2025, 3, 22, 11), min_role=3, max_role=5),  # Saturday 11 AM
-		Event(id=3, date=datetime.datetime(2025, 3, 23, 16), min_role=3, max_role=5),  # Sunday 4 PM
-		Event(id=4, date=datetime.datetime(2025, 3, 24, 19), min_role=3, max_role=5),  # Monday 7 PM
-		Event(id=5, date=datetime.datetime(2025, 3, 25, 11), min_role=3, max_role=5),  # Tuesday 11 AM
-		Event(id=6, date=datetime.datetime(2025, 3, 26, 16), min_role=3, max_role=5),  # Wednesday 4 PM
-		Event(id=7, date=datetime.datetime(2025, 3, 27, 16), min_role=3, max_role=5),  # Thursday 4 PM
+		Event(id=0, date=datetime.datetime(2025, 3, 21, 16), duration_minutes=999),  # Friday 4 PM
+		Event(id=1, date=datetime.datetime(2025, 3, 21, 19), duration_minutes=999),  # Friday 7 PM same day
+		Event(id=2, date=datetime.datetime(2025, 3, 22, 11), duration_minutes=999),  # Saturday 11 AM
+		Event(id=3, date=datetime.datetime(2025, 3, 23, 16), duration_minutes=999),  # Sunday 4 PM
+		Event(id=4, date=datetime.datetime(2025, 3, 24, 19), duration_minutes=999),  # Monday 7 PM
+		Event(id=5, date=datetime.datetime(2025, 3, 25, 11), duration_minutes=999),  # Tuesday 11 AM
+		Event(id=6, date=datetime.datetime(2025, 3, 26, 16), duration_minutes=999),  # Wednesday 4 PM
+		Event(id=7, date=datetime.datetime(2025, 3, 27, 16), duration_minutes=999),  # Thursday 4 PM
 	]
 
 @pytest.fixture(scope="module")
@@ -52,33 +73,37 @@ def peeps():
 	return leaders + followers
 
 def test_event_is_valid(events, peeps):
+	events = copy.deepcopy(events)
+
 	# Case 1: Valid event with sufficient leaders and followers
 	event = events[0]
 	leaders = peeps[:3]
 	followers = peeps[10:13]
-	for leader in leaders: event.add_attendee(leader)
-	for follower in followers: event.add_attendee(follower)
+	for leader in leaders: event.add_attendee(leader, Role.LEADER)
+	for follower in followers: event.add_attendee(follower, Role.FOLLOWER)
 	assert event.is_valid()
 
 	# Case 2: Invalid event - not enough followers
 	event2 = events[1]
 	leaders2 = peeps[:3]
-	for leader in leaders2: event2.add_attendee(leader)
+	for leader in leaders2: event2.add_attendee(leader, Role.LEADER)
 	assert not event2.is_valid()
 
 	# Case 3: Invalid event - not enough leaders
 	event3 = events[2]
 	followers3 = peeps[10:13]
-	for follower in followers3: event3.add_attendee(follower)
+	for follower in followers3: event3.add_attendee(leader, Role.FOLLOWER)
 	assert not event3.is_valid()
 
 def test_add_peeps_to_event(events, peeps):
+	events = copy.deepcopy(events)
+
 	# Case 1: Add exact required leaders and followers
 	event = events[3]
 	leaders = peeps[:3]
 	followers = peeps[10:13]
-	for leader in leaders: event.add_attendee(leader)
-	for follower in followers: event.add_attendee(follower)
+	for leader in leaders: event.add_attendee(leader, Role.LEADER)
+	for follower in followers: event.add_attendee(follower, Role.FOLLOWER)
 	assert len(event.leaders) == 3
 	assert len(event.followers) == 3
 
@@ -86,11 +111,18 @@ def test_add_peeps_to_event(events, peeps):
 	event2 = events[4]
 	leaders2 = peeps[:6]
 	followers2 = peeps[10:16]
-	for leader in leaders2: event2.add_attendee(leader)
-	for follower in followers2: event2.add_attendee(follower)
-	assert len(event2.leaders) > event2.max_role or len(event2.followers) > event2.max_role
+
+	with pytest.raises(AssertionError, match="Too many attendees in role Leader"):
+		for leader in leaders2: event2.add_attendee(leader, Role.LEADER)
+	with pytest.raises(AssertionError, match="Too many attendees in role Follower"):
+		for follower in followers2: event2.add_attendee(follower, Role.FOLLOWER)
+
+	# we should still only have the max allowed per role 
+	assert len(event2.leaders) == event2.max_role and len(event2.followers) == event2.max_role
 
 def test_peep_can_attend(events, peeps):
+	events = copy.deepcopy(events)
+
 	# Case 1: Peep eligible (event in availability, limit ok, no conflict)
 	event = events[5]
 	peep = [p for p in peeps if event.id in p.availability and p.role == Role.LEADER][0]
@@ -106,12 +138,14 @@ def test_peep_can_attend(events, peeps):
 	assert not unavailable_peep.can_attend(event)
 	
 def test_update_event_attendees(events, peeps):
+	events = copy.deepcopy(events)
+
 	event = events[6]
 	leaders = peeps[:3]
 	followers = peeps[10:13]
 	winners = leaders + followers
 	for peep in winners: 
-		event.add_attendee(peep)
+		event.add_attendee(peep, peep.role)
 
 	Peep.update_event_attendees(peeps, event)
 
@@ -154,15 +188,16 @@ def test_update_event_attendees(events, peeps):
 	assert peeps[19].id == 13 and peeps[19].priority == 0
 
 def test_eventsequence_equality(events, peeps):
-	
+	events = copy.deepcopy(events)
+
 	# Case 1: Sequences with same event & attendee order
 	event = copy.deepcopy(events[7])
 	leaders = peeps[:3]
 	followers = peeps[10:13]
 	for leader in leaders:
-		event.add_attendee(leader)
+		event.add_attendee(leader, Role.LEADER)
 	for follower in followers:
-		event.add_attendee(follower)
+		event.add_attendee(follower, Role.FOLLOWER)
 
 	sequence1 = EventSequence([event], peeps)
 	sequence2 = EventSequence([event], peeps)
@@ -174,9 +209,9 @@ def test_eventsequence_equality(events, peeps):
 	# Case 2: Sequences with same event but attendees added in a different order 
 	event2 = copy.deepcopy(events[7])
 	for follower in followers:
-		event2.add_attendee(follower)
+		event2.add_attendee(follower, Role.FOLLOWER)
 	for leader in leaders:
-		event2.add_attendee(leader)
+		event2.add_attendee(leader, Role.LEADER)
 	sequence3 = EventSequence([event2], peeps)
 	sequence3.valid_events.append(event2)
 	assert sequence1 == sequence3
@@ -184,20 +219,20 @@ def test_eventsequence_equality(events, peeps):
 	# Case 3: Same event, different attendees 
 	event3 = copy.deepcopy(events[7])
 	for leader in peeps[4:7]:
-		event3.add_attendee(leader)
+		event3.add_attendee(leader, Role.LEADER)
 	for follower in peeps[14:17]:
-		event3.add_attendee(follower)
+		event3.add_attendee(follower, Role.FOLLOWER)
 	
 	sequence4 = EventSequence([event3], peeps)
 	sequence4.valid_events.append(event3)
 	assert sequence1 != sequence4
 
 	# Case 4: Different events, same attendees 
-	event4 = copy.deepcopy(events[4])
+	event4 = events[4]
 	for leader in leaders:
-		event.add_attendee(leader)
+		event4.add_attendee(leader, Role.LEADER)
 	for follower in followers:
-		event.add_attendee(follower)
+		event4.add_attendee(follower, Role.FOLLOWER)
 	sequence5 = EventSequence([event4], peeps)
 	sequence5.valid_events.append(event4)
 	assert sequence1 != sequence5

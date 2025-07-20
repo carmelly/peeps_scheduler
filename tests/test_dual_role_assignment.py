@@ -4,12 +4,11 @@ import pytest
 from constants import DATE_FORMAT
 from models import EventSequence, Peep, Event, Role, SwitchPreference
 from scheduler import Scheduler
-
+import constants
 
 
 @pytest.fixture(autouse=True)
-def patch_abs_min_role(monkeypatch):
-	import constants
+def patch_constants(monkeypatch):
 	monkeypatch.setattr("models.ABS_MIN_ROLE", 2)
 	constants.CLASS_CONFIG[999] = {
 		"price": 0,
