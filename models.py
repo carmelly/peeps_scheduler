@@ -18,7 +18,6 @@ class Role(Enum):
 	
 	@classmethod
 	def from_string(cls, value):
-		#TODO: fix response form using "lead" and "follow" instead of "leader" and "follower"
 		value = value.strip().lower()
 		if value in ["lead", "leader"]:
 			return cls.LEADER
