@@ -1,7 +1,7 @@
 import copy
 import logging
 import time
-from constants import ABS_MAX_ROLE, ABS_MIN_ROLE
+import constants
 from models import Event, EventSequence, Peep, Role, SwitchPreference
 import utils
 
@@ -21,7 +21,7 @@ class Scheduler:
 			num_leaders = sum(1 for peep in peeps if event.id in peep.availability and peep.role == Role.LEADER)
 			num_followers = sum(1 for peep in peeps if event.id in peep.availability and peep.role == Role.FOLLOWER)
 
-			if num_leaders >= ABS_MIN_ROLE and num_followers >= ABS_MIN_ROLE:
+			if num_leaders >= constants.ABS_MIN_ROLE and num_followers >= constants.ABS_MIN_ROLE:
 				valid_events.append(event)
 			else:
 				removed_events.append(event)
@@ -240,7 +240,7 @@ class Scheduler:
 
 		# Try events with different max per role to get the *actual* best sequence
 		all_sequences = []
-		for target_max in range(ABS_MIN_ROLE, ABS_MAX_ROLE + 1):  
+		for target_max in range(constants.ABS_MIN_ROLE, constants.ABS_MAX_ROLE + 1):  
 			self.target_max = target_max
 			sequences = self.evaluate_all_event_sequences(peeps, sanitized_events)
 			all_sequences.extend(sequences)

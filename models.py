@@ -2,7 +2,8 @@ import datetime
 import random
 import logging
 from enum import Enum
-from constants import ABS_MIN_ROLE, CLASS_CONFIG, DATE_FORMAT, DATESTR_FORMAT
+from constants import DATE_FORMAT, DATESTR_FORMAT
+import constants
 
 class Role(Enum):
 	LEADER = "Leader"
@@ -174,7 +175,7 @@ class Event:
 		self.date = kwargs.get("date", None) #TODO: validate that this is a datetime
 		
 		self.duration_minutes = kwargs.get("duration_minutes")
-		if self.duration_minutes not in CLASS_CONFIG:
+		if self.duration_minutes not in constants.CLASS_CONFIG:
 			raise ValueError(f"Unknown event duration: {self.duration_minutes}")
 
 		# Attendee lists are role-specific and managed via internal assignment methods.
@@ -186,7 +187,7 @@ class Event:
 	
 	@property
 	def config(self):
-		return CLASS_CONFIG[self.duration_minutes]
+		return constants.CLASS_CONFIG[self.duration_minutes]
 
 	@property
 	def min_role(self):
@@ -323,8 +324,8 @@ class Event:
 		per role, regardless of duration or class configuration.
 		"""
 		return (
-			len(self.leaders) >= ABS_MIN_ROLE and
-			len(self.followers) >= ABS_MIN_ROLE
+			len(self.leaders) >= constants.ABS_MIN_ROLE and
+			len(self.followers) >= constants.ABS_MIN_ROLE
 		)
 
 	def is_full(self, role: Role = None) -> bool:
@@ -435,8 +436,8 @@ class Event:
 		logging.debug(f"Attempting to downgrade Event {self.id} due to underfill ({count_per_role}/role)")
 
 		# Search for a valid downgrade option in CLASS_CONFIG
-		for duration in sorted(CLASS_CONFIG.keys()):
-			new_config = CLASS_CONFIG[duration]
+		for duration in sorted(constants.CLASS_CONFIG.keys()):
+			new_config = constants.CLASS_CONFIG[duration]
 			if (
 				new_config["allow_downgrade"] and
 				new_config["min_role"] <= count_per_role <= new_config["max_role"]

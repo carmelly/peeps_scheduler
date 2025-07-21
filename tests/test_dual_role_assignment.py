@@ -9,7 +9,7 @@ import constants
 
 @pytest.fixture(autouse=True)
 def patch_constants(monkeypatch):
-	monkeypatch.setattr("models.ABS_MIN_ROLE", 2)
+	monkeypatch.setattr("constants.ABS_MIN_ROLE", 2)
 	constants.CLASS_CONFIG[999] = {
 		"price": 0,
 		"min_role": 2,

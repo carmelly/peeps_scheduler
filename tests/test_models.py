@@ -6,15 +6,8 @@ import constants
 
 @pytest.fixture(autouse=True)
 def patch_constants(monkeypatch):
-	monkeypatch.setattr("models.ABS_MIN_ROLE", 2)
+	monkeypatch.setattr("constants.ABS_MIN_ROLE", 2)
 
-
-# TODO: Make peeps and events using a fixture factory instead
-# @pytest.fixture
-# def make_event():
-# 	def _make_event(**kwargs):
-# 		return Event(id=kwargs.get("id", 1), ...)
-# 	return _make_event
 
 @pytest.fixture(scope="module")
 def events():

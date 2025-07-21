@@ -44,8 +44,7 @@ def test_is_sorted_by_priority(basic_data):
 
 def test_sanitize_events(monkeypatch, basic_data):
 	events, peeps = basic_data
-	monkeypatch.setattr("models.ABS_MIN_ROLE", 1)
-	monkeypatch.setattr("scheduler.ABS_MIN_ROLE", 1)
+	monkeypatch.setattr("constants.ABS_MIN_ROLE", 1)
 	sched = Scheduler(data_folder="tests/data", max_events=3)
 	valid = sched.sanitize_events(events, peeps)
 	assert len(valid) == 3
@@ -57,8 +56,7 @@ def test_sanitize_events(monkeypatch, basic_data):
 
 def test_remove_high_overlap_events(monkeypatch, basic_data):
 	events, peeps = basic_data
-	monkeypatch.setattr("models.ABS_MIN_ROLE", 1)
-	monkeypatch.setattr("scheduler.ABS_MIN_ROLE", 1)
+	monkeypatch.setattr("constants.ABS_MIN_ROLE", 1)
 	sched = Scheduler(data_folder="tests/data", max_events=2)
 	trimmed = sched.remove_high_overlap_events(events, peeps, 2)
 	assert len(trimmed) == 2
