@@ -36,7 +36,7 @@ class SwitchPreference(Enum):
 		value = value.strip()
 		if value == "I only want to be scheduled in my primary role": 
 			return cls.PRIMARY_ONLY
-		elif value == "I’m happy to dance my secondary role if it lets me attend when my primary is full": 
+		elif value == "I'm happy to dance my secondary role if it lets me attend when my primary is full": 
 			return cls.SWITCH_IF_PRIMARY_FULL
 		elif value == "I'm willing to dance my secondary role only if it's needed to enable filling a session": 
 			return cls.SWITCH_IF_NEEDED
@@ -71,6 +71,10 @@ class Peep:
 		self.responded = kwargs.get('responded', False)
 
 	@staticmethod
+	def is_peeps_list_sorted_by_priority(peeps: list["Peep"]): 
+		return all(peeps[i].priority >= peeps[i + 1].priority for i in range(len(peeps)-1))
+	
+	@staticmethod
 	def from_csv(row: dict) -> "Peep":
 		return Peep(
 			id=int(row["id"]),
@@ -81,7 +85,23 @@ class Peep:
 			index=int(row["Index"]),
 			priority=int(row["Priority"]),
 			total_attended=int(row["Total Attended"]),
+			active=row["Active"].strip().upper() == "TRUE",
+			date_joined = row["Date Joined"]
 		)
+	
+	def to_csv(self) -> dict: 
+		return {
+			'id': self.id,
+			'Name': self.full_name,
+			'Display Name': self.display_name,
+			'Email Address': self.email,
+			'Role': self.role.value,
+			'Index': self.index,
+			'Priority': self.priority,
+			'Total Attended': self.total_attended,
+			'Active': str(self.active).upper(),
+			'Date Joined': self.date_joined
+		}
 	
 	@property
 	def name(self): 
@@ -593,7 +613,40 @@ class EventSequence:
 		self.normalized_utilization = 0 
 				
 	
+	def to_dict(self): 
+		return {
+			"valid_events": [
+				{
+					"id": event.id,
+					"date": event.date.strftime(DATE_FORMAT),
+					"duration_minutes": event.duration_minutes, 
+					"attendees": [
+						{
+							"id": peep.id,
+							"name": peep.name,
+							"role": peep.role.value
+						}
+						for peep in event.attendees
+					],
+					"alternates": [
+						{
+							"id": peep.id,
+							"name": peep.name,
+							"role": peep.role.value
+						}
+						for peep in event.alt_leaders + event.alt_followers
+					],
+					"leaders_string": event.get_participants_str(Role.LEADER), 
+					"followers_string": event.get_participants_str(Role.FOLLOWER), 
 
+				}
+				for event in self.valid_events
+			],
+			"peeps": [peep.to_dict() for peep in self.peeps],
+			"num_unique_attendees": self.num_unique_attendees,
+			"system_weight": self.system_weight
+		}
+	
 	def finalize(self):
 		"""Finalizes a sequence by increasing priority for unsuccessful peeps and tracking metrics."""
 		for peep in self.peeps:

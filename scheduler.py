@@ -2,6 +2,7 @@ import copy
 import logging
 import time
 import constants
+import file_io
 from models import Event, EventSequence, Peep, Role, SwitchPreference
 import utils
 
@@ -212,11 +213,11 @@ class Scheduler:
 			responses_csv = f'data/{self.data_folder}/responses.csv'
 			peeps_csv = f'data/{self.data_folder}/members.csv'
 			logging.info(f"Loading data from {peeps_csv} and {responses_csv}")
-			utils.convert_to_json(responses_csv, peeps_csv, self.output_json)
+			file_io.convert_to_json(responses_csv, peeps_csv, self.output_json)
 
 		logging.info(f"Loading data from {self.output_json}")
 		
-		peeps, events = utils.load_data_from_json(self.output_json)
+		peeps, events = file_io.load_data_from_json(self.output_json)
 		responders = [p for p in peeps if p.responded]
 		no_availability = [p.name for p in responders if not p.availability]
 		non_responders = [p.name for p in peeps if not p.responded]
@@ -266,7 +267,7 @@ class Scheduler:
 				chosen_index = int(choice)
 				best_sequence = best[chosen_index]
 				logging.info(f"Selected {best_sequence}")
-				utils.save_event_sequence(best_sequence, self.result_json)
+				file_io.save_event_sequence(best_sequence, self.result_json)
 				logging.debug("Final Peeps:")
 				logging.debug(Peep.peeps_str(best_sequence.peeps))
 			except (ValueError, IndexError):

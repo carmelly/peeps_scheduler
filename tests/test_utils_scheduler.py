@@ -2,6 +2,7 @@ import datetime
 import math
 import pytest
 
+import file_io
 import utils
 from scheduler import Scheduler
 from models import Event, Peep, Role
@@ -23,7 +24,7 @@ def basic_data():
 
 def test_parse_event_date():
 	year = datetime.datetime.now().year
-	result = utils.parse_event_date("Wednesday March 05 - 4PM (ignore)")
+	result = file_io.parse_event_date("Wednesday March 05 - 4PM (ignore)")
 	assert result == f"{year}-03-05 16:00"
 
 
@@ -37,9 +38,9 @@ def test_generate_event_permutations(basic_data):
 def test_is_sorted_by_priority(basic_data):
 	_, peeps = basic_data
 	sorted_peeps = sorted(peeps, key=lambda p: p.priority, reverse=True)
-	assert utils.is_sorted_by_priority(sorted_peeps)
+	assert Peep.is_peeps_list_sorted_by_priority(sorted_peeps)
 	sorted_peeps[0].priority = -1
-	assert not utils.is_sorted_by_priority(sorted_peeps)
+	assert not Peep.is_peeps_list_sorted_by_priority(sorted_peeps)
 
 
 def test_sanitize_events(monkeypatch, basic_data):
