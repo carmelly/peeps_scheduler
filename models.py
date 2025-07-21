@@ -46,7 +46,7 @@ class SwitchPreference(Enum):
 class Peep:
 	def __init__(self, **kwargs):
 		self.id = int(kwargs.get("id"))
-		self.full_name = str(kwargs.get("name", "")).strip()
+		self.full_name = str(kwargs.get("full_name", "")).strip()
 		self.display_name = str(kwargs.get("display_name", "")).strip()
 		self.email = str(kwargs.get("email", "")).strip()
 
@@ -70,15 +70,43 @@ class Peep:
 		self.date_joined = kwargs.get('date_joined')
 		self.responded = kwargs.get('responded', False)
 
+	@staticmethod
+	def from_csv(row: dict) -> "Peep":
+		return Peep(
+			id=int(row["id"]),
+			full_name=row["Name"].strip(),
+			display_name=row["Display Name"].strip(),
+			email=row["Email Address"].strip(),
+			role=row["Role"].strip(),
+			index=int(row["Index"]),
+			priority=int(row["Priority"]),
+			total_attended=int(row["Total Attended"]),
+		)
+	
 	@property
 	def name(self): 
 		return self.display_name 
 	
 	def to_dict(self):
-		return {
-			**self.__dict__,
-			"role": self.role.value if hasattr(self.role, "value") else self.role
+		peep_dict = {
+			"id": self.id,
+			"name": self.full_name,
+			"display_name": self.display_name, 
+			'email': self.email,
+			"role": self.role.value,
+			"index": self.index, 
+			"priority": self.priority, 
+			"total_attended": self.total_attended,
 		}
+		if self.responded: 
+			peep_dict.update({
+				"availability": self.availability, 
+				"switch_pref": self.switch_pref.value,
+				"responded": self.responded,
+				"event_limit": self.event_limit,
+				"min_interval_days": self.min_interval_days
+			})
+		return peep_dict
 	
 	def can_attend(self, event):
 		"""Checks if a peep can attend an event based on peep availability, event limit, and interval. 
@@ -467,7 +495,9 @@ class Event:
 
 	def to_dict(self):
 		return {
-			**self.__dict__,
+			"id": self.id,
+            "date": self.date,
+            "duration_minutes": self.duration_minutes,
 		}
 	
 	@classmethod

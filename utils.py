@@ -1,3 +1,4 @@
+from collections import defaultdict
 import json
 import csv
 import logging
@@ -6,6 +7,7 @@ import sys
 import datetime 
 import itertools
 from constants import DATE_FORMAT, DATESTR_FORMAT
+import constants
 from models import EventSequence, Peep, Event, Role, SwitchPreference
 
 def parse_event_date(date_str):
@@ -41,79 +43,98 @@ def load_csv(filename, required_columns=[]):
 				sys.exit() 
 		return list(reader)
 
-def convert_to_json(responses_file, members_file, output_file):
-		
-	peeps_data = load_csv(members_file, ['id','Name','Display Name','Email Address','Role','Index','Priority','Total Attended'])
-	responses_data = load_csv(responses_file, ['Name','Email Address','Primary Role','Secondary Role','Max Sessions','Availability','Min Interval Days'])
+def convert_to_json(response_csv_path, peeps_csv_path, output_json_path):
+	# Load peeps
+	with open(peeps_csv_path, "r", newline='', encoding="utf-8") as f:
+		reader = csv.DictReader(f)
+		peeps = [Peep.from_csv(row) for row in reader]
 
-	unique_peeps = {}
-	unique_events = {}
-	jsonData = []
+	# Load responses
+	with open(response_csv_path, "r", newline='', encoding="utf-8") as f:
+		reader = csv.DictReader(f)
+		rows = list(reader)
+
+	# First pass: extract event definitions
+	event_map = {}
 	event_counter = 0
 
-	# Process members data
-	for row in peeps_data:
-		id = row['id']
+	for row in rows:
+		name = row["Name"].strip()
+		if name.startswith("Event:"):
+			parts = name.split("Event: ", 1)
+			if len(parts) < 2 or not parts[1].strip():
+				raise ValueError(f"Malformed event row: missing date in 'Name' field -> {name}")
+			
+			date_str = parts[1].strip()
+			event_date = parse_event_date(date_str)
 
-		if id not in unique_peeps:
-			unique_peeps[id] = {
-				"id": id,
-				"name": row['Name'].strip(),
-				"display_name": row['Display Name'].strip(),
-				'email': row['Email Address'], 
-				"role": row['Role'],
-				"index": row['Index'],
-				"priority": row['Priority'],
-				"total_attended": row['Total Attended'],
-				"availability": [],
-			}
+			duration_str = row.get("Event Duration", "").strip()
+			if not duration_str:
+				raise ValueError(f"Missing Event Duration for event row: {name}")
+			try:
+				duration = int(duration_str)
+			except ValueError:
+				raise ValueError(f"Invalid Event Duration value: {duration_str}")
+			if duration not in constants.CLASS_CONFIG:
+				raise ValueError(f"Duration {duration} not in CLASS_CONFIG")
 
-	# Process responses
-	for row in responses_data:
-		name, email, role, max_sessions, available_dates = row['Name'].strip(), row['Email Address'].strip(), row['Primary Role'], row['Max Sessions'], row['Availability']
-		min_interval_days = int(row.get('Min Interval Days', 0))  # Default to 0 if not specified
+			event = Event.from_dict({
+				"id": event_counter,
+				"date": event_date,
+				"duration_minutes": duration,
+			})
+			event.id = event_counter  # assign unique ID
+			event_counter += 1
 
-		peep  = Peep.find_matching_peep(unique_peeps, name, email )
-		peep['role'] = Role.from_string(role).value # allow response role to override peep main role (TODO: do we even need main role?)
-		peep['switch_pref'] = SwitchPreference.from_string(row['Secondary Role']).value
-		peep['responded'] = True 
+			event_map[event_date] = event  # keyed by date string
+
+	# Second pass: apply availability to peeps
+	responses_data = []
+
+	for row in rows:
+		name = row["Name"].strip()
+		if name.startswith("Event:"): #skip events
+			continue
+
+		email = row.get("Email Address", "").strip().lower()
+		if not email:
+			raise ValueError(f"Missing email for row: {name}")
 		
-		if not peep: 
-			logging.critical(f"Couldn't match all responses to peeps. Please check data and try again.")
-			sys.exit() 
+		peep = next((p for p in peeps if p.email.lower() == email), None)
+		if not peep:
+			raise ValueError(f"No matching peep found for email: {email} (row: {name})")
 
-		peep['event_limit'] = int(max_sessions)
-		peep['min_interval_days'] = int(min_interval_days)
+		peep.role = Role.from_string(row['Primary Role'])
+		peep.event_limit = int(row['Max Sessions'])
+		peep.min_interval_days = int(row.get('Min Interval Days', 0))  # Default to 0 if not specified
+		peep.switch_pref = SwitchPreference.from_string(row['Secondary Role'])
+		peep.responded = True 
+		
+		available_str = row.get("Availability", "").split(",")
+		available_str = [s.strip() for s in available_str if s.strip()]
+		for date_str in available_str:
+			date_id  = parse_event_date(date_str)
+			event = event_map.get(date_id)
+			if not event:
+				raise ValueError(f"{name} listed availability for unknown event: {date_id}")
+			peep.availability.append(event.id)
 
-		event_ids = []
-		for event in available_dates.split(', '):
-			if event:
-				if event not in unique_events:
-					unique_events[event] = {
-						"id": event_counter,
-						"date": parse_event_date(event),
-					}
-					event_counter += 1
-				event_ids.append(unique_events[event]['id'])
-
-		peep['availability'] = list(set(peep['availability'] + event_ids))
-		jsonData.append({
+		responses_data.append({
 			"timestamp": row['Timestamp'],
 			"name": name,
-			"role": role,
-			"switch_pref": peep['switch_pref'], 
-			"max_sessions": max_sessions,
-			"available_dates": available_dates.split(', '),
+			"role": peep.role,
+			"switch_pref": peep.switch_pref, 
+			"max_sessions": peep.event_limit,
+			"available_dates": available_str,
 		})
-		
+	
+	# Output to JSON
 	output = {
-		"responses": jsonData,
-		"events": list(unique_events.values()),
-		"peeps": list(unique_peeps.values())
+		"responses": responses_data,
+		"events": [event.to_dict() for event in event_map.values()],
+		"peeps": [peep.to_dict() for peep in peeps]
 	}
-
-	with open(output_file, 'w', encoding='utf-8') as f:
-		json.dump(output, f, indent=2)
+	save_json(output, output_json_path)
 
 def generate_event_permutations(events):
 	"""Generates all possible permutations of event sequences as a list of event ids."""
