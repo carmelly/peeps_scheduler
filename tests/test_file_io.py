@@ -171,9 +171,18 @@ def test_load_csv_raises_on_missing_required_columns():
 		tmp.write(content)
 		tmp_path = tmp.name
 
-	with pytest.raises(SystemExit):
+	with pytest.raises(ValueError):
 		load_csv(tmp_path, required_columns=["col1", "col3"])
 	os.remove(tmp_path)
+
+def test_load_csv_strips_whitespace_from_fields(tmp_path):
+	path = tmp_path / "trim.csv"
+	path.write_text(" Name , Role \n Alice , Follow \n Bob , Lead \n")
+	rows = load_csv(path)
+	assert rows[0]["Name"] == "Alice"
+	assert rows[0]["Role"] == "Follow"
+	assert rows[1]["Name"] == "Bob"
+	assert rows[1]["Role"] == "Lead"
 
 # --- JSON Loading / Saving ---
 

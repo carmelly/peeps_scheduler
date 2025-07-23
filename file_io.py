@@ -22,14 +22,36 @@ RESPONSES_CSV_FIELDS = [
 # -- CSV-related --
 
 def load_csv(filename, required_columns=[]):
-	"""Load CSV file and validate required columns."""
+	"""Load CSV file and validate required columns, trimming whitespace from headers and values."""
 	with open(filename, newline='', encoding='utf-8') as csvfile:
-		reader = csv.DictReader(csvfile)
-		missing = set(required_columns) - set(reader.fieldnames)
+		# Read the first line (fieldnames), trim whitespace
+		reader = csv.reader(csvfile)
+		try:
+			raw_fieldnames = next(reader)
+		except StopIteration:
+			return []
+
+		fieldnames = [name.strip() for name in raw_fieldnames]
+
+		# Check required columns
+		missing = set(required_columns) - set(fieldnames)
 		if required_columns and missing:
-			logging.critical(f"Missing required columns in {filename}: {missing}")
-			sys.exit()
-		return list(reader)
+			raise ValueError(f"Missing required column(s): {missing}")
+
+		# Rebuild DictReader with cleaned headers
+		dict_reader = csv.DictReader(csvfile, fieldnames=fieldnames)
+		rows = []
+		
+		# Replace smart quotes (’) with ASCII quotes ('))
+		def _normalize_quotes(s):
+			return s.replace("’", "'").replace("‘", "'").replace("“", '"').replace("”", '"')
+		
+		# Strip whitespace and normalize quotes for every value 
+		for row in dict_reader:
+			cleaned = {k: _normalize_quotes(v.strip()) if v else "" for k, v in row.items()}
+			rows.append(cleaned)
+
+		return rows
 
 def load_peeps(peeps_csv_path):
 	"""Load and convert peep rows from CSV into Peep instances. Validates unique emails."""
