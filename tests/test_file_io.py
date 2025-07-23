@@ -247,6 +247,23 @@ def test_process_responses(peeps_csv_path, responses_csv_rows):
 	assert bob.role == Role.FOLLOWER
 	assert bob.availability == [1]
 
+def test_response_from_inactive_peep_raises(valid_peeps_rows, responses_csv_rows): 
+	peeps = [Peep.from_csv(p) for p in valid_peeps_rows]
+	responses_csv_rows = responses_csv_rows.copy()
+	responses_csv_rows.append({
+		"Name": "Inactive Gamma",
+		"Email Address": "gamma@test.com",
+		"Primary Role": "Leader",
+		"Secondary Role": "I only want to be scheduled in my primary role",
+		"Max Sessions": "2",
+		"Availability": "Sunday July 6 - 2pm (extra info)",
+		"Min Interval Days": "0",
+		"Timestamp": "2025-07-01 12:01"
+	})
+	event_map = extract_events(responses_csv_rows)
+	with pytest.raises(ValueError, match="Response from inactive peep: Inactive Gamma"): 
+		updated_peeps, responses = process_responses(responses_csv_rows, peeps, event_map)
+
 # ---  Roundtrip + End-to-End Integration Tests ---
 
 def test_convert_to_json_and_load_data_from_json_roundtrip(peeps_csv_path, responses_csv_path):

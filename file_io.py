@@ -202,6 +202,8 @@ def process_responses(rows, peeps, event_map):
 		peep = next((p for p in peeps if p.email.lower() == email), None)
 		if not peep:
 			raise ValueError(f"No matching peep found for email: {email} (row: {name})")
+		if not peep.active: 
+			raise ValueError(f"Response from inactive peep: {peep.full_name} (ID {peep.id}) — please activate them in the members spreadsheet.")
 
 		peep.role = Role.from_string(row["Primary Role"])
 		peep.event_limit = int(row["Max Sessions"])
