@@ -60,7 +60,7 @@ def load_peeps(peeps_csv_path):
 	emails = []
 
 	for peep in peeps:
-		email = peep.email.strip().lower()
+		email = peep.email.lower()
 		if peep.active:
 			if not email:
 				raise ValueError(f"Active peep '{peep.full_name}' is missing an email.")
@@ -154,18 +154,18 @@ def extract_events(rows):
 	event_counter = 0
 
 	for row in rows:
-		name = row.get("Name", "").strip()
+		name = row.get("Name", "")
 		if not name or not name.startswith("Event:"):
 			continue
 
 		parts = name.split("Event: ", 1)
-		if len(parts) < 2 or not parts[1].strip():
+		if len(parts) < 2 or not parts[1]:
 			raise ValueError(f"Malformed event row: missing date in 'Name' field -> {name}")
 
 		date_str = parts[1].strip()
 		event_date = parse_event_date(date_str)
 
-		duration_str = row.get("Event Duration", "").strip()
+		duration_str = row.get("Event Duration", "")
 		if not duration_str:
 			raise ValueError(f"Missing Event Duration for event row: {name}")
 		try:
@@ -191,11 +191,11 @@ def process_responses(rows, peeps, event_map):
 	responses_data = []
 
 	for row in rows:
-		name = row.get("Name", "").strip()
+		name = row.get("Name", "")
 		if not name or name.startswith("Event:"):
 			continue
 
-		email = row.get("Email Address", "").strip().lower()
+		email = row.get("Email Address", "").lower()
 		if not email:
 			raise ValueError(f"Missing email for row: {name}")
 
@@ -209,7 +209,7 @@ def process_responses(rows, peeps, event_map):
 		peep.switch_pref = SwitchPreference.from_string(row["Secondary Role"])
 		peep.responded = True
 
-		available_strs = [s.strip() for s in row.get("Availability", "").split(",") if s.strip()]
+		available_strs = [s for s in row.get("Availability", "").split(",") if s]
 		for date_str in available_strs:
 			date_id = parse_event_date(date_str)
 			event = event_map.get(date_id)
