@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width,initial-scale=1" />
+		<title>{% block title %}{{ title or "Peeps" }} • {{ version }}{% endblock %}</title>
+		<script src="https://cdn.tailwindcss.com"></script>
+		{% block head %}{% endblock %}
+	</head>
+	<body class="bg-slate-50 text-slate-900">
+		<div class="max-w-6xl mx-auto p-6">
+			<header class="mb-6 flex items-center justify-between">
+				<div>
+					<h1 class="text-2xl font-semibold">{% block header %}{{ title }}{% endblock %}</h1>
+					<p class="text-sm text-slate-500">API version {{ version }}</p>
+				</div>
+				<nav class="text-sm space-x-4">
+					<a href="/api/peeps" class="text-blue-600 hover:underline">JSON</a>
+					<a href="/peeps" class="text-blue-600 hover:underline">Peeps</a>
+				</nav>
+			</header>
+
+			<main>
+				{% block content %}{% endblock %}
+			</main>
+
+			<footer class="mt-8 text-xs text-slate-500">
+				{% block footer %}Serving views at root, JSON under /api/*{% endblock %}
+			</footer>
+		</div>
+	</body>
+</html>

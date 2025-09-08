@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% import "_macros.html" as ui %}
+
+{% block title %}Peeps • {{ version }}{% endblock %}
+{% block header %}Peeps{% endblock %}
+
+{% block content %}
+	<div class="mb-4 flex items-center gap-3">
+		<input
+			id="filterInput"
+			type="text"
+			placeholder="Filter by name or role..."
+			class="w-full md:w-80 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+		/>
+		<button id="clearBtn" class="rounded-lg border border-slate-300 px-3 py-2 text-sm hover:bg-slate-100">
+			Clear
+		</button>
+	</div>
+
+	<div class="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+		<table class="min-w-full divide-y divide-slate-200" id="peepsTable">
+			<thead class="bg-slate-50">
+				<tr>
+					<th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600 cursor-pointer" data-sort="id">ID</th>
+					<th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600 cursor-pointer" data-sort="display_name">Name</th>
+					<th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600 cursor-pointer" data-sort="primary_role">Primary Role</th>
+					<th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600 cursor-pointer" data-sort="active">Active</th>
+				</tr>
+			</thead>
+			<tbody class="divide-y divide-slate-100 text-sm" id="peepsBody">
+				{% for p in peeps %}
+				<tr class="hover:bg-slate-50">
+					<td class="px-4 py-3 whitespace-nowrap">{{ p.id }}</td>
+					<td class="px-4 py-3 whitespace-nowrap">{{ p.display_name }}</td>
+					<td class="px-4 py-3 whitespace-nowrap">{{ ui.role_badge(p.primary_role) }}</td>
+					<td class="px-4 py-3 whitespace-nowrap">
+						<span class="inline-flex items-center gap-2">
+							<span class="h-2 w-2 rounded-full {{ 'bg-emerald-500' if p.active else 'bg-slate-300' }}"></span>
+							{{ 'Active' if p.active else 'Inactive' }}
+						</span>
+					</td>
+				</tr>
+				{% endfor %}
+			</tbody>
+		</table>
+	</div>
+
+	<script>
+		const filterInput = document.getElementById('filterInput');
+		const clearBtn = document.getElementById('clearBtn');
+		const table = document.getElementById('peepsTable');
+		const tbody = document.getElementById('peepsBody');
+
+		function normalize(s) {
+			return (s || '').toString().toLowerCase();
+		}
+
+		function filterRows() {
+			const q = normalize(filterInput.value);
+			for (const tr of tbody.querySelectorAll('tr')) {
+				const cells = tr.querySelectorAll('td');
+				const fullName = normalize(cells[1]?.textContent);
+				const primaryRole = normalize(cells[3]?.textContent);
+				tr.style.display = (fullName.includes(q) || primaryRole.includes(q)) ? '' : 'none';
+			}
+		}
+
+		filterInput.addEventListener('input', filterRows);
+		clearBtn.addEventListener('click', () => {
+			filterInput.value = '';
+			filterRows();
+			filterInput.focus();
+		});
+
+		let sortState = { key: 'priority', asc: true };
+		table.querySelectorAll('th[data-sort]').forEach(th => {
+			th.addEventListener('click', () => {
+				const key = th.dataset.sort;
+				sortState.asc = sortState.key === key ? !sortState.asc : true;
+				sortState.key = key;
+				sortRows();
+			});
+		});
+
+		function getCellValue(tr, key) {
+			const map = { id: 0, display_name: 1, primary_role: 2, active: 3 };
+			const idx = map[key];
+			const txt = tr.querySelectorAll('td')[idx]?.textContent.trim();
+			if (key === 'id' || key === 'priority') return Number(txt) || 0;
+			if (key === 'active') return txt === 'Active' ? 1 : 0;
+			return txt || '';
+		}
+
+		function sortRows() {
+			const rows = Array.from(tbody.querySelectorAll('tr')).filter(r => r.style.display !== 'none');
+			rows.sort((a, b) => {
+				const va = getCellValue(a, sortState.key);
+				const vb = getCellValue(b, sortState.key);
+				if (va < vb) return sortState.asc ? -1 : 1;
+				if (va > vb) return sortState.asc ? 1 : -1;
+				return 0;
+			});
+			for (const r of rows) tbody.appendChild(r);
+		}
+
+		sortRows();
+	</script>
+{% endblock %}

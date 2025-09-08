@@ -1,0 +1,5 @@
+{% macro role_badge(role) -%}
+	<span class="inline-flex items-center rounded-full border px-2 py-0.5 text-xs {{ 'border-emerald-300 text-emerald-700 bg-emerald-50' if role == 'leader' else 'border-fuchsia-300 text-fuchsia-700 bg-fuchsia-50' }}">
+		{{ role }}
+	</span>
+{%- endmacro %}
