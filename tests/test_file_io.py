@@ -6,6 +6,7 @@ import datetime
 from file_io import (
 	load_data_from_json,
 	convert_to_json,
+	normalize_role,
 	parse_event_date,
 	load_csv,
 	load_peeps,
@@ -140,6 +141,27 @@ def test_extract_events(responses_csv_rows):
 	events = extract_events(responses_csv_rows)
 	assert len(events) == 3
 	assert sorted(e.duration_minutes for e in events.values()) == [60, 90, 120]
+
+def test_normalize_role():
+	# canonical values
+	assert normalize_role("leader") == "leader"
+	assert normalize_role("follower") == "follower"
+
+	# aliases
+	assert normalize_role("lead") == "leader"
+	assert normalize_role("follow") == "follower"
+
+	# case and whitespace handling
+	assert normalize_role(" Leader ") == "leader"
+	assert normalize_role("FOLLOW") == "follower"
+
+	# invalid values
+	with pytest.raises(ValueError):
+		normalize_role("coach")
+	with pytest.raises(ValueError):
+		normalize_role("")
+	with pytest.raises(ValueError):
+		normalize_role("leaders")
 
 def test_parse_event_date_strips_parentheticals_and_formats():
 	# Includes parenthetical content which should be ignored

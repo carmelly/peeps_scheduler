@@ -4,7 +4,7 @@ import logging
 import datetime 
 import itertools
 from constants import DATE_FORMAT, DATESTR_FORMAT
-from file_io import load_csv, save_json
+from file_io import load_csv, normalize_role, save_json
 from models import EventSequence, Peep, Event, Role, SwitchPreference
 
 def generate_event_permutations(events):
@@ -109,7 +109,7 @@ def apply_event_results( result_json, members_csv):
 		for peep_info in e['attendees']:
 			for peep in fresh_peeps:
 				if peep.id == peep_info['id']:
-					role = Role.from_string(peep_info['role'])
+					role = Role(normalize_role(peep_info['role']))
 					event.add_attendee(peep, role)
 		events.append(event)
 

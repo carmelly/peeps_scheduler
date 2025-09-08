@@ -19,16 +19,6 @@ class Role(Enum):
 		elif self == Role.FOLLOWER:
 			return Role.LEADER
 		raise ValueError(f"No opposite defined for Role: {self}")
-	
-	@classmethod
-	def from_string(cls, value):
-		value = value.strip().lower()
-		if value in ["lead", "leader"]:
-			return cls.LEADER
-		elif value in ["follow", "follower"]:
-			return cls.FOLLOWER
-		else:
-			raise ValueError(f"Unknown role: {value}")
 
 class SwitchPreference(Enum): 
 	PRIMARY_ONLY = 1       # "I only want to be scheduled in my primary role"
@@ -55,7 +45,7 @@ class Peep:
 		self.email = str(kwargs.get("email", "")).strip()
 
 		role_input = kwargs.get("role", "")
-		self.role = role_input if isinstance(role_input, Role) else Role.from_string(role_input)
+		self.role = role_input if isinstance(role_input, Role) else Role(role_input)
 
 		switch_input = kwargs.get("switch_pref", SwitchPreference.PRIMARY_ONLY)
 		self.switch_pref = switch_input if isinstance(switch_input, SwitchPreference) else SwitchPreference(switch_input)
@@ -80,12 +70,13 @@ class Peep:
 	
 	@staticmethod
 	def from_csv(row: dict) -> "Peep":
+		from utils import normalize_role 
 		return Peep(
 			id=int(row["id"]),
 			full_name=row["Name"].strip(),
 			display_name=row["Display Name"].strip(),
 			email=row["Email Address"].strip(),
-			role=row["Role"].strip(),
+			role=normalize_role(row["Role"]),
 			index=int(row["Index"]),
 			priority=int(row["Priority"]),
 			total_attended=int(row["Total Attended"]),

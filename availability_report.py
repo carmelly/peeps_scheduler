@@ -1,7 +1,7 @@
 import csv
 from collections import defaultdict
 from models import Role, SwitchPreference
-from file_io import parse_event_date, load_csv
+from file_io import normalize_role, parse_event_date, load_csv
 
 
 def parse_availability(responses_file, members_file):
@@ -12,7 +12,8 @@ def parse_availability(responses_file, members_file):
 
 	for row in load_csv(responses_file):
 		email = row["Email Address"].strip().lower()
-		role = Role.from_string(row["Primary Role"].strip())
+		role_raw = row["Primary Role"]
+		role = normalize_role(role_raw)
 		switch_pref = SwitchPreference.from_string(row["Secondary Role"].strip())
 		dates = [d.strip() for d in row["Availability"].split(",") if d.strip()]
 

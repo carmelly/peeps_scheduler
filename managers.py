@@ -1,5 +1,6 @@
 import logging
 import csv
+from file_io import normalize_role
 from models import Peep, Event, Role
 from constants import DATE_FORMAT
 import datetime
@@ -28,8 +29,7 @@ def _as_role(v: str):
 	if isinstance(v, Role):
 		return v
 	val = v.strip()
-	return Role.from_string(val)
-	
+	return Role(normalize_role(val))
 
 class DbManager:
 	def __init__(self, db_path: str):

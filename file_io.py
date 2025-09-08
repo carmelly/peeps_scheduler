@@ -205,7 +205,7 @@ def process_responses(rows, peeps, event_map):
 		if not peep.active: 
 			raise ValueError(f"Response from inactive peep: {peep.full_name} (ID {peep.id}) — please activate them in the members spreadsheet.")
 
-		peep.role = Role.from_string(row["Primary Role"])
+		peep.role = Role(normalize_role(row["Primary Role"]))
 		peep.event_limit = int(row["Max Sessions"])
 		peep.min_interval_days = int(row.get("Min Interval Days", 0))
 		peep.switch_pref = SwitchPreference.from_string(row["Secondary Role"])
@@ -246,3 +246,20 @@ def parse_event_date(date_str):
 	dt = datetime.datetime.strptime(date_str, constants.DATESTR_FORMAT)
 	dt = dt.replace(year=datetime.datetime.now().year)
 	return dt.strftime("%Y-%m-%d %H:%M")
+
+ 
+def normalize_role(value: str) -> str:
+	""" 
+	Transitional input normalizer for CSV/web inputs
+	Accepts legacy aliases during the migration window.
+	"""
+	v = value.strip().lower()
+	# temporary alias support while CSVs still say "lead"/"follow"
+	if v == "lead":
+		return "leader"
+	if v == "follow":
+		return "follower"
+	# canonical values
+	if v in ("leader", "follower"):
+		return v
+	raise ValueError(f"Unknown role: {value!r}")
