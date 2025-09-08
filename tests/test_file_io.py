@@ -213,7 +213,7 @@ def test_save_json_serializes_enum(tmp_path):
 	save_json(data, out_path)
 
 	result = json.loads(out_path.read_text())
-	assert result["role"] == "Leader"
+	assert result["role"] == "leader"
 
 def test_save_json_fallback_str_for_unknown_type(tmp_path):
 	"""Ensure save_json falls back to str(obj) for unknown types like set."""

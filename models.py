@@ -9,6 +9,10 @@ class Role(Enum):
 	LEADER = "leader"
 	FOLLOWER = "follower"
 
+	def __str__(self) -> str:
+		# Presentation-friendly string
+		return self.value.capitalize()
+
 	def opposite(self):
 		if self == Role.LEADER:
 			return Role.FOLLOWER
@@ -41,7 +45,7 @@ class SwitchPreference(Enum):
 		elif value == "I'm willing to dance my secondary role only if it's needed to enable filling a session": 
 			return cls.SWITCH_IF_NEEDED
 		else:
-			raise ValueError(f"Unknown role: {value}")
+			raise ValueError(f"Unknown switch preference: {value}")
 
 class Peep:
 	def __init__(self, **kwargs):
@@ -313,8 +317,8 @@ class Event:
 		Adds peep to the appropriate role list and tracks assignment order.
 		"""
 		if self.is_full(role):
-			logging.error(f"Attempted to overfill {role.value} for Event {self.id}")
-			raise RuntimeError(f"Too many attendees in role {role.value} for Event {self.id}")
+			logging.error(f"Attempted to overfill {role} for Event {self.id}")
+			raise RuntimeError(f"Too many attendees in role {role} for Event {self.id}")
 		
 		if peep in self._attendee_order:
 			logging.error(f"Peep {peep.id} is already assigned to Event {self.id}")
@@ -344,8 +348,8 @@ class Event:
 		alt_list = self._alt_leaders if role == Role.LEADER else self._alt_followers
 
 		if peep not in alt_list:
-			logging.error(f"Peep {peep.id} not in alt list for role {role.value} in Event {self.id}")
-			raise RuntimeError(f"Peep {peep.id} not in {role.value} alternates")
+			logging.error(f"Peep {peep.id} not in alt list for role {role} in Event {self.id}")
+			raise RuntimeError(f"Peep {peep.id} not in {role} alternates")
 
 		alt_list.remove(peep)
 
@@ -384,8 +388,8 @@ class Event:
 			return all(self.is_full(role) for role in (Role.LEADER, Role.FOLLOWER))
 		count = self.num_attendees(role)
 		if count > self.max_role:
-			logging.error(f"Too many {role.value}s in Event {self.id}: {count} > max of {self.max_role}")
-			raise RuntimeError(f"Too many {role.value}s assigned")
+			logging.error(f"Too many {role}s in Event {self.id}: {count} > max of {self.max_role}")
+			raise RuntimeError(f"Too many {role}s assigned")
 		return count == self.max_role
 	
 	def has_space(self, role: Role): 
@@ -510,7 +514,7 @@ class Event:
 		for role in (Role.LEADER, Role.FOLLOWER):
 			for peep in self.get_alternates(role)[:]:  # copy list to avoid mutation during iteration
 				if not peep.can_attend(self):
-					logging.debug(f"Removing ineligible alternate {peep.name} from Event {self.id} ({role.value})")
+					logging.debug(f"Removing ineligible alternate {peep.name} from Event {self.id} ({role})")
 					self.remove_alternate(peep, role)
 
 	def to_dict(self):
