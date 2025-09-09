@@ -38,7 +38,8 @@ CREATE TABLE SchedulePeriods (
 	notes TEXT,
 	snapshot_before_id INTEGER REFERENCES PeepOrderSnapshots(id),
 	snapshot_after_id INTEGER REFERENCES PeepOrderSnapshots(id),
-	snapshot_final_id INTEGER REFERENCES PeepOrderSnapshots(id)
+	snapshot_final_id INTEGER REFERENCES PeepOrderSnapshots(id),
+	slug TEXT);
 );
 CREATE TABLE Responses (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -60,3 +61,4 @@ CREATE TABLE __migrations_applied__ (
 			filename TEXT PRIMARY KEY,
 			applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		);
+
