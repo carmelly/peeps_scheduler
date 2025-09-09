@@ -1,35 +1,43 @@
-import csv
-import os
-import sqlite3
 import logging
+from file_io import load_peeps, load_responses, parse_event_date
 import utils
-from constants import DATE_FORMAT
-from datetime import datetime
-from managers import CsvManager, DbManager
+from managers import DbManager
+from models import Peep
 
 DB_PATH = "db/peeps_scheduler.db"
 
-def import_members(csv_path, dry_run=False):
-	conn = sqlite3.connect(DB_PATH)
-	db = DbManager(conn)
-	members_csv = CsvManager(csv_path)
+def import_period(slug, dry_run=False): 
+	# derive filenames from slug 
+	members_path = f"db/imports/{slug}/data/members.csv"
+	responses_path = f"db/imports/{slug}/data/responses.csv"
 
-	peeps = members_csv.get_all_peeps()
+	import_members(members_path, dry_run)
+	import_responses(responses_path, "May 2025", dry_run)# hardcode name for now
+
+
+def import_members(csv_path, dry_run=False):
+	db = DbManager(DB_PATH)
+	conn = db.conn
+	cur = conn.cursor()
+
+	# peeps = members_csv.get_all_peeps()
+	peeps = load_peeps(csv_path)
 	matched = []
 	updated = [] 
 	created = [] 
 
 	for peep in peeps: 
-		existing = db.get_peep_by_id(peep.id)
+		match = db.get_peep_by_id(peep.id)  
 
-		if existing:
+		if match:
+			existing = Peep.from_db_dict(match)
 			changes = (
-				(peep.name != existing.name) or
+				(peep.full_name != existing.full_name) or
 				(peep.display_name != existing.display_name) or
-				((peep.email.lower() if peep.email else None) != (existing.email.lower() if existing.email else None)) or
+				(peep.email != existing.email) or
 				(peep.role != existing.role) or
 				(peep.active != existing.active) or
-				(peep.date_joined != existing.date_joined)
+				((peep.date_joined if peep.date_joined else None) != existing.date_joined)
 			)
 			if changes:
 				if not dry_run:
@@ -39,7 +47,7 @@ def import_members(csv_path, dry_run=False):
 				matched.append(peep)
 		else:
 			if not dry_run:
-				db.create_peep(peep)
+				db.create_peep(peep.to_db_dict())
 			created.append(peep)
 
 	if dry_run:
@@ -61,10 +69,9 @@ def import_members(csv_path, dry_run=False):
 		print(f"      - Peep({p.id:>3}): {p.display_name}")
 
 def import_responses(responses_csv_path, period_name, dry_run=False):
-	conn = sqlite3.connect(DB_PATH)
+	db = DbManager(DB_PATH)
+	conn = db.conn
 	cur = conn.cursor() # TODO: move logic to DbManager so we won't need this here
-	db = DbManager(conn)
-	responses_csv = CsvManager(responses_csv_path)
 
 	# check for existing and unique name
 	if not period_name:
@@ -77,15 +84,17 @@ def import_responses(responses_csv_path, period_name, dry_run=False):
 		return
 	
 	# read csv
-	rows = responses_csv.load_rows(required_columns=['Timestamp','Name','Email Address','Role','Max Sessions','Availability','Min Interval'])
+	columns =  ['Timestamp', 'Email Address', "Name", 'Role', 'Min Interval','Max Sessions', 'Availability']
+	rows = load_responses(responses_csv_path, columns)
 	responses = []
 	event_map = {}
 	peep_lookup = {}
 
 	# build lookup of all peeps by lowercase email
 	for peep in db.get_all_peeps():
-		if peep.email:
-			peep_lookup[peep.email.lower()] = peep
+		email = peep["email"]
+		if email:
+			peep_lookup[email.lower()] = Peep.from_db_dict(peep)
 
 	# get last used event id 
 	cur.execute("SELECT MAX(id) FROM events")
@@ -111,7 +120,7 @@ def import_responses(responses_csv_path, period_name, dry_run=False):
 				event_map[date_str] = {
 					"id": event_counter,
 					"name": date_str, 
-					"date": utils.parse_event_date(date_str),
+					"date": parse_event_date(date_str),
 					"min_role": 4,
 					"max_role": 8
 				}
