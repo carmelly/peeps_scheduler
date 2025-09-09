@@ -145,33 +145,3 @@ class DbManager:
 		cur = self.conn.cursor()
 		cur.execute("SELECT id, scheduleperiod_id, event_id, date, min_role, max_role FROM events WHERE scheduleperiod_id = ?", (scheduleperiod_id,))
 		return [self._event_row_to_dict(row) for row in cur.fetchall()]
-
-
-class CsvManager:
-	def __init__(self, file_path):
-		self.file_path = file_path
-
-	def load_rows(self, required_columns=None):
-		with open(self.file_path, newline='', encoding='utf-8') as csvfile:
-			reader = csv.DictReader(csvfile)
-			if required_columns:
-				missing = set(required_columns) - set(reader.fieldnames)
-				if missing:
-					raise ValueError(f"Missing required columns in {self.file_path}: {missing}")
-			return list(reader)
-
-	def get_peep_from_csv_row(self, row):
-		return {
-			"id": _as_int(row.get("id")),
-			"full_name": (row.get("Name") or "").strip(),
-			"display_name": (row.get("Display Name") or "").strip(),
-			"email": (row.get("Email Address") or None),
-			"primary_role": _as_role((row.get("Role") or "").strip()).value,
-			"active": _as_bool(row.get("Active")),
-			"date_joined": row.get("Date Joined") or None,
-		}
-
-	def get_all_peeps(self): 
-		required_columns = ['id','Name','Display Name','Email Address','Role', 'Active', 'Date Joined']
-		rows = self.load_rows(required_columns)
-		return [self.get_peep_from_csv_row(row) for row in rows]

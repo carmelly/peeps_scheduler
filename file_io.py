@@ -15,8 +15,8 @@ PEEPS_CSV_FIELDS = [
 ]
 
 RESPONSES_CSV_FIELDS = [
-	'Name', 'Email Address', 'Primary Role', 'Secondary Role',
-	'Max Sessions', 'Availability'
+	'Timestamp', 'Email Address', 'Name', 'Primary Role', 'Secondary Role', 
+	'Min Interval Days', 'Max Sessions', 'Availability'
 ]
 
 # -- CSV-related --
@@ -60,7 +60,7 @@ def load_peeps(peeps_csv_path):
 	emails = []
 
 	for peep in peeps:
-		email = peep.email.lower()
+		email = peep.email.lower() if peep.email else None
 		if peep.active:
 			if not email:
 				raise ValueError(f"Active peep '{peep.full_name}' is missing an email.")
@@ -74,9 +74,10 @@ def load_peeps(peeps_csv_path):
 
 	return peeps
 
-def load_responses(response_csv_path):
+def load_responses(response_csv_path, columns_override=None):
 	"""Load and parse response rows from responses.csv."""
-	return load_csv(response_csv_path, RESPONSES_CSV_FIELDS)
+	columns = columns_override if columns_override else RESPONSES_CSV_FIELDS
+	return load_csv(response_csv_path, columns)
 
 def save_peeps_csv(peeps: list[Peep], filename):
 	"""Save updated peeps to a new CSV called members_updated.csv in the same folder as the original."""

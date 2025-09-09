@@ -143,7 +143,6 @@ class TestDbManager:
 					"date_joined": None,
 				})
 
-from managers import CsvManager
 
 # Helpers to create temporary CSVs for tests
 def _write_csv(tmp_path, name, header, rows):
@@ -153,72 +152,3 @@ def _write_csv(tmp_path, name, header, rows):
 		for r in rows:
 			f.write(",".join(r) + "\n")
 	return str(p)
-
-class TestCsvManager:
-	def test_load_rows_success(self, tmp_path):
-		# valid file with all required columns
-		header = ["id","Name","Display Name","Email Address","Role","Active","Date Joined"]
-		rows = [
-			["1","Alice Example","Alice","a@example.com","Leader","TRUE","2024-01-01"],
-			["2","Bob Sample","Bob","b@example.com","Follower","FALSE","2024-02-02"],
-		]
-		path = _write_csv(tmp_path, "peeps_ok.csv", header, rows)
-
-		csvm = CsvManager(path)
-		out = csvm.load_rows(required_columns=header)
-		assert isinstance(out, list)
-		assert len(out) == 2
-		assert out[0]["Name"] == "Alice Example"
-
-	def test_load_rows_missing_columns_raises(self, tmp_path):
-		# missing Display Name column
-		header = ["id","Name","Email Address","Role","Active","Date Joined"]
-		rows = [
-			["1","Alice Example","a@example.com","Leader","TRUE","2024-01-01"],
-		]
-		path = _write_csv(tmp_path, "peeps_missing.csv", header, rows)
-
-		csvm = CsvManager(path)
-		with pytest.raises(ValueError) as ei:
-			csvm.load_rows(required_columns=['id','Name','Display Name','Email Address','Role','Active','Date Joined'])
-		msg = str(ei.value)
-		assert "Missing required columns" in msg
-		assert "Display Name" in msg
-
-	def test_get_peep_from_csv_row_coercion(self, tmp_path):
-		# exercise _as_int, _as_bool, role parsing, trimming
-		header = ["id","Name","Display Name","Email Address","Role","Active","Date Joined"]
-		rows = [
-			["003","  Carol  ","  Car  ","","Leader","TRUE",""],  # empty email, empty date
-		]
-		path = _write_csv(tmp_path, "one.csv", header, rows)
-
-		csvm = CsvManager(path)
-		row = csvm.load_rows(required_columns=header)[0]
-		peep = csvm.get_peep_from_csv_row(row)
-
-		assert peep["id"] == 3					# _as_int
-		assert peep["full_name"] == "Carol"		# strip
-		assert peep["display_name"] == "Car"	# strip
-		assert peep["email"] is None			# empty -> None
-		assert peep["primary_role"] == "leader"	# role value
-		assert peep["active"] is True			# TRUE -> True
-		assert peep["date_joined"] is None		# empty -> None
-
-	def test_get_all_peeps_multirow(self, tmp_path):
-		header = ["id","Name","Display Name","Email Address","Role","Active","Date Joined"]
-		rows = [
-			["1","Alice Example","Alice","a@example.com","Leader","TRUE","2024-01-01"],
-			["2","Bob Sample","Bob","b@example.com","Follower","FALSE","2024-02-02"],
-		]
-		path = _write_csv(tmp_path, "many.csv", header, rows)
-
-		csvm = CsvManager(path)
-		peeps = csvm.get_all_peeps()
-		assert isinstance(peeps, list)
-		assert len(peeps) == 2
-
-		# spot check shapes
-		assert {"id","full_name","display_name","email","primary_role","active","date_joined"} <= set(peeps[0].keys())
-		assert peeps[0]["primary_role"] in {"leader","follower"}
-		assert peeps[0]["active"] in {True, False}

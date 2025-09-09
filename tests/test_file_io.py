@@ -134,7 +134,7 @@ def test_load_peeps(peeps_csv_path):
 	assert peeps[0].full_name == "Alice Alpha"
 	assert peeps[0].email == "alice@test.com"
 	assert peeps[2].active is False
-	assert peeps[2].email == ""
+	assert peeps[2].email == None
 
 def test_extract_events(responses_csv_rows):
 	"""Ensure event rows are parsed and assigned correct durations and IDs."""

@@ -42,7 +42,9 @@ class Peep:
 		self.id = int(kwargs.get("id"))
 		self.full_name = str(kwargs.get("full_name", "")).strip()
 		self.display_name = str(kwargs.get("display_name", "")).strip()
-		self.email = str(kwargs.get("email", "")).strip()
+
+		email = kwargs.get("email", "")
+		self.email = str(email).strip() if email else None 
 
 		role_input = kwargs.get("role", "")
 		self.role = role_input if isinstance(role_input, Role) else Role(role_input)
@@ -68,6 +70,29 @@ class Peep:
 	def is_peeps_list_sorted_by_priority(peeps: list["Peep"]): 
 		return all(peeps[i].priority >= peeps[i + 1].priority for i in range(len(peeps)-1))
 	
+	@staticmethod 
+	def from_db_dict(row: dict) -> "Peep": 
+		return Peep(
+			id = int(row["id"]),
+			full_name = row["full_name"],
+			display_name = row["display_name"], 
+			email = row["email"] if row["email"] else None,
+			role = Role(row["primary_role"]),
+			active = bool(row["active"]),
+			date_joined = row["date_joined"]
+		)
+	
+	def to_db_dict(self) -> dict: 
+		return {
+			"id": self.id,
+			"full_name": self.full_name,
+			"display_name": self.display_name, 
+			"email": self.email,
+			"primary_role": self.role.value,
+			"active" : self.active, 
+			"date_joined": self.date_joined
+		}
+
 	@staticmethod
 	def from_csv(row: dict) -> "Peep":
 		from utils import normalize_role 
@@ -86,16 +111,16 @@ class Peep:
 	
 	def to_csv(self) -> dict: 
 		return {
-			'id': self.id,
-			'Name': self.full_name,
-			'Display Name': self.display_name,
-			'Email Address': self.email,
-			'Role': self.role.value,
-			'Index': self.index,
-			'Priority': self.priority,
-			'Total Attended': self.total_attended,
-			'Active': str(self.active).upper(),
-			'Date Joined': self.date_joined
+			"id": self.id,
+			"Name": self.full_name,
+			"Display Name": self.display_name,
+			"Email Address": self.email,
+			"Role": self.role.value,
+			"Index": self.index,
+			"Priority": self.priority,
+			"Total Attended": self.total_attended,
+			"Active": str(self.active).upper(),
+			"Date Joined": self.date_joined
 		}
 	
 	@property
@@ -107,7 +132,7 @@ class Peep:
 			"id": self.id,
 			"name": self.full_name,
 			"display_name": self.display_name, 
-			'email': self.email,
+			"email": self.email,
 			"role": self.role.value,
 			"index": self.index, 
 			"priority": self.priority, 
