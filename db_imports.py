@@ -11,8 +11,20 @@ def import_period(slug, dry_run=False):
 	members_path = f"db/imports/{slug}/data/members.csv"
 	responses_path = f"db/imports/{slug}/data/responses.csv"
 
-	import_members(members_path, dry_run)
-	import_responses(responses_path, "May 2025", dry_run)# hardcode name for now
+	db_peeps = import_members(members_path, dry_run)
+	period_id, db_events, db_responses = import_responses(responses_path, "May 2025", dry_run) or (None, None, None)
+
+	print('\nData for manifest')
+	print('------------')
+	print("Source files:") 
+	print(f"   {members_path}")
+	print(f"   {responses_path}")
+	if not dry_run: 
+		print(f"SchedulePeriod id: {period_id}") 
+		print("DB row counts:") 
+		print(f"   peeps: {db_peeps}")
+		print(f"   events: {db_events}")
+		print(f"   responses: {db_responses}")
 
 
 def import_members(csv_path, dry_run=False):
@@ -25,6 +37,7 @@ def import_members(csv_path, dry_run=False):
 	matched = []
 	updated = [] 
 	created = [] 
+	db_total_peeps = None
 
 	for peep in peeps: 
 		match = db.get_peep_by_id(peep.id)  
@@ -51,12 +64,15 @@ def import_members(csv_path, dry_run=False):
 			created.append(peep)
 
 	if dry_run:
-		print("\n🧪 Dry run: Loaded the following Peeps from CSV:")
-		for p in peeps:
-			print(f"  - Peep({p.id:>3}): {p.display_name}")
+		print(f"\n🧪 Dry run: Loaded {len(peeps)} peeps from CSV.")
 
 	if not dry_run:
 		conn.commit()
+		# DB counts (post-commit) for quick comparison
+		cur.execute("SELECT COUNT(*) FROM Peeps")
+		db_total_peeps = cur.fetchone()[0]
+		assert len(peeps) == db_total_peeps
+		
 	conn.close()
 
 	print(f"\n📋 Import summary for {csv_path}:")
@@ -68,6 +84,8 @@ def import_members(csv_path, dry_run=False):
 	for p in created:
 		print(f"      - Peep({p.id:>3}): {p.display_name}")
 
+	return db_total_peeps
+ 
 def import_responses(responses_csv_path, period_name, dry_run=False):
 	db = DbManager(DB_PATH)
 	conn = db.conn
@@ -169,8 +187,20 @@ def import_responses(responses_csv_path, period_name, dry_run=False):
 		))
 
 	conn.commit()
+
+	# Verify counts for this SchedulePeriod
+	cur.execute("SELECT COUNT(*) FROM Events WHERE schedule_id = ?", (period_id,))
+	db_events = cur.fetchone()[0]
+	assert db_events == len(event_map)
+
+	cur.execute("SELECT COUNT(*) FROM Responses WHERE scheduleperiod_id = ?", (period_id,))
+	db_responses = cur.fetchone()[0]
+	assert db_responses == len(responses)
+
 	conn.close()
 
 	print(f"\n✅ Created SchedulePeriod '{period_name}'")
 	print(f"   Events added: {len(event_map)}")
 	print(f"   Responses recorded: {len(responses)}")
+
+	return (period_id, db_events, db_responses)
