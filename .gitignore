@@ -14,6 +14,7 @@ __pycache__/
 # Data directories and historical data
 data/*
 db/historical_data/*
+db/imports/*/data
 
 # SQLite database files and related artifacts
 db/*.db
@@ -24,3 +25,9 @@ db/backups/*
 
 # Test coverage report 
 .coverage 
+
+# Virtualenv
+.venv
+
+# Repo zip for easy upload
+repo-*.zip
