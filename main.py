@@ -3,7 +3,7 @@ import argparse
 import logging
 import utils
 from scheduler import Scheduler
-from db_imports import import_members, import_responses, import_period 
+from db_imports import import_period 
 
 def apply_results(results_file, members_file):
 	logging.info(f"Applying {results_file} to update {members_file}")
