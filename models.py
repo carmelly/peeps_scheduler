@@ -71,7 +71,7 @@ class Peep:
 		return all(peeps[i].priority >= peeps[i + 1].priority for i in range(len(peeps)-1))
 	
 	@staticmethod 
-	def from_db_dict(row: dict) -> "Peep": 
+	def from_db_row(row: dict) -> "Peep": 
 		return Peep(
 			id = int(row["id"]),
 			full_name = row["full_name"],
@@ -79,7 +79,7 @@ class Peep:
 			email = row["email"] if row["email"] else None,
 			role = Role(row["primary_role"]),
 			active = bool(row["active"]),
-			date_joined = row["date_joined"]
+			date_joined = row["date_joined"] # TODO: keep as string or make date?
 		)
 	
 	def to_db_dict(self) -> dict: 

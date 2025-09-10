@@ -14,193 +14,136 @@ def import_period(slug, dry_run=False):
 	db_peeps = import_members(members_path, dry_run)
 	period_id, db_events, db_responses = import_responses(responses_path, "May 2025", dry_run) or (None, None, None)
 
+	
 	print('\nData for manifest')
+	if dry_run: 
+		print('PREVIEW; rolled back')
 	print('------------')
 	print("Source files:") 
 	print(f"   {members_path}")
 	print(f"   {responses_path}")
-	if not dry_run: 
-		print(f"SchedulePeriod id: {period_id}") 
-		print("DB row counts:") 
-		print(f"   peeps: {db_peeps}")
-		print(f"   events: {db_events}")
-		print(f"   responses: {db_responses}")
+	print(f"SchedulePeriod id: {period_id}") 
+	print("DB row counts:") 
+	print(f"   peeps: {db_peeps}")
+	print(f"   events: {db_events}")
+	print(f"   responses: {db_responses}")
 
 
 def import_members(csv_path, dry_run=False):
-	db = DbManager(DB_PATH)
-	conn = db.conn
-	cur = conn.cursor()
+	with DbManager(DB_PATH) as db: 
+		peeps = load_peeps(csv_path)
+		matched, updated, created = [], [], []
 
-	# peeps = members_csv.get_all_peeps()
-	peeps = load_peeps(csv_path)
-	matched = []
-	updated = [] 
-	created = [] 
-	db_total_peeps = None
+		with db.transaction(dry_run):
+			for peep in peeps:
+				result = db.upsert_peep(peep)  # "created"/"updated"/"unchanged"
+				if result == "created":
+					created.append(peep)
+				elif result == "updated":
+					updated.append(peep)
+				else:
+					matched.append(peep)
+			db_total_peeps = db.count_peeps()
 
-	for peep in peeps: 
-		match = db.get_peep_by_id(peep.id)  
-
-		if match:
-			existing = Peep.from_db_dict(match)
-			changes = (
-				(peep.full_name != existing.full_name) or
-				(peep.display_name != existing.display_name) or
-				(peep.email != existing.email) or
-				(peep.role != existing.role) or
-				(peep.active != existing.active) or
-				((peep.date_joined if peep.date_joined else None) != existing.date_joined)
-			)
-			if changes:
-				if not dry_run:
-					db.update_peep(peep)
-				updated.append(peep)
-			else:
-				matched.append(peep)
+		# After context exits:
+		# - persisted when dry_run=False
+		# - rolled back when dry_run=True
+		print(f"\n📋 Import summary for {csv_path}:")
+		print(f"   Matched (no changes): {len(matched)}")
+		print(f"   Updated: {len(updated)}")
+		print(f"   Created: {len(created)}")
+		if not dry_run:
+			print(f"   Peeps in DB (post-commit): {db_total_peeps}")
 		else:
-			if not dry_run:
-				db.create_peep(peep.to_db_dict())
-			created.append(peep)
-
-	if dry_run:
-		print(f"\n🧪 Dry run: Loaded {len(peeps)} peeps from CSV.")
-
-	if not dry_run:
-		conn.commit()
-		# DB counts (post-commit) for quick comparison
-		cur.execute("SELECT COUNT(*) FROM Peeps")
-		db_total_peeps = cur.fetchone()[0]
-		assert len(peeps) == db_total_peeps
-		
-	conn.close()
-
-	print(f"\n📋 Import summary for {csv_path}:")
-	print(f"   Matched (no changes): {len(matched)}")
-	print(f"   Updated: {len(updated)}")
-	for p in updated:
-		print(f"      - Peep({p.id:>3}): {p.display_name}")
-	print(f"   Created: {len(created)}")
-	for p in created:
-		print(f"      - Peep({p.id:>3}): {p.display_name}")
-
-	return db_total_peeps
+			print(f"   Peeps in DB (preview, rolled back): {db_total_peeps}")
+		return db_total_peeps
  
-def import_responses(responses_csv_path, period_name, dry_run=False):
-	db = DbManager(DB_PATH)
-	conn = db.conn
-	cur = conn.cursor() # TODO: move logic to DbManager so we won't need this here
+def import_responses(responses_csv_path, period_name, dry_run=False, replace=False):
+	with DbManager(DB_PATH) as db: 
 
-	# check for existing and unique name
-	if not period_name:
+		# basic validation
+		if not period_name:
 			print("❌ Schedule name is required.")
-			return
-	cur.execute("SELECT COUNT(*) FROM scheduleperiods WHERE name = ?", (period_name,))
-	if cur.fetchone()[0] > 0:
-		print(f"❌ SchedulePeriod name '{period_name}' already exists. Choose a different name.")
-		conn.close()
-		return
+			return None, None, None
 	
-	# read csv
-	columns =  ['Timestamp', 'Email Address', "Name", 'Role', 'Min Interval','Max Sessions', 'Availability']
-	rows = load_responses(responses_csv_path, columns)
-	responses = []
-	event_map = {}
-	peep_lookup = {}
+		# load csv with expected columns
+		columns =  ['Timestamp', 'Email Address', "Name", 'Role', 'Min Interval','Max Sessions', 'Availability']
+		rows = load_responses(responses_csv_path, columns)
+		responses = []
+		event_map = {}
+		peep_lookup = {}
 
-	# build lookup of all peeps by lowercase email
-	for peep in db.get_all_peeps():
-		email = peep["email"]
-		if email:
-			peep_lookup[email.lower()] = Peep.from_db_dict(peep)
+		# build lookup of peeps by lowercase email
+		for peep in db.get_all_peeps():
+			if peep.email:
+				peep_lookup[peep.email.lower()] = peep
 
-	# get last used event id 
-	cur.execute("SELECT MAX(id) FROM events")
-	max_event_id = cur.fetchone()[0] or -1
-	event_counter = max_event_id + 1
+		# get last used event id 
+		event_counter = db.next_event_id()
 
-	# process responses
-	for row in rows:
-		# find peep in db by email; bail if not matched
-		email = row["Email Address"].strip().lower()
-		name = row["Name"].strip()
-		peep = peep_lookup.get(email)
-		if not peep:
-			logging.critical(f"No matching peep for: {name} <{email}>")
-			print(f"❌ Could not match: {name} <{email}>")
-			conn.close()
-			return
+		existing = db.get_period_id_by_name(period_name)
+		if existing:
+			print(f"❌ SchedulePeriod name '{period_name}' already exists. Choose a different name.")
+			return None, None, None
+		
+		# process CSV rows
+		for row in rows:
+			email = row["Email Address"].strip().lower()
+			name = row["Name"].strip()
+			peep = peep_lookup.get(email)
+			if not peep:
+				print(f"❌ Could not match: {name} <{email}>")
+				return None, None, None
 
-		# create an Event for each new date we encounter
-		available_dates = [d.strip() for d in row["Availability"].split(",") if d.strip()]
-		for date_str in available_dates:
-			if date_str not in event_map:
-				event_map[date_str] = {
-					"id": event_counter,
-					"name": date_str, 
-					"date": parse_event_date(date_str),
-					"min_role": 4,
-					"max_role": 8
-				}
-				event_counter += 1
+			available_dates = [d.strip() for d in row["Availability"].split(",") if d.strip()]
+			for date_str in available_dates:
+				if date_str not in event_map:
+					event_map[date_str] = {
+						"id": event_counter,
+						"name": date_str,
+						"date": parse_event_date(date_str),
+						"min_role": 4,
+						"max_role": 8,
+					}
+					event_counter += 1
+		
+			# create an Event for each new date we encounter
+			available_dates = [d.strip() for d in row["Availability"].split(",") if d.strip()]
+			for date_str in available_dates:
+				if date_str not in event_map:
+					event_map[date_str] = {
+						"id": event_counter,
+						"name": date_str, 
+						"date": parse_event_date(date_str),
+						"min_role": 4,
+						"max_role": 8
+					}
+					event_counter += 1
 
-		# build response dict
-		responses.append({
-			"timestamp": row["Timestamp"],
-			"peep_id": peep.id, 
-			"role": row["Role"],
-			"max_sessions": int(row["Max Sessions"]),
-			"min_interval_days": int(row["Min Interval"]),
-			"availability": str([event_map[d]["id"] for d in available_dates]),
-			"raw_data": str(row)
-			})
+			# build response dict
+			responses.append({
+				"timestamp": row["Timestamp"],
+				"peep_id": peep.id, 
+				"role": row["Role"],
+				"max_sessions": int(row["Max Sessions"]),
+				"min_interval_days": int(row["Min Interval"]),
+				"availability": str([event_map[d]["id"] for d in available_dates]),
+				"raw_data": str(row)
+				})
 
-	if dry_run:
-		print(f"\n🧪 Dry run: would insert SchedulePeriod '{period_name}' with {len(event_map)} events and {len(responses)} responses.")
-		return
+		with db.transaction(dry_run=dry_run):
+			period_id = db.create_schedule_period(period_name)
+			db.bulk_insert_events(period_id, list(event_map.values()))
+			db.bulk_insert_responses(period_id, responses)
 
-	# Insert SchedulePeriod
-	cur.execute("INSERT INTO SchedulePeriods (name) VALUES (?)", (period_name,))
-	period_id = cur.lastrowid
+			db_events = db.count_events_for_period(period_id)
+			db_responses = db.count_responses_for_period(period_id)
 
-	# Insert Events
-	event_id_map = {}
-	for event in event_map.values():
-		cur.execute("INSERT INTO Events (id, schedule_id, name, datetime, min_per_role, max_per_role) VALUES (?, ?, ?, ?, ?, ?)",
-			(event["id"], period_id, event["name"], event["date"], event["min_role"], event["max_role"]))
-		event_id_map[event["date"]] = cur.lastrowid
+			assert db_events == len(event_map)
+			assert db_responses == len(responses)
 
-	# Insert Responses
-	for r in responses:
-		cur.execute("""
-			INSERT INTO Responses (scheduleperiod_id, peep_id, timestamp, role, availability, min_interval_days, max_sessions, raw_data)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-		""", (
-			period_id,
-			r["peep_id"],
-			r["timestamp"],
-			r["role"],
-			r["availability"],
-			r["min_interval_days"],
-			r["max_sessions"],
-			r["raw_data"]
-		))
+		print(f"\n✅ Created SchedulePeriod '{period_name}'")
+		print(f"   Events added: {len(event_map)}")
+		print(f"   Responses recorded: {len(responses)}")
 
-	conn.commit()
-
-	# Verify counts for this SchedulePeriod
-	cur.execute("SELECT COUNT(*) FROM Events WHERE schedule_id = ?", (period_id,))
-	db_events = cur.fetchone()[0]
-	assert db_events == len(event_map)
-
-	cur.execute("SELECT COUNT(*) FROM Responses WHERE scheduleperiod_id = ?", (period_id,))
-	db_responses = cur.fetchone()[0]
-	assert db_responses == len(responses)
-
-	conn.close()
-
-	print(f"\n✅ Created SchedulePeriod '{period_name}'")
-	print(f"   Events added: {len(event_map)}")
-	print(f"   Responses recorded: {len(responses)}")
-
-	return (period_id, db_events, db_responses)
+		return (period_id, db_events, db_responses)

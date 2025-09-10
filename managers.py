@@ -3,6 +3,8 @@ import csv
 from file_io import normalize_role
 from models import Peep, Event, Role
 from constants import DATE_FORMAT
+from contextlib import contextmanager
+
 import datetime
 import sqlite3
 
@@ -51,50 +53,80 @@ class DbManager:
 				self.conn.rollback()
 		finally:
 			self.conn.close()
-
-	def _peep_row_to_dict(self, row):
-		d = dict(row)
-		return {
-			"id": _as_int(d.get("id")),
-			"full_name": (d.get("full_name") or "").strip(),
-			"display_name": (d.get("display_name") or "").strip(),
-			"email": (d.get("email") or None),
-			"primary_role": _as_role(d.get("primary_role")).value if d.get("primary_role") else None,
-			"active": _as_bool(d.get("active")),
-			"date_joined": d.get("date_joined") or None,  # keep string as-is or parse with _as_date if you prefer
-		}
-
-	def _event_row_to_dict(self, row):
-		d = dict(row)
-		return {
-			"id": _as_int(d.get("event_id") or d.get("id")),
-			"scheduleperiod_id": _as_int(d.get("scheduleperiod_id")),
-			"date": _as_date(d.get("date"), DATE_FORMAT),
-			"min_role": _as_int(d.get("min_role")),
-			"max_role": _as_int(d.get("max_role")),
-		}
 	
-	def get_peep_by_id(self, id):
+	@contextmanager
+	def transaction(self, dry_run: bool = False):
+		# Ensure FK constraints are enforced
+		self.conn.execute("PRAGMA foreign_keys = ON")
+		self.conn.execute("BEGIN IMMEDIATE")
+		try:
+			yield
+			if dry_run:
+				self.conn.rollback()
+			else:
+				self.conn.commit()
+		except Exception:
+			self.conn.rollback()
+			raise
+	
+	def get_peep_by_id(self, id) -> Peep:
 		cur = self.conn.cursor()
 		cur.execute("SELECT id, full_name, display_name, email, primary_role, active, date_joined FROM peeps WHERE id = ?", (id,))
 		row = cur.fetchone()
-		return self._peep_row_to_dict(row) if row else None
+		return Peep.from_db_row(row) if row else None
 	
-	def get_peep_by_email(self, email):
+	def get_peep_by_email(self, email) -> Peep:
 		cur = self.conn.cursor()
 		cur.execute("SELECT id, full_name, display_name, email, primary_role, active, date_joined FROM peeps WHERE LOWER(email) = ?", (email.lower(),))
 		row = cur.fetchone()
-		return self._peep_row_to_dict(row) if row else None
+		return Peep.from_db_row(row) if row else None
 
-	def get_all_peeps(self):
+	def get_all_peeps(self) -> list[Peep]:
 		cur = self.conn.cursor()
 		cur.execute("""
 			SELECT id, full_name, display_name, email, primary_role, active, date_joined
 			FROM peeps
 			ORDER BY id
 		""")
-		return [self._peep_row_to_dict(r) for r in cur.fetchall()]
+		return [Peep.from_db_row(r) if r else None for r in cur.fetchall()]
 
+	def upsert_peep(self, peep: Peep) -> str:
+		"""
+		Update if exists (by id), else insert. 
+		Returns "updated" or "created".
+		"""
+		# call your existing get/update/create methods internally
+
+	def count_peeps(self) -> int:
+		cur = self.conn.execute("SELECT COUNT(*) FROM Peeps")
+		return cur.fetchone()[0]
+	
+	def upsert_peep(self, peep: "Peep") -> str:
+		"""
+		Update an existing peep if it has changes, otherwise insert a new one.
+		Returns:
+			"updated" if an existing row was changed
+			"created" if a new row was inserted
+			"unchanged" if nothing needed (optional to use)
+		"""
+		existing = self.get_peep_by_id(peep.id)
+		if existing:
+			changes = (
+				(peep.full_name != existing.full_name)
+				or (peep.display_name != existing.display_name)
+				or (peep.email != existing.email)
+				or (peep.role != existing.role)
+				or (peep.active != existing.active)
+				or ((peep.date_joined if peep.date_joined else None) != existing.date_joined)
+			)
+			if changes:
+				self.update_peep(peep)  # assumes update_peep accepts a Peep
+				return "updated"
+			return "unchanged"
+		else:
+			self.create_peep(peep.to_db_dict())
+			return "created"
+	
 	def create_peep(self, peep_dict):
 		cur = self.conn.cursor()
 		cur.execute("""
@@ -145,3 +177,53 @@ class DbManager:
 		cur = self.conn.cursor()
 		cur.execute("SELECT id, scheduleperiod_id, event_id, date, min_role, max_role FROM events WHERE scheduleperiod_id = ?", (scheduleperiod_id,))
 		return [self._event_row_to_dict(row) for row in cur.fetchall()]
+
+	def get_period_id_by_name(self, name: str) -> int | None:
+		cur = self.conn.execute("SELECT id FROM SchedulePeriods WHERE name = ?", (name,))
+		row = cur.fetchone()
+		return int(row["id"]) if row else None
+
+	def create_schedule_period(self, name: str) -> int:
+		cur = self.conn.execute("INSERT INTO SchedulePeriods (name) VALUES (?)", (name,))
+		return int(cur.lastrowid)
+
+	def bulk_insert_events(self, period_id: int, events: list[dict]) -> int:
+		# events: [{"id": int, "name": str, "date": str|datetime, "min_role": int, "max_role": int}]
+		self.conn.executemany(
+			"INSERT INTO Events (id, schedule_id, name, datetime, min_per_role, max_per_role) VALUES (?, ?, ?, ?, ?, ?)",
+			[(e["id"], period_id, e["name"], e["date"], e["min_role"], e["max_role"]) for e in events]
+		)
+		return len(events)
+
+	def bulk_insert_responses(self, period_id: int, rows: list[dict]) -> int:
+		# rows: [{"peep_id": int, "timestamp": str, "role": str, "availability": str, "min_interval_days": int, "max_sessions": int, "raw_data": str}]
+		self.conn.executemany(
+			"""INSERT INTO Responses (scheduleperiod_id, peep_id, timestamp, role, availability, min_interval_days, max_sessions, raw_data)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+			[(period_id, r["peep_id"], r["timestamp"], r["role"], r["availability"],
+			r["min_interval_days"], r["max_sessions"], r["raw_data"]) for r in rows]
+		)
+		return len(rows)
+
+	def count_events_for_period(self, period_id: int) -> int:
+		cur = self.conn.execute("SELECT COUNT(*) AS c FROM Events WHERE schedule_id = ?", (period_id,))
+		return int(cur.fetchone()[0])
+
+	def count_responses_for_period(self, period_id: int) -> int:
+		cur = self.conn.execute("SELECT COUNT(*) AS c FROM Responses WHERE scheduleperiod_id = ?", (period_id,))
+		return int(cur.fetchone()[0])
+
+	def delete_period(self, period_id: int) -> None:
+		# Order matters: children → parent
+		self.conn.execute("DELETE FROM Responses WHERE scheduleperiod_id = ?", (period_id,))
+		# (Future) self.conn.execute("DELETE FROM AttendanceRecords WHERE scheduleperiod_id = ?", (period_id,))
+		self.conn.execute("DELETE FROM Events WHERE schedule_id = ?", (period_id,))
+		# (Future) self.conn.execute("DELETE FROM PeepOrderSnapshots WHERE scheduleperiod_id = ?", (period_id,))
+		self.conn.execute("DELETE FROM SchedulePeriods WHERE id = ?", (period_id,))
+
+	def next_event_id(self) -> int:
+		"""
+		Return the next Events.id value (MAX(id)+1). Safe when called inside a transaction.
+		"""
+		cur = self.conn.execute("SELECT COALESCE(MAX(id), -1) FROM Events")
+		return int(cur.fetchone()[0]) + 1
