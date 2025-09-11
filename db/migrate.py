@@ -31,7 +31,7 @@ def create_auto_backup(pending_files, db_existed_before):
 			
 			# Create descriptive backup name
 			if len(pending_files) == 1:
-				backup_label = f"pre_{pending_files[0].replace('.sql', '')}"
+				backup_label = f"pre_migration_{pending_files[0].replace('.sql', '')}"
 			else:
 				first_num = pending_files[0].split('_')[0]
 				last_num = pending_files[-1].split('_')[0] 
