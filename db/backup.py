@@ -3,12 +3,44 @@ from datetime import datetime
 from pathlib import Path
 import sys
 import os
+import sqlite3
 
 # Base path of this script (e.g., db/)
 BASE_PATH = Path(__file__).resolve().parent
 DB_PATH = BASE_PATH / "peeps_scheduler.db"
+SCHEMA_PATH = BASE_PATH / "schema.sql"
 BACKUP_DIR = BASE_PATH / "backups"
 BACKUP_DIR.mkdir(exist_ok=True)
+
+def update_schema_file():
+	"""Update schema.sql with current database structure."""
+	if not DB_PATH.exists():
+		return False
+	
+	try:
+		conn = sqlite3.connect(DB_PATH)
+		cursor = conn.cursor()
+		
+		# Get all table creation statements and indexes
+		cursor.execute("""
+			SELECT sql FROM sqlite_master 
+			WHERE type IN ('table', 'index') 
+			AND name NOT LIKE 'sqlite_%'
+			AND sql IS NOT NULL
+			ORDER BY type, name
+		""")
+		
+		schema_statements = [row[0] + ';' for row in cursor.fetchall()]
+		conn.close()
+		
+		# Write to schema.sql
+		with open(SCHEMA_PATH, 'w', encoding='utf-8') as f:
+			f.write('\n'.join(schema_statements))
+		
+		return True
+	except Exception as e:
+		print(f"⚠️ Could not update schema.sql: {e}")
+		return False
 
 def list_backups():
 	"""List all available backups with file sizes and dates."""
@@ -77,6 +109,11 @@ def backup(backup_label=None, auto=False):
 			print(f"🛡️ Auto-backup created: {backup_filename} ({size_mb:.1f}MB)")
 		else:
 			print(f"✅ Backup saved to: {backup_path} ({size_mb:.1f}MB)")
+		
+		# Update schema.sql after successful backup to reflect current state
+		if update_schema_file():
+			print("📄 Updated schema.sql to reflect current database state")
+		
 		return True
 		
 	except OSError as e:
@@ -123,6 +160,8 @@ def restore():
 
 	if confirm == 'yes':
 		try:
+			# Restore the backup data
+			print("📦 Restoring data from backup...")
 			shutil.copy2(selected, DB_PATH)
 			
 			# Verify restore succeeded
@@ -130,6 +169,11 @@ def restore():
 				restored_size = DB_PATH.stat().st_size
 				if restored_size == backup_size:
 					print("✅ Restore complete.")
+					
+					# Update schema.sql after successful restore to reflect new state
+					if update_schema_file():
+						print("📄 Updated schema.sql to reflect restored database state")
+					
 					return True
 				else:
 					print(f"❌ Restore failed - file size mismatch.")
