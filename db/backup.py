@@ -5,11 +5,18 @@ import sys
 import os
 import sqlite3
 
-# Base path of this script (e.g., db/)
-BASE_PATH = Path(__file__).resolve().parent
-DB_PATH = BASE_PATH / "peeps_scheduler.db"
-SCHEMA_PATH = BASE_PATH / "schema.sql"
-BACKUP_DIR = BASE_PATH / "backups"
+# Add parent directory for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from data_manager import get_data_manager
+import constants
+
+# Database configuration
+DB_PATH = Path(constants.DEFAULT_DB_PATH)
+SCHEMA_PATH = Path("db/schema.sql")
+
+# Use DataManager for backup paths
+data_manager = get_data_manager()
+BACKUP_DIR = data_manager.get_db_backups_path()
 BACKUP_DIR.mkdir(exist_ok=True)
 
 def update_schema_file():

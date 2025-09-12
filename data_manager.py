@@ -2,35 +2,34 @@
 Data management module for Novice Peeps scheduling system.
 Handles path management for private data submodule and period archiving.
 """
-
-import json
-import logging
-import os
-import shutil
-from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
-
+from typing import List
+import constants
 
 class DataManager:
 	"""Manages data paths and period archiving for the scheduling system."""
 	
-	def __init__(self, submodule_root: str = "peeps_data"):
+	def __init__(self, submodule_root: str = None):
 		"""
 		Initialize DataManager with submodule root path.
 		
 		Args:
-			submodule_root: Path to the private data submodule
+			submodule_root: Path to the private data submodule (defaults to constants.PRIVATE_DATA_ROOT)
 		"""
+		if submodule_root is None:
+			submodule_root = constants.PRIVATE_DATA_ROOT
 		self.submodule_root = Path(submodule_root)
 		self.original_path = self.submodule_root / "original"
+		self.processed_path = self.submodule_root / "processed"
+		self.db_backups_path = self.submodule_root / "db_backups"
 		
 		# Ensure directories exist
 		self._ensure_directories()
 	
 	def _ensure_directories(self) -> None:
 		"""Create required directories if they don't exist."""
-		self.original_path.mkdir(parents=True, exist_ok=True)
+		for path in [self.original_path, self.processed_path, self.db_backups_path]:
+			path.mkdir(parents=True, exist_ok=True)
 	
 	# Path accessors for clean integration with existing code
 	def get_original_data_path(self, period_slug: str = None) -> Path:
@@ -38,6 +37,16 @@ class DataManager:
 		if period_slug:
 			return self.original_path / period_slug
 		return self.original_path
+	
+	def get_processed_data_path(self, period_slug: str = None) -> Path:
+		"""Get path to processed data directory for a period."""
+		if period_slug:
+			return self.processed_path / period_slug
+		return self.processed_path
+	
+	def get_db_backups_path(self) -> Path:
+		"""Get path to database backups directory."""
+		return self.db_backups_path
 	
 	# Period archiving utilities
 	def get_period_path(self, period_slug: str) -> Path:
@@ -52,7 +61,7 @@ class DataManager:
 	
 	def list_periods(self) -> List[str]:
 		"""
-		List all archived periods.
+		List all periods in original data.
 		
 		Returns:
 			List of period slugs
