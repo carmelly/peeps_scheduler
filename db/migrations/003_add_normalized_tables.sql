@@ -1,70 +1,7 @@
-CREATE TABLE __migrations_applied__ (
-				filename TEXT PRIMARY KEY,
-				applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
-			);
-CREATE TABLE raw_members (
-	id INTEGER PRIMARY KEY AUTOINCREMENT,
-	period_name TEXT NOT NULL,
-	csv_id TEXT,
-	Name TEXT,
-	"Display Name" TEXT,  -- Preserve spaces in column names
-	"Email Address" TEXT,
-	Role TEXT,
-	"Index" INTEGER,
-	Priority INTEGER,
-	"Total Attended" INTEGER,
-	Active TEXT,
-	"Date Joined" TEXT,
-	raw_data TEXT,  -- Full row as JSON for any extra fields
-	imported_at DATETIME DEFAULT CURRENT_TIMESTAMP, data_quality_notes TEXT DEFAULT '', reconstructed_flag INTEGER DEFAULT 0,
-	UNIQUE(period_name, csv_id)  -- Prevent duplicate imports
-);
-CREATE TABLE sqlite_sequence(name,seq);
-CREATE TABLE raw_responses (
-	id INTEGER PRIMARY KEY AUTOINCREMENT,
-	period_name TEXT NOT NULL,
-	row_number INTEGER,
-	Timestamp TEXT,
-	"Email Address" TEXT,
-	Name TEXT,
-	"Primary Role" TEXT,
-	"Secondary Role" TEXT,
-	"Max Sessions" TEXT,
-	Availability TEXT,
-	"Min Interval Days" TEXT,
-	"Preferred gap between sessions?" TEXT,
-	"Partnership Preference" TEXT,
-	"Questions or Comments for Organizers" TEXT,
-	"Questions or Comments for Leilani" TEXT,
-	raw_data TEXT,  -- Full row as JSON for schema variations
-	imported_at DATETIME DEFAULT CURRENT_TIMESTAMP, data_quality_notes TEXT DEFAULT '', reconstructed_flag INTEGER DEFAULT 0,
-	UNIQUE(period_name, row_number, Name, "Email Address")  -- Prevent duplicate imports
-);
-CREATE TABLE raw_results (
-	id INTEGER PRIMARY KEY AUTOINCREMENT,
-	period_name TEXT NOT NULL UNIQUE,
-	results_json TEXT,  -- Complete JSON as text
-	imported_at DATETIME DEFAULT CURRENT_TIMESTAMP
-, data_quality_notes TEXT DEFAULT '', reconstructed_flag INTEGER DEFAULT 0);
-CREATE TABLE raw_output (
-	id INTEGER PRIMARY KEY AUTOINCREMENT,
-	period_name TEXT NOT NULL UNIQUE,
-	output_json TEXT,  -- Complete JSON as text
-	imported_at DATETIME DEFAULT CURRENT_TIMESTAMP
-, data_quality_notes TEXT DEFAULT '', reconstructed_flag INTEGER DEFAULT 0);
-CREATE TABLE raw_actual_attendance (
-	id INTEGER PRIMARY KEY AUTOINCREMENT,
-	period_name TEXT NOT NULL UNIQUE,
-	actual_attendance_json TEXT,  -- Complete JSON as text
-	imported_at DATETIME DEFAULT CURRENT_TIMESTAMP
-, data_quality_notes TEXT DEFAULT '', reconstructed_flag INTEGER DEFAULT 0);
-CREATE INDEX idx_raw_members_period ON raw_members(period_name);
-CREATE INDEX idx_raw_responses_period ON raw_responses(period_name);
-CREATE INDEX idx_raw_results_period ON raw_results(period_name);
-CREATE INDEX idx_raw_output_period ON raw_output(period_name);
-CREATE INDEX idx_raw_actual_attendance_period ON raw_actual_attendance(period_name);
-CREATE INDEX idx_raw_members_email ON raw_members("Email Address");
-CREATE INDEX idx_raw_responses_email ON raw_responses("Email Address");
+-- Step 1 - Design Schema
+-- Design normalized relational schema with proper foreign key relationships
+-- Enable efficient queries for scheduling algorithms and analytics
+
 CREATE TABLE members (
     id INTEGER PRIMARY KEY,              -- Preserve CSV IDs (manually maintained)
     full_name TEXT NOT NULL,             -- From "Name" column
@@ -78,6 +15,7 @@ CREATE TABLE members (
 
     CHECK(primary_role IN ('leader', 'follower'))
 );
+
 CREATE TABLE schedule_periods (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     period_name TEXT UNIQUE NOT NULL,    -- "2025-09", "2024-10", etc.
@@ -90,6 +28,7 @@ CREATE TABLE schedule_periods (
     CHECK(start_date <= end_date),
     CHECK(status IN ('draft', 'active', 'completed'))
 );
+
 CREATE TABLE events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,     -- Global unique event ID
     period_id INTEGER NOT NULL,               -- Foreign key to schedule_periods
@@ -106,6 +45,8 @@ CREATE TABLE events (
     CHECK(duration_minutes IN (60, 90, 120)),
     CHECK(status IN ('scheduled', 'cancelled', 'completed'))
 );
+
+-- Represents member status (priority, order) at the beginning of the period
 CREATE TABLE member_period_snapshots (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     member_id INTEGER NOT NULL,
@@ -125,6 +66,7 @@ CREATE TABLE member_period_snapshots (
     CHECK(index_position >= 0),
     CHECK(total_attended >= 0)
 );
+
 CREATE TABLE responses (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     member_id INTEGER NOT NULL,
@@ -148,6 +90,7 @@ CREATE TABLE responses (
     CHECK(max_sessions > 0),
     CHECK(min_interval_days >= 0)
 );
+
 CREATE TABLE event_availability (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     response_id INTEGER NOT NULL,
@@ -157,6 +100,7 @@ CREATE TABLE event_availability (
     FOREIGN KEY (event_id) REFERENCES events(id),
     UNIQUE(response_id, event_id)
 );
+
 CREATE TABLE event_assignments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     event_id INTEGER NOT NULL,
@@ -174,6 +118,8 @@ CREATE TABLE event_assignments (
     CHECK(assigned_role IN ('leader', 'follower')),
     CHECK(assignment_type IN ('attendee', 'alternate'))
 );
+
+-- Actual attendance of event usually differs from assignments
 CREATE TABLE event_attendance (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     event_id INTEGER NOT NULL,
@@ -209,6 +155,8 @@ CREATE TABLE event_attendance (
     CHECK(expected_role IS NULL OR expected_role IN ('leader', 'follower')),
     CHECK(actual_role IS NULL OR actual_role IN ('leader', 'follower'))
 );
+
+-- Tracks changes to event assignments after initial scheduling
 CREATE TABLE event_assignment_changes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     event_id INTEGER NOT NULL,
@@ -232,6 +180,8 @@ CREATE TABLE event_assignment_changes (
         'change_role'              -- Switch leader/follower
     ))
 );
+
+-- Indexes for performance
 CREATE INDEX idx_members_email ON members(email);
 CREATE INDEX idx_members_active ON members(active);
 CREATE INDEX idx_events_period ON events(period_id);
