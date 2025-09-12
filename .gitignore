@@ -11,7 +11,10 @@ __pycache__/
 # Temporary files
 .tmp.driveupload/*
 
-# Data directories and historical data
+# Data directory tracked in private submodule 
+peeps_data
+
+# Legacy data -- will be deleted when data migration is complete 
 data/*
 db/historical_data/*
 db/imports/*/data

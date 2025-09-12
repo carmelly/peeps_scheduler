@@ -5,13 +5,18 @@ import constants
 import file_io
 from models import Event, EventSequence, Peep, Role, SwitchPreference
 import utils
+from data_manager import get_data_manager
 
 class Scheduler:
 	def __init__(self, data_folder, max_events):
 		self.data_folder = data_folder
 		self.max_events = max_events
-		self.output_json = f'data/{data_folder}/output.json'
-		self.result_json = f'data/{data_folder}/results.json'
+		self.data_manager = get_data_manager()
+		
+		# Ensure period directory exists
+		self.period_path = self.data_manager.ensure_period_exists(data_folder)
+		self.output_json = self.period_path / 'output.json'
+		self.result_json = self.period_path / 'results.json'
 		self.target_max = None # max per role used for each run 
 
 	def sanitize_events(self, events, peeps):
@@ -210,14 +215,14 @@ class Scheduler:
 			logging.info(f"Generating test data and saving to {self.output_json}")
 			utils.generate_test_data(5, 30, self.output_json)
 		elif load_from_csv:
-			responses_csv = f'data/{self.data_folder}/responses.csv'
-			peeps_csv = f'data/{self.data_folder}/members.csv'
+			responses_csv = self.period_path / 'responses.csv'
+			peeps_csv = self.period_path / 'members.csv'
 			logging.info(f"Loading data from {peeps_csv} and {responses_csv}")
-			file_io.convert_to_json(responses_csv, peeps_csv, self.output_json)
+			file_io.convert_to_json(str(responses_csv), str(peeps_csv), str(self.output_json))
 
 		logging.info(f"Loading data from {self.output_json}")
 		
-		peeps, events = file_io.load_data_from_json(self.output_json)
+		peeps, events = file_io.load_data_from_json(str(self.output_json))
 		responders = [p for p in peeps if p.responded]
 		no_availability = [p.name for p in responders if not p.availability]
 		non_responders = [p.name for p in peeps if not p.responded]
@@ -254,7 +259,7 @@ class Scheduler:
 		if len(best) == 1:
 			best_sequence = best[0]
 			logging.info(f"Auto-selected best sequence: {best_sequence}")
-			utils.save_event_sequence(best_sequence, self.result_json)
+			file_io.save_event_sequence(best_sequence, str(self.result_json))
 			logging.debug("Final Peeps:")
 			logging.debug(Peep.peeps_str(best_sequence.peeps))
 		else:
@@ -267,7 +272,7 @@ class Scheduler:
 				chosen_index = int(choice)
 				best_sequence = best[chosen_index]
 				logging.info(f"Selected {best_sequence}")
-				file_io.save_event_sequence(best_sequence, self.result_json)
+				file_io.save_event_sequence(best_sequence, str(self.result_json))
 				logging.debug("Final Peeps:")
 				logging.debug(Peep.peeps_str(best_sequence.peeps))
 			except (ValueError, IndexError):

@@ -1,3 +1,5 @@
+import os
+
 DATE_FORMAT = "%Y-%m-%d %H:%M"
 DATESTR_FORMAT = "%A %B %d - %I%p"
 
@@ -21,5 +23,11 @@ CLASS_CONFIG = {
 		"allow_downgrade": True
 	}
 }
+
 ABS_MIN_ROLE = min(config["min_role"] for config in CLASS_CONFIG.values() if config["allow_downgrade"])
 ABS_MAX_ROLE = max(config["max_role"] for config in CLASS_CONFIG.values())
+
+# === Data Management Configuration ===
+
+# Private data submodule root - can be overridden by environment
+PRIVATE_DATA_ROOT = os.getenv("PEEPS_DATA_PATH", "peeps_data")
