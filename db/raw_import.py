@@ -23,9 +23,14 @@ from pathlib import Path
 
 # Add project root to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
+from data_manager import get_data_manager
+import constants
 
-DB_PATH = "db/peeps_scheduler.db"
-DATA_PATH = "db/historical_data"
+# Use constants and DataManager for paths
+DB_PATH = constants.DEFAULT_DB_PATH
+data_manager = get_data_manager()
+# Use processed data path for historical imports
+DATA_PATH = str(data_manager.get_processed_data_path())
 
 def setup_logging():
 	"""Configure logging for import operations."""

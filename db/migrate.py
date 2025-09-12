@@ -1,11 +1,17 @@
 import os
 import sqlite3
 import subprocess
+import sys
 from pathlib import Path
 
-DB_PATH = "db/peeps_scheduler.db"
-MIGRATIONS_PATH = "db/migrations"
-SCHEMA_PATH = "db/schema.sql"
+# Add parent directory for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import constants
+
+# Use constants for database path
+DB_PATH = Path(constants.DEFAULT_DB_PATH)
+MIGRATIONS_PATH = Path("db/migrations")
+SCHEMA_PATH = Path("db/schema.sql")
 
 # Resolve the local path to sqlite3.exe
 SQLITE_EXE = os.path.join(os.path.dirname(__file__), "sqlite3.exe")
@@ -124,7 +130,7 @@ def run_migrations():
 		return True
 	
 	# Check if database exists before we connect (and potentially create it)
-	db_existed_before = os.path.exists(DB_PATH)
+	db_existed_before = DB_PATH.exists()
 	
 	try:
 		# Connect to database (this will create it if it doesn't exist)
@@ -186,7 +192,7 @@ def run_migrations():
 		print("🧬 Generating schema.sql...")
 		try:
 			schema_output = subprocess.check_output(
-				[SQLITE_EXE, DB_PATH, ".schema"],
+				[SQLITE_EXE, str(DB_PATH), ".schema"],
 				text=True
 			)
 			with open(SCHEMA_PATH, "w", encoding="utf-8") as f:
