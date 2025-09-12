@@ -12,12 +12,18 @@ db/
 ├── schema.sql               # Auto-generated reference schema (do not edit manually)
 ├── migrate.py               # Applies SQL migrations and updates schema.sql
 ├── backup.py                # Creates and restores timestamped database backups
+├── raw_import.py            # Imports historical data into raw tables
 ├── migrations/              # Folder containing versioned schema migrations
 │   ├── 001_initial_schema.sql
 │   └── README.md
-├── backups/                 # Folder where backups are stored
+├── backups/                 # Legacy folder (backups now in peeps_data/db_backups/)
+
+peeps_data/
+├── db_backups/              # Database backups (managed by DataManager)
 │   ├── 20250407-1530_backup.db
 │   └── ...
+├── original/                # Original CSV/JSON data by period
+└── processed/               # Processed scheduler outputs
 ```
 
 ---
@@ -50,7 +56,7 @@ Create timestamped backups and restore old database states.
 python db/backup.py
 ```
 
-Saves a backup like `20250407-1545_my_backup.db` in `db/backups/`.
+Saves a backup like `20250407-1545_my_backup.db` in `peeps_data/db_backups/` (managed by DataManager).
 
 ### Restore a Backup
 
@@ -72,8 +78,9 @@ python db/backup.py --list
 
 ```gitignore
 db/peeps_scheduler.db
-db/backups/*.db
+db/backups/*.db        # Legacy backup location
 db/sqlite3.exe
+peeps_data/            # Private data submodule (managed separately)
 ```
 
 ---
