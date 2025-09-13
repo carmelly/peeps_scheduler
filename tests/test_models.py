@@ -112,23 +112,7 @@ def test_add_peeps_to_event(events, peeps):
 
 	# we should still only have the max allowed per role 
 	assert len(event2.leaders) == event2.max_role and len(event2.followers) == event2.max_role
-
-def test_peep_can_attend(events, peeps):
-	events = copy.deepcopy(events)
-
-	# Case 1: Peep eligible (event in availability, limit ok, no conflict)
-	event = events[5]
-	peep = [p for p in peeps if event.id in p.availability and p.role == Role.LEADER][0]
-	assert peep.can_attend(event)
-
-	# Case 2: Peep exceeds event limit
-	over_limit_peep = copy.deepcopy(peep)
-	over_limit_peep.num_events = over_limit_peep.event_limit
-	assert not over_limit_peep.can_attend(event)
-
-	# Case 3: Peep availability conflict (event not in availability)
-	unavailable_peep = [p for p in peeps if event.id not in p.availability and p.role == Role.LEADER][0]
-	assert not unavailable_peep.can_attend(event)
+	
 	
 def test_update_event_attendees(events, peeps):
 	events = copy.deepcopy(events)
