@@ -31,7 +31,7 @@ def test_switch_if_primary_full_peep_gets_scheduled_in_secondary():
 	# Fill primary role (leaders)
 	for i in range(3):
 		peeps.append(Peep(
-			id=i, name=f"L{i+1}", display_name=f"L{i}", email=f"l{i}@x.com",
+			id=i+1, name=f"L{i+1}", display_name=f"L{i}", email=f"l{i}@x.com",
 			role=Role.LEADER, switch_pref=SwitchPreference.PRIMARY_ONLY, 
 			availability = [1], event_limit = 1, index=i, priority=0
 		))
@@ -61,7 +61,7 @@ def test_primary_only_peep_does_not_switch():
 	# Fill primary role (leaders)
 	for i in range(3):
 		peeps.append(Peep(
-			id=i, name=f"L{i+1}", display_name=f"L{i}", email=f"l{i}@x.com",
+			id=i+1, name=f"L{i+1}", display_name=f"L{i}", email=f"l{i}@x.com",
 			role=Role.LEADER, switch_pref=SwitchPreference.PRIMARY_ONLY, 
 			availability = [1], event_limit = 1, index=i, priority=0
 		))
@@ -86,7 +86,7 @@ def test_switch_if_needed_is_ignored_in_initial_pass():
 	# Fill primary role (leaders)
 	for i in range(3):
 		peeps.append(Peep(
-			id=i, name=f"L{i+1}", display_name=f"L{i}", email=f"l{i}@x.com",
+			id=i+1, name=f"L{i+1}", display_name=f"L{i}", email=f"l{i}@x.com",
 			role=Role.LEADER, switch_pref=SwitchPreference.PRIMARY_ONLY, 
 			availability = [1], event_limit = 1, index=i, priority=0
 		))

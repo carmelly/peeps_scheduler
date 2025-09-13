@@ -45,13 +45,23 @@ class SwitchPreference(Enum):
 
 class Peep:
 	def __init__(self, **kwargs):
+		# Validate required fields first
+		if not kwargs.get("id"):
+			raise ValueError("Peep requires an 'id' field")
+		
+		if not kwargs.get("role"):
+			raise ValueError("Peep requires a 'role' field")
+		
 		self.id = int(kwargs.get("id"))
 		self.full_name = str(kwargs.get("full_name", "")).strip()
 		self.display_name = str(kwargs.get("display_name", "")).strip()
 		self.email = str(kwargs.get("email", "")).strip()
 
 		role_input = kwargs.get("role", "")
-		self.role = role_input if isinstance(role_input, Role) else Role.from_string(role_input)
+		try:
+			self.role = role_input if isinstance(role_input, Role) else Role.from_string(role_input)
+		except ValueError as e:
+			raise ValueError(f"Invalid role '{role_input}': {str(e)}") from e
 
 		switch_input = kwargs.get("switch_pref", SwitchPreference.PRIMARY_ONLY)
 		self.switch_pref = switch_input if isinstance(switch_input, SwitchPreference) else SwitchPreference(switch_input)
