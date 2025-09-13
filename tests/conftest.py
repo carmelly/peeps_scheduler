@@ -9,26 +9,6 @@ def patch_abs_min(monkeypatch):
 	abs_min = min(config["min_role"] for config in constants.CLASS_CONFIG.values() if config["allow_downgrade"])
 	monkeypatch.setattr(constants, "ABS_MIN_ROLE", abs_min)
 
-@pytest.fixture(autouse=True, scope="session")
-def patch_class_config():
-	constants.CLASS_CONFIG[1] = {
-		"price": 50,
-		"min_role": 1,
-		"max_role": 2,
-		"allow_downgrade": False,
-	}
-	constants.CLASS_CONFIG[2] = {
-		"price": 100,
-		"min_role": 2,
-		"max_role": 3,
-		"allow_downgrade": True,
-	}
-	constants.CLASS_CONFIG[3] = {
-		"price": 150,
-		"min_role": 3,
-		"max_role": 5,
-		"allow_downgrade": True,
-	}
 
 @pytest.fixture
 def peep_factory() -> Callable[..., Peep]:
