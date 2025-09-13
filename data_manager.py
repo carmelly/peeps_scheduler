@@ -22,6 +22,7 @@ class DataManager:
 		self.original_path = self.submodule_root / "original"
 		self.processed_path = self.submodule_root / "processed"
 		self.db_backups_path = self.submodule_root / "db_backups"
+		self.db_path = self.submodule_root / "peeps_scheduler.db"
 		
 		# Ensure directories exist
 		self._ensure_directories()
@@ -47,6 +48,10 @@ class DataManager:
 	def get_db_backups_path(self) -> Path:
 		"""Get path to database backups directory."""
 		return self.db_backups_path
+	
+	def get_database_path(self) -> Path:
+		"""Get path to the main database file."""
+		return self.db_path
 	
 	# Period archiving utilities
 	def get_period_path(self, period_slug: str) -> Path:
