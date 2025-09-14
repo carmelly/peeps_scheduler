@@ -392,11 +392,11 @@ class TestEventDataConversion:
         """Test that to_dict includes essential event data."""
         date = datetime.datetime(2025, 3, 15, 19, 0)
         event = Event(id=42, date=date, duration_minutes=90)
-        
+
         data = event.to_dict()
-        
+
         assert data['id'] == 42
-        assert data['date'] == date
+        assert data['date'] == '2025-03-15 19:00'  # Formatted string, not datetime object
         assert data['duration_minutes'] == 90
     
     def test_from_dict_recreates_event(self, event_factory, peep_factory):

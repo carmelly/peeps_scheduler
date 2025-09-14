@@ -526,7 +526,7 @@ class Event:
 	def to_dict(self):
 		return {
 			"id": self.id,
-            "date": self.date,
+            "date": self.date.strftime(DATE_FORMAT),
             "duration_minutes": self.duration_minutes,
 		}
 	
