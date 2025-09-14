@@ -654,6 +654,7 @@ class EventSequence:
 			],
 			"peeps": [peep.to_dict() for peep in self.peeps],
 			"num_unique_attendees": self.num_unique_attendees,
+			"priority_fulfilled": self.priority_fulfilled,
 			"system_weight": self.system_weight
 		}
 	
