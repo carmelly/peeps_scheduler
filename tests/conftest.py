@@ -8,7 +8,7 @@ def peep_factory():
     """Factory for creating test peeps with sensible defaults."""
     def _create(id=1, role=Role.LEADER, **kwargs):
         defaults = {
-            'name': f'TestPeep{id}',
+            'full_name': f'TestPeep{id}',
             'display_name': f'TestPeep{id}',
             'email': f'peep{id}@test.com',
             'availability': [1],
