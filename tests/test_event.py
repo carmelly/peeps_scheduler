@@ -13,9 +13,6 @@ import datetime
 from models import Event, Peep, Role
 import constants
 
-
-
-
 class TestEventAttendeeManagement:
     """Test core attendee addition, removal, and capacity management."""
     
@@ -572,7 +569,3 @@ class TestEventPeepIntegration:
         # All non-winners should come before all winners
         assert final_ids[:len(non_winners)] == non_winner_ids
         assert final_ids[len(non_winners):] == winner_ids
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])

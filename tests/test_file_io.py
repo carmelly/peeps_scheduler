@@ -116,14 +116,6 @@ def sample_peeps():
 		)
 	]
 
-@pytest.fixture
-def sample_events():
-	"""Two simple events with different durations and timestamps."""
-	return [
-		Event(id=0, date="2025-07-05 13:00", duration_minutes=90),
-		Event(id=1, date="2025-07-06 14:00", duration_minutes=60)
-	]
-
 # --- Peep and Event Loading ---
 
 def test_load_peeps(peeps_csv_path):

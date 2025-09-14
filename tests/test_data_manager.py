@@ -106,7 +106,3 @@ class TestDataManagerErrorHandling:
             period_path = dm.ensure_period_exists("2025-09-special")
             assert period_path.exists()
             assert "2025-09-special" in dm.list_periods()
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
