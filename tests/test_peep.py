@@ -235,5 +235,4 @@ class TestDataConversion:
         with pytest.raises(ValueError, match="Peep requires a 'role' field"):
             Peep(id=1)
 
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
+

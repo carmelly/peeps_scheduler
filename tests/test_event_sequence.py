@@ -13,28 +13,6 @@ import datetime
 from models import EventSequence, Event, Peep, Role
 
 
-def create_simple_event(id=1, duration_minutes=120):
-    """Helper for creating test events."""
-    return Event(
-        id=id,
-        date=datetime.datetime(2025, 1, 15, 18, 0),
-        duration_minutes=duration_minutes
-    )
-
-
-def create_simple_peep(id=1, role=Role.LEADER, **kwargs):
-    """Helper for creating test peeps."""
-    defaults = {
-        'name': f'TestPeep{id}',
-        'availability': [0, 1, 2],
-        'event_limit': 2,
-        'priority': 1,
-        'total_attended': 0,
-        'responded': True
-    }
-    defaults.update(kwargs)
-    return Peep(id=id, role=role, **defaults)
-
 
 class TestEventSequenceInitialization:
     """Test EventSequence creation and initial state."""
@@ -50,10 +28,10 @@ class TestEventSequenceInitialization:
         assert sequence.total_attendees == 0
         assert sequence.priority_fulfilled == 0
     
-    def test_initialization_with_events_and_peeps(self):
+    def test_initialization_with_events_and_peeps(self, event_factory, peep_factory):
         """Test that EventSequence stores provided events and peeps."""
-        events = [create_simple_event(id=1), create_simple_event(id=2)]
-        peeps = [create_simple_peep(id=1), create_simple_peep(id=2)]
+        events = [event_factory(id=1), event_factory(id=2)]
+        peeps = [peep_factory(id=1), peep_factory(id=2)]
         
         sequence = EventSequence(events, peeps)
         
@@ -61,10 +39,10 @@ class TestEventSequenceInitialization:
         assert sequence.peeps == peeps
         assert sequence.valid_events == []  # Should start empty
     
-    def test_initialization_metrics_start_at_zero(self):
+    def test_initialization_metrics_start_at_zero(self, event_factory, peep_factory):
         """Test that all metrics start at zero regardless of input."""
-        events = [create_simple_event(id=1)]
-        peeps = [create_simple_peep(id=1, priority=5, total_attended=3)]
+        events = [event_factory(id=1)]
+        peeps = [peep_factory(id=1, priority=5, total_attended=3)]
         
         sequence = EventSequence(events, peeps)
         
@@ -87,21 +65,21 @@ class TestEventSequenceEquality:
         assert seq1 == seq2
         assert hash(seq1) == hash(seq2)
     
-    def test_sequences_with_same_valid_events_are_equal(self):
+    def test_sequences_with_same_valid_events_are_equal(self, event_factory, peep_factory):
         """Test that sequences with identical valid events are equal."""
-        events = [create_simple_event(id=1)]
-        peeps = [create_simple_peep(id=1), create_simple_peep(id=2)]
+        events = [event_factory(id=1)]
+        peeps = [peep_factory(id=1), peep_factory(id=2)]
         
         # Create two sequences
         seq1 = EventSequence(events, peeps)
         seq2 = EventSequence(events, peeps)
         
         # Add same event with same attendees to both
-        event1 = create_simple_event(id=1)
-        event2 = create_simple_event(id=1) 
+        event1 = event_factory(id=1)
+        event2 = event_factory(id=1) 
         
-        peep1 = create_simple_peep(id=1)
-        peep2 = create_simple_peep(id=2)
+        peep1 = peep_factory(id=1)
+        peep2 = peep_factory(id=2)
         
         event1.add_attendee(peep1, Role.LEADER)
         event1.add_attendee(peep2, Role.FOLLOWER)
@@ -115,17 +93,17 @@ class TestEventSequenceEquality:
         assert seq1 == seq2
         assert hash(seq1) == hash(seq2)
     
-    def test_sequences_with_different_attendees_are_not_equal(self):
+    def test_sequences_with_different_attendees_are_not_equal(self, event_factory, peep_factory):
         """Test that sequences with different attendee assignments are not equal."""
-        events = [create_simple_event(id=1)]
-        peeps = [create_simple_peep(id=1), create_simple_peep(id=2), create_simple_peep(id=3)]
+        events = [event_factory(id=1)]
+        peeps = [peep_factory(id=1), peep_factory(id=2), peep_factory(id=3)]
         
         seq1 = EventSequence(events, peeps)
         seq2 = EventSequence(events, peeps)
         
         # Same event, different attendees
-        event1 = create_simple_event(id=1)
-        event2 = create_simple_event(id=1)
+        event1 = event_factory(id=1)
+        event2 = event_factory(id=1)
         
         event1.add_attendee(peeps[0], Role.LEADER)  # peep 1
         event2.add_attendee(peeps[1], Role.LEADER)  # peep 2 (different)
@@ -136,15 +114,15 @@ class TestEventSequenceEquality:
         assert seq1 != seq2
         assert hash(seq1) != hash(seq2)
     
-    def test_sequences_with_different_events_are_not_equal(self):
+    def test_sequences_with_different_events_are_not_equal(self, event_factory, peep_factory):
         """Test that sequences with different events are not equal."""
-        peeps = [create_simple_peep(id=1), create_simple_peep(id=2)]
+        peeps = [peep_factory(id=1), peep_factory(id=2)]
         
-        seq1 = EventSequence([create_simple_event(id=1)], peeps)
-        seq2 = EventSequence([create_simple_event(id=2)], peeps)
+        seq1 = EventSequence([event_factory(id=1)], peeps)
+        seq2 = EventSequence([event_factory(id=2)], peeps)
         
-        event1 = create_simple_event(id=1)
-        event2 = create_simple_event(id=2)  # Different event
+        event1 = event_factory(id=1)
+        event2 = event_factory(id=2)  # Different event
         
         event1.add_attendee(peeps[0], Role.LEADER)
         event2.add_attendee(peeps[0], Role.LEADER)  # Same attendee, different event
@@ -155,19 +133,19 @@ class TestEventSequenceEquality:
         assert seq1 != seq2
         assert hash(seq1) != hash(seq2)
     
-    def test_attendee_order_does_not_affect_equality(self):
+    def test_attendee_order_does_not_affect_equality(self, event_factory, peep_factory):
         """Test that different attendee assignment order doesn't affect equality."""
-        events = [create_simple_event(id=1)]
-        peep1 = create_simple_peep(id=1, role=Role.LEADER)
-        peep2 = create_simple_peep(id=2, role=Role.FOLLOWER)
+        events = [event_factory(id=1)]
+        peep1 = peep_factory(id=1, role=Role.LEADER)
+        peep2 = peep_factory(id=2, role=Role.FOLLOWER)
         peeps = [peep1, peep2]
         
         seq1 = EventSequence(events, peeps)
         seq2 = EventSequence(events, peeps)
         
         # Add attendees in different order
-        event1 = create_simple_event(id=1)
-        event2 = create_simple_event(id=1)
+        event1 = event_factory(id=1)
+        event2 = event_factory(id=1)
         
         # Sequence 1: Leader first, then Follower
         event1.add_attendee(peep1, Role.LEADER)
@@ -184,23 +162,23 @@ class TestEventSequenceEquality:
         assert seq1 == seq2
         assert hash(seq1) == hash(seq2)
 
-    def test_equality_failure_scenarios(self):
+    def test_equality_failure_scenarios(self, event_factory, peep_factory):
         """Test various scenarios where EventSequence equality should fail."""
-        peep1 = create_simple_peep(id=1, role=Role.LEADER)
-        peep2 = create_simple_peep(id=2, role=Role.FOLLOWER)
-        peep3 = create_simple_peep(id=3, role=Role.LEADER)
+        peep1 = peep_factory(id=1, role=Role.LEADER)
+        peep2 = peep_factory(id=2, role=Role.FOLLOWER)
+        peep3 = peep_factory(id=3, role=Role.LEADER)
         peeps = [peep1, peep2, peep3]
 
         # Test 1: Different number of valid events
-        event1 = create_simple_event(id=1)
-        event2 = create_simple_event(id=2)
+        event1 = event_factory(id=1)
+        event2 = event_factory(id=2)
 
         seq1 = EventSequence([event1, event2], peeps)
         seq2 = EventSequence([event1], peeps)
 
-        event1_copy1 = create_simple_event(id=1)
-        event1_copy2 = create_simple_event(id=1)
-        event2_copy = create_simple_event(id=2)
+        event1_copy1 = event_factory(id=1)
+        event1_copy2 = event_factory(id=1)
+        event2_copy = event_factory(id=2)
 
         event1_copy1.add_attendee(peep1, Role.LEADER)
         event1_copy2.add_attendee(peep1, Role.LEADER)
@@ -213,8 +191,8 @@ class TestEventSequenceEquality:
         assert hash(seq1) != hash(seq2)
 
         # Test 2: Same events but different roles for same peep
-        event_a = create_simple_event(id=1)
-        event_b = create_simple_event(id=1)
+        event_a = event_factory(id=1)
+        event_b = event_factory(id=1)
 
         seq3 = EventSequence([event_a], peeps)
         seq4 = EventSequence([event_b], peeps)
@@ -236,8 +214,8 @@ class TestEventSequenceEquality:
 
         # Test 4: Empty vs non-empty sequences
         empty_seq = EventSequence([], [])
-        non_empty_seq = EventSequence([create_simple_event(id=1)], [peep1])
-        event = create_simple_event(id=1)
+        non_empty_seq = EventSequence([event_factory(id=1)], [peep1])
+        event = event_factory(id=1)
         event.add_attendee(peep1, Role.LEADER)
         non_empty_seq.valid_events = [event]
 
@@ -249,11 +227,11 @@ class TestEventSequenceFinalizationPriorities:
     """Test EventSequence finalization priority update logic."""
     
     
-    def test_finalize_updates_total_attended_for_successful_peeps(self):
+    def test_finalize_updates_total_attended_for_successful_peeps(self, event_factory, peep_factory):
         """Test that successful attendees get total_attended incremented."""
-        event = create_simple_event(id=1)
-        peep1 = create_simple_peep(id=1, total_attended=5)
-        peep2 = create_simple_peep(id=2, total_attended=2)
+        event = event_factory(id=1)
+        peep1 = peep_factory(id=1, total_attended=5)
+        peep2 = peep_factory(id=2, total_attended=2)
         peeps = [peep1, peep2]
 
         # peep1 attends, gets num_events = 1 during event processing
@@ -270,12 +248,12 @@ class TestEventSequenceFinalizationPriorities:
         # Non-attendee: total_attended unchanged
         assert peep2.total_attended == 2
 
-    def test_finalize_increases_priority_for_unscheduled_responded_peeps(self):
+    def test_finalize_increases_priority_for_unscheduled_responded_peeps(self, event_factory, peep_factory):
         """Test that priority increases for peeps who responded but didn't get into events."""
-        event = create_simple_event(id=1)
-        peep1 = create_simple_peep(id=1, priority=2, responded=True)   # Responded but won't attend
-        peep2 = create_simple_peep(id=2, priority=3, responded=True)   # Responded and will attend
-        peep3 = create_simple_peep(id=3, priority=1, responded=False)  # Didn't respond, won't attend
+        event = event_factory(id=1)
+        peep1 = peep_factory(id=1, priority=2, responded=True)   # Responded but won't attend
+        peep2 = peep_factory(id=2, priority=3, responded=True)   # Responded and will attend
+        peep3 = peep_factory(id=3, priority=1, responded=False)  # Didn't respond, won't attend
         peeps = [peep1, peep2, peep3]
 
         # Only peep2 gets into the event
@@ -300,12 +278,12 @@ class TestEventSequenceFinalizationPriorities:
 class TestEventSequenceFinalizationMetrics:
     """Test EventSequence finalization metrics calculation."""
     
-    def test_finalize_calculates_unique_attendees_correctly(self):
+    def test_finalize_calculates_unique_attendees_correctly(self, event_factory, peep_factory):
         """Test that num_unique_attendees counts peeps who attended any event."""
-        events = [create_simple_event(id=1), create_simple_event(id=2)]
-        peep1 = create_simple_peep(id=1)
-        peep2 = create_simple_peep(id=2) 
-        peep3 = create_simple_peep(id=3)
+        events = [event_factory(id=1), event_factory(id=2)]
+        peep1 = peep_factory(id=1)
+        peep2 = peep_factory(id=2) 
+        peep3 = peep_factory(id=3)
         peeps = [peep1, peep2, peep3]
         
         # peep1 attends both events, peep2 attends one, peep3 attends none
@@ -326,12 +304,12 @@ class TestEventSequenceFinalizationMetrics:
         # Should count 2 unique attendees (peep1 and peep2)
         assert sequence.num_unique_attendees == 2
     
-    def test_finalize_calculates_priority_fulfilled_correctly(self):
+    def test_finalize_calculates_priority_fulfilled_correctly(self, event_factory, peep_factory):
         """Test that priority_fulfilled sums original priority of successful attendees."""
-        event = create_simple_event(id=1)
-        peep1 = create_simple_peep(id=1, priority=3)
-        peep2 = create_simple_peep(id=2, priority=5)
-        peep3 = create_simple_peep(id=3, priority=2)
+        event = event_factory(id=1)
+        peep1 = peep_factory(id=1, priority=3)
+        peep2 = peep_factory(id=2, priority=5)
+        peep3 = peep_factory(id=3, priority=2)
         peeps = [peep1, peep2, peep3]
         
         # Store original priorities
@@ -355,12 +333,12 @@ class TestEventSequenceFinalizationMetrics:
         # Should sum original priorities of successful attendees
         assert sequence.priority_fulfilled == 8  # 3 + 5
     
-    def test_finalize_calculates_normalized_utilization_correctly(self):
+    def test_finalize_calculates_normalized_utilization_correctly(self, event_factory, peep_factory):
         """Test that normalized_utilization correctly averages utilization rates."""
-        event = create_simple_event(id=1)
-        peep1 = create_simple_peep(id=1, event_limit=2)  # attends 1/2 = 0.5
-        peep2 = create_simple_peep(id=2, event_limit=1)  # attends 1/1 = 1.0
-        peep3 = create_simple_peep(id=3, event_limit=3)  # attends 0/3 = 0.0
+        event = event_factory(id=1)
+        peep1 = peep_factory(id=1, event_limit=2)  # attends 1/2 = 0.5
+        peep2 = peep_factory(id=2, event_limit=1)  # attends 1/1 = 1.0
+        peep3 = peep_factory(id=3, event_limit=3)  # attends 0/3 = 0.0
         peeps = [peep1, peep2, peep3]
         
         event.add_attendee(peep1, Role.LEADER)
@@ -378,12 +356,12 @@ class TestEventSequenceFinalizationMetrics:
         # Should be sum of individual utilization rates: 0.5 + 1.0 + 0.0 = 1.5
         assert sequence.normalized_utilization == 1.5
     
-    def test_finalize_calculates_total_attendees_correctly(self):
+    def test_finalize_calculates_total_attendees_correctly(self, event_factory, peep_factory):
         """Test that total_attendees sums all num_events across peeps."""
-        events = [create_simple_event(id=1), create_simple_event(id=2)]
-        peep1 = create_simple_peep(id=1)
-        peep2 = create_simple_peep(id=2)
-        peep3 = create_simple_peep(id=3)
+        events = [event_factory(id=1), event_factory(id=2)]
+        peep1 = peep_factory(id=1)
+        peep2 = peep_factory(id=2)
+        peep3 = peep_factory(id=3)
         peeps = [peep1, peep2, peep3]
         
         # Simulate various attendance patterns
@@ -403,12 +381,12 @@ class TestEventSequenceFinalizationMetrics:
 class TestEventSequenceFinalizationSorting:
     """Test EventSequence finalization sorting and index updates."""
     
-    def test_finalize_sorts_peeps_by_priority_descending(self):
+    def test_finalize_sorts_peeps_by_priority_descending(self, event_factory, peep_factory):
         """Test that finalize sorts peeps by priority (highest first)."""
-        event = create_simple_event(id=1)
-        peep1 = create_simple_peep(id=1, priority=1, index=0)
-        peep2 = create_simple_peep(id=2, priority=5, index=1) 
-        peep3 = create_simple_peep(id=3, priority=3, index=2)
+        event = event_factory(id=1)
+        peep1 = peep_factory(id=1, priority=1, index=0)
+        peep2 = peep_factory(id=2, priority=5, index=1) 
+        peep3 = peep_factory(id=3, priority=3, index=2)
         peeps = [peep1, peep2, peep3]  # Not sorted by priority initially
         
         sequence = EventSequence([event], peeps)
@@ -421,12 +399,12 @@ class TestEventSequenceFinalizationSorting:
         assert sequence.peeps[1] == peep3  
         assert sequence.peeps[2] == peep1
     
-    def test_finalize_updates_peep_indices_after_sorting(self):
+    def test_finalize_updates_peep_indices_after_sorting(self, event_factory, peep_factory):
         """Test that finalize updates peep indices to match new sorted order."""
-        event = create_simple_event(id=1)
-        peep1 = create_simple_peep(id=1, priority=1, index=0)
-        peep2 = create_simple_peep(id=2, priority=5, index=1)
-        peep3 = create_simple_peep(id=3, priority=3, index=2)
+        event = event_factory(id=1)
+        peep1 = peep_factory(id=1, priority=1, index=0)
+        peep2 = peep_factory(id=2, priority=5, index=1)
+        peep3 = peep_factory(id=3, priority=3, index=2)
         peeps = [peep1, peep2, peep3]
         
         sequence = EventSequence([event], peeps)
@@ -439,12 +417,12 @@ class TestEventSequenceFinalizationSorting:
         assert peep3.index == 1
         assert peep1.index == 2
     
-    def test_finalize_preserves_order_for_tied_priorities(self):
+    def test_finalize_preserves_order_for_tied_priorities(self, event_factory, peep_factory):
         """Test that finalize preserves original order when priorities are tied (stable sort)."""
-        event = create_simple_event(id=1)
-        peep1 = create_simple_peep(id=1, priority=2, index=0)
-        peep2 = create_simple_peep(id=2, priority=2, index=1)  # Same priority, should stay after peep1
-        peep3 = create_simple_peep(id=3, priority=3, index=2)
+        event = event_factory(id=1)
+        peep1 = peep_factory(id=1, priority=2, index=0)
+        peep2 = peep_factory(id=2, priority=2, index=1)  # Same priority, should stay after peep1
+        peep3 = peep_factory(id=3, priority=3, index=2)
         peeps = [peep1, peep2, peep3]  # Original order: 1, 2, 3
         
         sequence = EventSequence([event], peeps)
@@ -462,10 +440,10 @@ class TestEventSequenceFinalizationSorting:
 class TestEventSequenceDataConversion:
     """Test EventSequence data conversion for serialization."""
     
-    def test_to_dict_includes_essential_fields(self):
+    def test_to_dict_includes_essential_fields(self, event_factory, peep_factory):
         """Test that to_dict includes all fields needed for serialization."""
-        events = [create_simple_event(id=1)]
-        peeps = [create_simple_peep(id=1), create_simple_peep(id=2)]
+        events = [event_factory(id=1)]
+        peeps = [peep_factory(id=1), peep_factory(id=2)]
         
         sequence = EventSequence(events, peeps)
         sequence.num_unique_attendees = 2
@@ -482,10 +460,10 @@ class TestEventSequenceDataConversion:
         assert data['num_unique_attendees'] == 2
         assert data['system_weight'] == 10
     
-    def test_to_dict_serializes_valid_events_with_attendees(self):
+    def test_to_dict_serializes_valid_events_with_attendees(self, event_factory, peep_factory):
         """Test that to_dict properly serializes valid events with attendee info."""
-        event = create_simple_event(id=42)
-        peep = create_simple_peep(id=1, display_name='TestPeep')
+        event = event_factory(id=42)
+        peep = peep_factory(id=1, display_name='TestPeep')
         
         event.add_attendee(peep, Role.LEADER)
         
@@ -515,5 +493,4 @@ class TestEventSequenceDataConversion:
         assert data['system_weight'] == 0
 
 
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
+
