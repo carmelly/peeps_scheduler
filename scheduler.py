@@ -229,10 +229,11 @@ class Scheduler:
 		no_availability = [p.name for p in responders if not p.availability]
 		non_responders = [p.name for p in peeps if not p.responded]
 		num_available = len([p for p in responders if p.availability])
-		print(f"\n📋 Mini Availability Report: {len(responders)} responses /  {num_available} available / {len(peeps)} total")
-		print("  🚫  No availability:", ", ".join(sorted(no_availability)) if no_availability else "None")
-		print("  ❌  Did not respond:", ", ".join(sorted(non_responders)) if non_responders else "None")
-		print()
+		if self.interactive:
+			print(f"\n📋 Mini Availability Report: {len(responders)} responses /  {num_available} available / {len(peeps)} total")
+			print("  🚫  No availability:", ", ".join(sorted(no_availability)) if no_availability else "None")
+			print("  ❌  Did not respond:", ", ".join(sorted(non_responders)) if non_responders else "None")
+			print()
 		
 		logging.debug("Initial Peeps")
 		logging.debug(Peep.peeps_str(peeps))
@@ -266,9 +267,10 @@ class Scheduler:
 			logging.debug(Peep.peeps_str(best_sequence.peeps))
 			return best_sequence
 		else:
-			print(f"Found {len(best)} tied top sequences with {best[0].num_unique_attendees} unique attendees:")
-			for i, seq in enumerate(best):
-				print(f"[{i}] {seq}")
+			if self.interactive:
+				print(f"Found {len(best)} tied top sequences with {best[0].num_unique_attendees} unique attendees:")
+				for i, seq in enumerate(best):
+					print(f"[{i}] {seq}")
 
 			if self.interactive:
 				choice = input(f"Enter the index of the sequence to save (0-{len(best) - 1}): ")
