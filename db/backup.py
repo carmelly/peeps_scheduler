@@ -11,11 +11,11 @@ from data_manager import get_data_manager
 import constants
 
 # Database configuration
-DB_PATH = Path(constants.DEFAULT_DB_PATH)
-SCHEMA_PATH = Path("db/schema.sql")
+data_manager = get_data_manager()
+DB_PATH = data_manager.get_database_path()
+SCHEMA_PATH = Path(constants.SCHEMA_PATH)
 
 # Use DataManager for backup paths
-data_manager = get_data_manager()
 BACKUP_DIR = data_manager.get_db_backups_path()
 BACKUP_DIR.mkdir(exist_ok=True)
 

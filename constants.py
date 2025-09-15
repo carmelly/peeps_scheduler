@@ -27,10 +27,8 @@ CLASS_CONFIG = {
 ABS_MIN_ROLE = min(config["min_role"] for config in CLASS_CONFIG.values() if config["allow_downgrade"])
 ABS_MAX_ROLE = max(config["max_role"] for config in CLASS_CONFIG.values())
 
-# === Data Management Configuration ===
-
 # Private data submodule root - can be overridden by environment
 PRIVATE_DATA_ROOT = os.getenv("PEEPS_DATA_PATH", "peeps_data")
 
-# Database configuration
-DEFAULT_DB_PATH = "db/peeps_scheduler.db"
+# Database paths
+SCHEMA_PATH = "db/schema.sql"
