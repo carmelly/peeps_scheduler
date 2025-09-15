@@ -123,7 +123,8 @@ def load_data_from_json(filename):
 	peeps = [Peep(**p) for p in peeps_data] if peeps_data else []
 
 	sorted_peeps = sorted(peeps, key=lambda peep: peep.index)
-	assert Peep.is_peeps_list_sorted_by_priority(peeps), "Peeps are not sorted by priority; check input file."
+	if not Peep.is_peeps_list_sorted_by_priority(sorted_peeps):
+		raise ValueError("Peeps data is not sorted by priority (highest to lowest). Check input file data integrity.")
 
 	return sorted_peeps, events
 

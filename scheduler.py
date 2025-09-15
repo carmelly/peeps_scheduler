@@ -8,15 +8,17 @@ import utils
 from data_manager import get_data_manager
 
 class Scheduler:
-	def __init__(self, data_folder, max_events):
+	def __init__(self, data_folder, max_events, interactive=True, sequence_choice=0):
 		self.data_folder = data_folder
 		self.max_events = max_events
+		self.interactive = interactive
+		self.sequence_choice = sequence_choice  # Which tied sequence to auto-select in non-interactive mode
 		self.data_manager = get_data_manager()
-		
+
 		# Ensure period directory exists
 		self.period_path = self.data_manager.ensure_period_exists(data_folder)
-		self.output_json = self.period_path / 'output.json'
-		self.result_json = self.period_path / 'results.json'
+		self.output_json = (self.period_path / 'output.json').as_posix()
+		self.result_json = (self.period_path / 'results.json').as_posix()
 		self.target_max = None # max per role used for each run 
 
 	def sanitize_events(self, events, peeps):
@@ -215,8 +217,8 @@ class Scheduler:
 			logging.info(f"Generating test data and saving to {self.output_json}")
 			utils.generate_test_data(5, 30, self.output_json)
 		elif load_from_csv:
-			responses_csv = self.period_path / 'responses.csv'
-			peeps_csv = self.period_path / 'members.csv'
+			responses_csv = (self.period_path / 'responses.csv').as_posix()
+			peeps_csv = (self.period_path / 'members.csv').as_posix()
 			logging.info(f"Loading data from {peeps_csv} and {responses_csv}")
 			file_io.convert_to_json(str(responses_csv), str(peeps_csv), str(self.output_json))
 
@@ -227,10 +229,11 @@ class Scheduler:
 		no_availability = [p.name for p in responders if not p.availability]
 		non_responders = [p.name for p in peeps if not p.responded]
 		num_available = len([p for p in responders if p.availability])
-		print(f"\n📋 Mini Availability Report: {len(responders)} responses /  {num_available} available / {len(peeps)} total")
-		print("  🚫  No availability:", ", ".join(sorted(no_availability)) if no_availability else "None")
-		print("  ❌  Did not respond:", ", ".join(sorted(non_responders)) if non_responders else "None")
-		print()
+		if self.interactive:
+			print(f"\n📋 Mini Availability Report: {len(responders)} responses /  {num_available} available / {len(peeps)} total")
+			print("  🚫  No availability:", ", ".join(sorted(no_availability)) if no_availability else "None")
+			print("  ❌  Did not respond:", ", ".join(sorted(non_responders)) if non_responders else "None")
+			print()
 		
 		logging.debug("Initial Peeps")
 		logging.debug(Peep.peeps_str(peeps))
@@ -262,18 +265,36 @@ class Scheduler:
 			file_io.save_event_sequence(best_sequence, str(self.result_json))
 			logging.debug("Final Peeps:")
 			logging.debug(Peep.peeps_str(best_sequence.peeps))
+			return best_sequence
 		else:
-			print(f"Found {len(best)} tied top sequences with {best[0].num_unique_attendees} unique attendees:")
-			for i, seq in enumerate(best):
-				print(f"[{i}] {seq}")
+			if self.interactive:
+				print(f"Found {len(best)} tied top sequences with {best[0].num_unique_attendees} unique attendees:")
+				for i, seq in enumerate(best):
+					print(f"[{i}] {seq}")
 
-			choice = input(f"Enter the index of the sequence to save (0-{len(best) - 1}): ")
-			try:
-				chosen_index = int(choice)
-				best_sequence = best[chosen_index]
-				logging.info(f"Selected {best_sequence}")
+			if self.interactive:
+				choice = input(f"Enter the index of the sequence to save (0-{len(best) - 1}): ")
+				try:
+					chosen_index = int(choice)
+					best_sequence = best[chosen_index]
+					logging.info(f"Selected {best_sequence}")
+					file_io.save_event_sequence(best_sequence, str(self.result_json))
+					logging.debug("Final Peeps:")
+					logging.debug(Peep.peeps_str(best_sequence.peeps))
+					return best_sequence
+				except (ValueError, IndexError):
+					logging.error("Invalid choice. No sequence was saved.")
+					return None
+			else:
+				# In non-interactive mode, auto-select the specified sequence
+				if self.sequence_choice < len(best):
+					best_sequence = best[self.sequence_choice]
+					logging.info(f"Auto-selected tied sequence {self.sequence_choice}: {best_sequence}")
+				else:
+					logging.warning(f"Sequence choice {self.sequence_choice} out of range, selecting first")
+					best_sequence = best[0]
+					logging.info(f"Auto-selected first tied sequence: {best_sequence}")
 				file_io.save_event_sequence(best_sequence, str(self.result_json))
 				logging.debug("Final Peeps:")
 				logging.debug(Peep.peeps_str(best_sequence.peeps))
-			except (ValueError, IndexError):
-				logging.error("Invalid choice. No sequence was saved.")
+				return best_sequence

@@ -1,0 +1,964 @@
+{
+    "valid_events": [
+        {
+            "id": 0,
+            "date": "2025-09-12 17:00",
+            "duration_minutes": 90,
+            "attendees": [
+                {
+                    "id": 40,
+                    "name": "P40",
+                    "role": "Leader"
+                },
+                {
+                    "id": 41,
+                    "name": "P41",
+                    "role": "Leader"
+                },
+                {
+                    "id": 2,
+                    "name": "P2",
+                    "role": "Follower"
+                },
+                {
+                    "id": 35,
+                    "name": "P35",
+                    "role": "Follower"
+                },
+                {
+                    "id": 39,
+                    "name": "P39",
+                    "role": "Leader"
+                },
+                {
+                    "id": 20,
+                    "name": "P20",
+                    "role": "Leader"
+                },
+                {
+                    "id": 19,
+                    "name": "P19",
+                    "role": "Follower"
+                },
+                {
+                    "id": 18,
+                    "name": "P18",
+                    "role": "Follower"
+                },
+                {
+                    "id": 37,
+                    "name": "P37",
+                    "role": "Follower"
+                },
+                {
+                    "id": 15,
+                    "name": "P15",
+                    "role": "Leader"
+                }
+            ],
+            "alternates": [],
+            "leaders_string": "Leaders(5): P15, P20, P39, P40, P41",
+            "followers_string": "Followers(5): P18, P19, P2, P35, P37"
+        },
+        {
+            "id": 4,
+            "date": "2025-09-27 16:00",
+            "duration_minutes": 120,
+            "attendees": [
+                {
+                    "id": 21,
+                    "name": "P21",
+                    "role": "Leader"
+                },
+                {
+                    "id": 42,
+                    "name": "P42",
+                    "role": "Follower"
+                },
+                {
+                    "id": 14,
+                    "name": "P14",
+                    "role": "Follower"
+                },
+                {
+                    "id": 24,
+                    "name": "P24",
+                    "role": "Leader"
+                },
+                {
+                    "id": 22,
+                    "name": "P22",
+                    "role": "Follower"
+                },
+                {
+                    "id": 5,
+                    "name": "P5",
+                    "role": "Leader"
+                },
+                {
+                    "id": 28,
+                    "name": "P28",
+                    "role": "Follower"
+                },
+                {
+                    "id": 31,
+                    "name": "P31",
+                    "role": "Leader"
+                },
+                {
+                    "id": 9,
+                    "name": "P9",
+                    "role": "Leader"
+                },
+                {
+                    "id": 3,
+                    "name": "P3",
+                    "role": "Leader"
+                },
+                {
+                    "id": 11,
+                    "name": "P11",
+                    "role": "Leader"
+                },
+                {
+                    "id": 19,
+                    "name": "P19",
+                    "role": "Follower"
+                },
+                {
+                    "id": 18,
+                    "name": "P18",
+                    "role": "Follower"
+                },
+                {
+                    "id": 37,
+                    "name": "P37",
+                    "role": "Follower"
+                }
+            ],
+            "alternates": [
+                {
+                    "id": 4,
+                    "name": "P4",
+                    "role": "Leader"
+                },
+                {
+                    "id": 20,
+                    "name": "P20",
+                    "role": "Leader"
+                }
+            ],
+            "leaders_string": "Leaders(7): P11, P21, P24, P3, P31, P5, P9 [alt: P20, P4]",
+            "followers_string": "Followers(7): P14, P18, P19, P22, P28, P37, P42"
+        },
+        {
+            "id": 3,
+            "date": "2025-09-26 17:00",
+            "duration_minutes": 90,
+            "attendees": [
+                {
+                    "id": 33,
+                    "name": "P33",
+                    "role": "Follower"
+                },
+                {
+                    "id": 4,
+                    "name": "P4",
+                    "role": "Leader"
+                },
+                {
+                    "id": 41,
+                    "name": "P41",
+                    "role": "Leader"
+                },
+                {
+                    "id": 20,
+                    "name": "P20",
+                    "role": "Leader"
+                },
+                {
+                    "id": 31,
+                    "name": "P31",
+                    "role": "Leader"
+                },
+                {
+                    "id": 19,
+                    "name": "P19",
+                    "role": "Follower"
+                },
+                {
+                    "id": 18,
+                    "name": "P18",
+                    "role": "Follower"
+                },
+                {
+                    "id": 37,
+                    "name": "P37",
+                    "role": "Follower"
+                }
+            ],
+            "alternates": [],
+            "leaders_string": "Leaders(4): P20, P31, P4, P41",
+            "followers_string": "Followers(4): P18, P19, P33, P37"
+        },
+        {
+            "id": 1,
+            "date": "2025-09-13 16:00",
+            "duration_minutes": 90,
+            "attendees": [
+                {
+                    "id": 32,
+                    "name": "P32",
+                    "role": "Follower"
+                },
+                {
+                    "id": 35,
+                    "name": "P35",
+                    "role": "Follower"
+                },
+                {
+                    "id": 39,
+                    "name": "P39",
+                    "role": "Leader"
+                },
+                {
+                    "id": 42,
+                    "name": "P42",
+                    "role": "Follower"
+                },
+                {
+                    "id": 24,
+                    "name": "P24",
+                    "role": "Leader"
+                },
+                {
+                    "id": 5,
+                    "name": "P5",
+                    "role": "Leader"
+                },
+                {
+                    "id": 9,
+                    "name": "P9",
+                    "role": "Leader"
+                },
+                {
+                    "id": 11,
+                    "name": "P11",
+                    "role": "Leader"
+                },
+                {
+                    "id": 19,
+                    "name": "P19",
+                    "role": "Follower"
+                },
+                {
+                    "id": 37,
+                    "name": "P37",
+                    "role": "Follower"
+                }
+            ],
+            "alternates": [
+                {
+                    "id": 20,
+                    "name": "P20",
+                    "role": "Leader"
+                }
+            ],
+            "leaders_string": "Leaders(5): P11, P24, P39, P5, P9 [alt: P20]",
+            "followers_string": "Followers(5): P19, P32, P35, P37, P42"
+        },
+        {
+            "id": 2,
+            "date": "2025-09-17 18:00",
+            "duration_minutes": 60,
+            "attendees": [
+                {
+                    "id": 22,
+                    "name": "P22",
+                    "role": "Follower"
+                },
+                {
+                    "id": 28,
+                    "name": "P28",
+                    "role": "Follower"
+                },
+                {
+                    "id": 3,
+                    "name": "P3",
+                    "role": "Leader"
+                },
+                {
+                    "id": 33,
+                    "name": "P33",
+                    "role": "Follower"
+                },
+                {
+                    "id": 4,
+                    "name": "P4",
+                    "role": "Leader"
+                },
+                {
+                    "id": 35,
+                    "name": "P35",
+                    "role": "Follower"
+                }
+            ],
+            "alternates": [],
+            "leaders_string": "Leaders(3): P3, *P35, P4",
+            "followers_string": "Followers(3): P22, P28, P33"
+        }
+    ],
+    "peeps": [
+        {
+            "id": 7,
+            "name": "",
+            "display_name": "P7",
+            "email": "testperson7@testemail.com",
+            "role": "Leader",
+            "index": 0,
+            "priority": 5,
+            "total_attended": 0
+        },
+        {
+            "id": 12,
+            "name": "",
+            "display_name": "P12",
+            "email": "testperson12@testemail.com",
+            "role": "Leader",
+            "index": 1,
+            "priority": 4,
+            "total_attended": 0
+        },
+        {
+            "id": 13,
+            "name": "",
+            "display_name": "P13",
+            "email": "testperson13@testemail.com",
+            "role": "Leader",
+            "index": 2,
+            "priority": 4,
+            "total_attended": 0
+        },
+        {
+            "id": 17,
+            "name": "",
+            "display_name": "P17",
+            "email": "testperson17@testemail.com",
+            "role": "Follower",
+            "index": 3,
+            "priority": 4,
+            "total_attended": 0
+        },
+        {
+            "id": 27,
+            "name": "",
+            "display_name": "P27",
+            "email": "testperson27@testemail.com",
+            "role": "Follower",
+            "index": 4,
+            "priority": 4,
+            "total_attended": 0
+        },
+        {
+            "id": 30,
+            "name": "",
+            "display_name": "P30",
+            "email": "testperson30@testemail.com",
+            "role": "Leader",
+            "index": 5,
+            "priority": 3,
+            "total_attended": 0
+        },
+        {
+            "id": 34,
+            "name": "",
+            "display_name": "P34",
+            "email": "testperson34@testemail.com",
+            "role": "Leader",
+            "index": 6,
+            "priority": 1,
+            "total_attended": 0
+        },
+        {
+            "id": 16,
+            "name": "",
+            "display_name": "P16",
+            "email": "testperson16@testemail.com",
+            "role": "Leader",
+            "index": 7,
+            "priority": 1,
+            "total_attended": 1,
+            "availability": [],
+            "switch_pref": 1,
+            "responded": true,
+            "event_limit": 0,
+            "min_interval_days": 99
+        },
+        {
+            "id": 36,
+            "name": "",
+            "display_name": "P36",
+            "email": "testperson36@testemail.com",
+            "role": "Leader",
+            "index": 8,
+            "priority": 1,
+            "total_attended": 2,
+            "availability": [],
+            "switch_pref": 1,
+            "responded": true,
+            "event_limit": 4,
+            "min_interval_days": 99
+        },
+        {
+            "id": 10,
+            "name": "",
+            "display_name": "P10",
+            "email": "testperson10@testemail.com",
+            "role": "Follower",
+            "index": 9,
+            "priority": 1,
+            "total_attended": 1,
+            "availability": [],
+            "switch_pref": 1,
+            "responded": true,
+            "event_limit": 1,
+            "min_interval_days": 99
+        },
+        {
+            "id": 6,
+            "name": "",
+            "display_name": "P6",
+            "email": "testperson6@testemail.com",
+            "role": "Follower",
+            "index": 10,
+            "priority": 1,
+            "total_attended": 3,
+            "availability": [],
+            "switch_pref": 1,
+            "responded": true,
+            "event_limit": 1,
+            "min_interval_days": 99
+        },
+        {
+            "id": 8,
+            "name": "",
+            "display_name": "P8",
+            "email": "testperson8@testemail.com",
+            "role": "Follower",
+            "index": 11,
+            "priority": 0,
+            "total_attended": 1
+        },
+        {
+            "id": 23,
+            "name": "",
+            "display_name": "P23",
+            "email": "testperson23@testemail.com",
+            "role": "Leader",
+            "index": 12,
+            "priority": 0,
+            "total_attended": 2
+        },
+        {
+            "id": 25,
+            "name": "",
+            "display_name": "P25",
+            "email": "testperson25@testemail.com",
+            "role": "Follower",
+            "index": 13,
+            "priority": 0,
+            "total_attended": 4
+        },
+        {
+            "id": 29,
+            "name": "",
+            "display_name": "P29",
+            "email": "testperson29@testemail.com",
+            "role": "Leader",
+            "index": 14,
+            "priority": 0,
+            "total_attended": 2
+        },
+        {
+            "id": 1,
+            "name": "",
+            "display_name": "P1",
+            "email": "testperson1@testemail.com",
+            "role": "Follower",
+            "index": 15,
+            "priority": 0,
+            "total_attended": 7
+        },
+        {
+            "id": 38,
+            "name": "",
+            "display_name": "P38",
+            "email": "testperson38@testemail.com",
+            "role": "Leader",
+            "index": 16,
+            "priority": 0,
+            "total_attended": 3
+        },
+        {
+            "id": 26,
+            "name": "",
+            "display_name": "P26",
+            "email": "testperson26@testemail.com",
+            "role": "Follower",
+            "index": 17,
+            "priority": 0,
+            "total_attended": 8
+        },
+        {
+            "id": 40,
+            "name": "",
+            "display_name": "P40",
+            "email": "testperson40@testemail.com",
+            "role": "Leader",
+            "index": 18,
+            "priority": 0,
+            "total_attended": 1,
+            "availability": [
+                0,
+                1,
+                3
+            ],
+            "switch_pref": 1,
+            "responded": true,
+            "event_limit": 1,
+            "min_interval_days": 20
+        },
+        {
+            "id": 2,
+            "name": "",
+            "display_name": "P2",
+            "email": "testperson2@testemail.com",
+            "role": "Follower",
+            "index": 19,
+            "priority": 0,
+            "total_attended": 6,
+            "availability": [
+                0,
+                1
+            ],
+            "switch_pref": 1,
+            "responded": true,
+            "event_limit": 1,
+            "min_interval_days": 0
+        },
+        {
+            "id": 15,
+            "name": "",
+            "display_name": "P15",
+            "email": "testperson15@testemail.com",
+            "role": "Leader",
+            "index": 20,
+            "priority": 0,
+            "total_attended": 5,
+            "availability": [
+                0,
+                1,
+                2
+            ],
+            "switch_pref": 1,
+            "responded": true,
+            "event_limit": 1,
+            "min_interval_days": 13
+        },
+        {
+            "id": 21,
+            "name": "",
+            "display_name": "P21",
+            "email": "testperson21@testemail.com",
+            "role": "Leader",
+            "index": 21,
+            "priority": 0,
+            "total_attended": 2,
+            "availability": [
+                1,
+                4
+            ],
+            "switch_pref": 1,
+            "responded": true,
+            "event_limit": 1,
+            "min_interval_days": 13
+        },
+        {
+            "id": 14,
+            "name": "",
+            "display_name": "P14",
+            "email": "testperson14@testemail.com",
+            "role": "Follower",
+            "index": 22,
+            "priority": 0,
+            "total_attended": 6,
+            "availability": [
+                1,
+                4
+            ],
+            "switch_pref": 1,
+            "responded": true,
+            "event_limit": 1,
+            "min_interval_days": 13
+        },
+        {
+            "id": 41,
+            "name": "",
+            "display_name": "P41",
+            "email": "testperson41@testemail.com",
+            "role": "Leader",
+            "index": 23,
+            "priority": 0,
+            "total_attended": 2,
+            "availability": [
+                0,
+                1,
+                2,
+                3,
+                4
+            ],
+            "switch_pref": 3,
+            "responded": true,
+            "event_limit": 4,
+            "min_interval_days": 6
+        },
+        {
+            "id": 20,
+            "name": "",
+            "display_name": "P20",
+            "email": "testperson20@testemail.com",
+            "role": "Leader",
+            "index": 24,
+            "priority": 0,
+            "total_attended": 11,
+            "availability": [
+                0,
+                1,
+                3,
+                4
+            ],
+            "switch_pref": 3,
+            "responded": true,
+            "event_limit": 4,
+            "min_interval_days": 0
+        },
+        {
+            "id": 31,
+            "name": "",
+            "display_name": "P31",
+            "email": "testperson31@testemail.com",
+            "role": "Leader",
+            "index": 25,
+            "priority": 0,
+            "total_attended": 5,
+            "availability": [
+                3,
+                4
+            ],
+            "switch_pref": 3,
+            "responded": true,
+            "event_limit": 2,
+            "min_interval_days": 1
+        },
+        {
+            "id": 18,
+            "name": "",
+            "display_name": "P18",
+            "email": "testperson18@testemail.com",
+            "role": "Follower",
+            "index": 26,
+            "priority": 0,
+            "total_attended": 11,
+            "availability": [
+                0,
+                1,
+                3,
+                4
+            ],
+            "switch_pref": 1,
+            "responded": true,
+            "event_limit": 3,
+            "min_interval_days": 0
+        },
+        {
+            "id": 32,
+            "name": "",
+            "display_name": "P32",
+            "email": "testperson32@testemail.com",
+            "role": "Follower",
+            "index": 27,
+            "priority": 0,
+            "total_attended": 3,
+            "availability": [
+                1
+            ],
+            "switch_pref": 1,
+            "responded": true,
+            "event_limit": 1,
+            "min_interval_days": 6
+        },
+        {
+            "id": 39,
+            "name": "",
+            "display_name": "P39",
+            "email": "testperson39@testemail.com",
+            "role": "Leader",
+            "index": 28,
+            "priority": 0,
+            "total_attended": 3,
+            "availability": [
+                0,
+                1
+            ],
+            "switch_pref": 3,
+            "responded": true,
+            "event_limit": 2,
+            "min_interval_days": 0
+        },
+        {
+            "id": 42,
+            "name": "",
+            "display_name": "P42",
+            "email": "testperson42@testemail.com",
+            "role": "Follower",
+            "index": 29,
+            "priority": 0,
+            "total_attended": 2,
+            "availability": [
+                1,
+                4
+            ],
+            "switch_pref": 1,
+            "responded": true,
+            "event_limit": 4,
+            "min_interval_days": 6
+        },
+        {
+            "id": 24,
+            "name": "",
+            "display_name": "P24",
+            "email": "testperson24@testemail.com",
+            "role": "Leader",
+            "index": 30,
+            "priority": 0,
+            "total_attended": 6,
+            "availability": [
+                1,
+                4
+            ],
+            "switch_pref": 1,
+            "responded": true,
+            "event_limit": 2,
+            "min_interval_days": 13
+        },
+        {
+            "id": 5,
+            "name": "",
+            "display_name": "P5",
+            "email": "testperson5@testemail.com",
+            "role": "Leader",
+            "index": 31,
+            "priority": 0,
+            "total_attended": 11,
+            "availability": [
+                1,
+                4
+            ],
+            "switch_pref": 1,
+            "responded": true,
+            "event_limit": 2,
+            "min_interval_days": 6
+        },
+        {
+            "id": 9,
+            "name": "",
+            "display_name": "P9",
+            "email": "testperson9@testemail.com",
+            "role": "Leader",
+            "index": 32,
+            "priority": 0,
+            "total_attended": 8,
+            "availability": [
+                1,
+                4
+            ],
+            "switch_pref": 1,
+            "responded": true,
+            "event_limit": 2,
+            "min_interval_days": 6
+        },
+        {
+            "id": 11,
+            "name": "",
+            "display_name": "P11",
+            "email": "testperson11@testemail.com",
+            "role": "Leader",
+            "index": 33,
+            "priority": 0,
+            "total_attended": 9,
+            "availability": [
+                1,
+                4
+            ],
+            "switch_pref": 1,
+            "responded": true,
+            "event_limit": 2,
+            "min_interval_days": 13
+        },
+        {
+            "id": 19,
+            "name": "",
+            "display_name": "P19",
+            "email": "testperson19@testemail.com",
+            "role": "Follower",
+            "index": 34,
+            "priority": 0,
+            "total_attended": 13,
+            "availability": [
+                0,
+                1,
+                3,
+                4
+            ],
+            "switch_pref": 1,
+            "responded": true,
+            "event_limit": 4,
+            "min_interval_days": 0
+        },
+        {
+            "id": 37,
+            "name": "",
+            "display_name": "P37",
+            "email": "testperson37@testemail.com",
+            "role": "Follower",
+            "index": 35,
+            "priority": 0,
+            "total_attended": 6,
+            "availability": [
+                0,
+                1,
+                2,
+                3,
+                4
+            ],
+            "switch_pref": 1,
+            "responded": true,
+            "event_limit": 4,
+            "min_interval_days": 0
+        },
+        {
+            "id": 22,
+            "name": "",
+            "display_name": "P22",
+            "email": "testperson22@testemail.com",
+            "role": "Follower",
+            "index": 36,
+            "priority": 0,
+            "total_attended": 6,
+            "availability": [
+                2,
+                4
+            ],
+            "switch_pref": 3,
+            "responded": true,
+            "event_limit": 2,
+            "min_interval_days": 6
+        },
+        {
+            "id": 28,
+            "name": "",
+            "display_name": "P28",
+            "email": "testperson28@testemail.com",
+            "role": "Follower",
+            "index": 37,
+            "priority": 0,
+            "total_attended": 3,
+            "availability": [
+                2,
+                3,
+                4
+            ],
+            "switch_pref": 3,
+            "responded": true,
+            "event_limit": 2,
+            "min_interval_days": 6
+        },
+        {
+            "id": 3,
+            "name": "",
+            "display_name": "P3",
+            "email": "testperson3@testemail.com",
+            "role": "Leader",
+            "index": 38,
+            "priority": 0,
+            "total_attended": 9,
+            "availability": [
+                2,
+                4
+            ],
+            "switch_pref": 2,
+            "responded": true,
+            "event_limit": 3,
+            "min_interval_days": 0
+        },
+        {
+            "id": 33,
+            "name": "",
+            "display_name": "P33",
+            "email": "testperson33@testemail.com",
+            "role": "Follower",
+            "index": 39,
+            "priority": 0,
+            "total_attended": 5,
+            "availability": [
+                2,
+                3
+            ],
+            "switch_pref": 1,
+            "responded": true,
+            "event_limit": 2,
+            "min_interval_days": 0
+        },
+        {
+            "id": 4,
+            "name": "",
+            "display_name": "P4",
+            "email": "testperson4@testemail.com",
+            "role": "Leader",
+            "index": 40,
+            "priority": 0,
+            "total_attended": 12,
+            "availability": [
+                2,
+                3,
+                4
+            ],
+            "switch_pref": 3,
+            "responded": true,
+            "event_limit": 3,
+            "min_interval_days": 0
+        },
+        {
+            "id": 35,
+            "name": "",
+            "display_name": "P35",
+            "email": "testperson35@testemail.com",
+            "role": "Follower",
+            "index": 41,
+            "priority": 0,
+            "total_attended": 5,
+            "availability": [
+                0,
+                1,
+                2
+            ],
+            "switch_pref": 2,
+            "responded": true,
+            "event_limit": 4,
+            "min_interval_days": 0
+        }
+    ],
+    "num_unique_attendees": 24,
+    "priority_fulfilled": 1,
+    "system_weight": 29
+}
