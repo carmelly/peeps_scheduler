@@ -6,12 +6,13 @@ from pathlib import Path
 
 # Add parent directory for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from data_manager import get_data_manager
 import constants
 
-# Use constants for database path
-DB_PATH = Path(constants.DEFAULT_DB_PATH)
+# Use DataManager for database path
+DB_PATH = get_data_manager().get_database_path()
 MIGRATIONS_PATH = Path("db/migrations")
-SCHEMA_PATH = Path("db/schema.sql")
+SCHEMA_PATH = Path(constants.SCHEMA_PATH)
 
 # Resolve the local path to sqlite3.exe
 SQLITE_EXE = os.path.join(os.path.dirname(__file__), "sqlite3.exe")
