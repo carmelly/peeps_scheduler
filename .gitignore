@@ -12,6 +12,9 @@ __pycache__/
 .claude/
 CLAUDE.md
 
+# Obsidian vault configuration
+.obsidian/
+
 # Temporary files
 .tmp.driveupload/*
 
