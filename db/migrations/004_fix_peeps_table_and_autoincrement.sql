@@ -1,100 +1,16 @@
-CREATE TABLE __migrations_applied__ (
-				filename TEXT PRIMARY KEY,
-				applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
-			);
-CREATE TABLE raw_members (
-	id INTEGER PRIMARY KEY AUTOINCREMENT,
-	period_name TEXT NOT NULL,
-	csv_id TEXT,
-	Name TEXT,
-	"Display Name" TEXT,  -- Preserve spaces in column names
-	"Email Address" TEXT,
-	Role TEXT,
-	"Index" INTEGER,
-	Priority INTEGER,
-	"Total Attended" INTEGER,
-	Active TEXT,
-	"Date Joined" TEXT,
-	raw_data TEXT,  -- Full row as JSON for any extra fields
-	imported_at DATETIME DEFAULT CURRENT_TIMESTAMP, data_quality_notes TEXT DEFAULT '', reconstructed_flag INTEGER DEFAULT 0,
-	UNIQUE(period_name, csv_id)  -- Prevent duplicate imports
-);
-CREATE TABLE sqlite_sequence(name,seq);
-CREATE TABLE raw_responses (
-	id INTEGER PRIMARY KEY AUTOINCREMENT,
-	period_name TEXT NOT NULL,
-	row_number INTEGER,
-	Timestamp TEXT,
-	"Email Address" TEXT,
-	Name TEXT,
-	"Primary Role" TEXT,
-	"Secondary Role" TEXT,
-	"Max Sessions" TEXT,
-	Availability TEXT,
-	"Min Interval Days" TEXT,
-	"Preferred gap between sessions?" TEXT,
-	"Partnership Preference" TEXT,
-	"Questions or Comments for Organizers" TEXT,
-	"Questions or Comments for Leilani" TEXT,
-	raw_data TEXT,  -- Full row as JSON for schema variations
-	imported_at DATETIME DEFAULT CURRENT_TIMESTAMP, data_quality_notes TEXT DEFAULT '', reconstructed_flag INTEGER DEFAULT 0,
-	UNIQUE(period_name, row_number, Name, "Email Address")  -- Prevent duplicate imports
-);
-CREATE TABLE raw_results (
-	id INTEGER PRIMARY KEY AUTOINCREMENT,
-	period_name TEXT NOT NULL UNIQUE,
-	results_json TEXT,  -- Complete JSON as text
-	imported_at DATETIME DEFAULT CURRENT_TIMESTAMP
-, data_quality_notes TEXT DEFAULT '', reconstructed_flag INTEGER DEFAULT 0);
-CREATE TABLE raw_output (
-	id INTEGER PRIMARY KEY AUTOINCREMENT,
-	period_name TEXT NOT NULL UNIQUE,
-	output_json TEXT,  -- Complete JSON as text
-	imported_at DATETIME DEFAULT CURRENT_TIMESTAMP
-, data_quality_notes TEXT DEFAULT '', reconstructed_flag INTEGER DEFAULT 0);
-CREATE TABLE raw_actual_attendance (
-	id INTEGER PRIMARY KEY AUTOINCREMENT,
-	period_name TEXT NOT NULL UNIQUE,
-	actual_attendance_json TEXT,  -- Complete JSON as text
-	imported_at DATETIME DEFAULT CURRENT_TIMESTAMP
-, data_quality_notes TEXT DEFAULT '', reconstructed_flag INTEGER DEFAULT 0);
-CREATE INDEX idx_raw_members_period ON raw_members(period_name);
-CREATE INDEX idx_raw_responses_period ON raw_responses(period_name);
-CREATE INDEX idx_raw_results_period ON raw_results(period_name);
-CREATE INDEX idx_raw_output_period ON raw_output(period_name);
-CREATE INDEX idx_raw_actual_attendance_period ON raw_actual_attendance(period_name);
-CREATE INDEX idx_raw_members_email ON raw_members("Email Address");
-CREATE INDEX idx_raw_responses_email ON raw_responses("Email Address");
-CREATE TABLE schedule_periods (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    period_name TEXT UNIQUE NOT NULL,    -- "2025-09", "2024-10", etc.
-    display_name TEXT,                   -- "May 2025"
-    start_date DATE NOT NULL,            -- Period start (when available)
-    end_date DATE NOT NULL,              -- Period end (when available) 
-    status TEXT DEFAULT 'draft',         -- draft, active, completed
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+-- Fix peeps table: add AUTOINCREMENT and rename members -> peeps
+-- Since tables are empty, we can simply drop and recreate with correct schema
 
-    CHECK(start_date <= end_date),
-    CHECK(status IN ('draft', 'active', 'completed'))
-);
-CREATE TABLE events (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,     -- Global unique event ID
-    period_id INTEGER NOT NULL,               -- Foreign key to schedule_periods
-    legacy_period_event_id INTEGER,           -- Original per-period ID (0,1,2,3...)
-    event_datetime DATETIME NOT NULL,         -- Event date and time
-    duration_minutes INTEGER NOT NULL,        -- 60, 90, or 120 minutes
-    status TEXT DEFAULT 'scheduled',           -- scheduled, cancelled, completed
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    
-    FOREIGN KEY (period_id) REFERENCES schedule_periods(id),
-    UNIQUE(period_id, legacy_period_event_id),
-    UNIQUE(event_datetime),                    -- No two events at same time
+-- Drop existing empty tables (in dependency order)
+DROP TABLE IF EXISTS event_assignment_changes;
+DROP TABLE IF EXISTS event_attendance;
+DROP TABLE IF EXISTS event_assignments;
+DROP TABLE IF EXISTS event_availability;
+DROP TABLE IF EXISTS responses;
+DROP TABLE IF EXISTS member_period_snapshots;
+DROP TABLE IF EXISTS members;
 
-    CHECK(duration_minutes IN (60, 90, 120)),
-    CHECK(status IN ('scheduled', 'cancelled', 'completed'))
-);
-CREATE INDEX idx_events_period ON events(period_id);
-CREATE INDEX idx_events_datetime ON events(event_datetime);
+-- Create peeps table (renamed from members) with AUTOINCREMENT
 CREATE TABLE peeps (
     id INTEGER PRIMARY KEY AUTOINCREMENT,   -- Now with AUTOINCREMENT for new peeps
     full_name TEXT NOT NULL,                -- From "Name" column
@@ -108,6 +24,8 @@ CREATE TABLE peeps (
 
     CHECK(primary_role IN ('leader', 'follower'))
 );
+
+-- Recreate other tables with peep_id references
 CREATE TABLE member_period_snapshots (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     peep_id INTEGER NOT NULL,                    -- Renamed from member_id
@@ -127,6 +45,7 @@ CREATE TABLE member_period_snapshots (
     CHECK(index_position >= 0),
     CHECK(total_attended >= 0)
 );
+
 CREATE TABLE responses (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     peep_id INTEGER NOT NULL,                    -- Renamed from member_id
@@ -150,6 +69,7 @@ CREATE TABLE responses (
     CHECK(max_sessions > 0),
     CHECK(min_interval_days >= 0)
 );
+
 CREATE TABLE event_availability (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     response_id INTEGER NOT NULL,
@@ -159,6 +79,7 @@ CREATE TABLE event_availability (
     FOREIGN KEY (event_id) REFERENCES events(id),
     UNIQUE(response_id, event_id)
 );
+
 CREATE TABLE event_assignments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     event_id INTEGER NOT NULL,
@@ -176,6 +97,7 @@ CREATE TABLE event_assignments (
     CHECK(assigned_role IN ('leader', 'follower')),
     CHECK(assignment_type IN ('attendee', 'alternate'))
 );
+
 CREATE TABLE event_attendance (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     event_id INTEGER NOT NULL,
@@ -211,6 +133,8 @@ CREATE TABLE event_attendance (
     CHECK(expected_role IS NULL OR expected_role IN ('leader', 'follower')),
     CHECK(actual_role IS NULL OR actual_role IN ('leader', 'follower'))
 );
+
+-- Recreate event_assignment_changes table (unchanged)
 CREATE TABLE event_assignment_changes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     event_id INTEGER NOT NULL,
@@ -234,6 +158,8 @@ CREATE TABLE event_assignment_changes (
         'change_role'              -- Switch leader/follower
     ))
 );
+
+-- Recreate indexes with updated names
 CREATE INDEX idx_peeps_email ON peeps(email);
 CREATE INDEX idx_peeps_active ON peeps(active);
 CREATE INDEX idx_member_snapshots_period ON member_period_snapshots(period_id);
