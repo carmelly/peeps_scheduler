@@ -108,25 +108,6 @@ CREATE TABLE peeps (
 
     CHECK(primary_role IN ('leader', 'follower'))
 );
-CREATE TABLE member_period_snapshots (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    peep_id INTEGER NOT NULL,                    -- Renamed from member_id
-    period_id INTEGER NOT NULL,
-    role TEXT NOT NULL,                          -- "leader" or "follower"
-    priority INTEGER NOT NULL,                   -- Scheduling priority
-    index_position INTEGER NOT NULL,             -- Position in priority list
-    total_attended INTEGER NOT NULL,             -- Historical attendance count
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-
-    FOREIGN KEY (peep_id) REFERENCES peeps(id),
-    FOREIGN KEY (period_id) REFERENCES schedule_periods(id),
-    UNIQUE(peep_id, period_id),
-
-    CHECK(role IN ('leader', 'follower')),
-    CHECK(priority >= 0),
-    CHECK(index_position >= 0),
-    CHECK(total_attended >= 0)
-);
 CREATE TABLE responses (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     peep_id INTEGER NOT NULL,                    -- Renamed from member_id
@@ -236,7 +217,6 @@ CREATE TABLE event_assignment_changes (
 );
 CREATE INDEX idx_peeps_email ON peeps(email);
 CREATE INDEX idx_peeps_active ON peeps(active);
-CREATE INDEX idx_member_snapshots_period ON member_period_snapshots(period_id);
 CREATE INDEX idx_responses_period_peep ON responses(period_id, peep_id);
 CREATE INDEX idx_assignments_event_type ON event_assignments(event_id, assignment_type);
 CREATE INDEX idx_availability_response ON event_availability(response_id);
@@ -245,3 +225,26 @@ CREATE INDEX idx_event_attendance_peep ON event_attendance(peep_id);
 CREATE INDEX idx_event_attendance_mode ON event_attendance(participation_mode);
 CREATE INDEX idx_eac_event ON event_assignment_changes(event_id);
 CREATE INDEX idx_eac_changed_at ON event_assignment_changes(changed_at);
+CREATE TABLE peep_order_snapshots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    peep_id INTEGER NOT NULL,
+    period_id INTEGER NOT NULL,
+
+    -- State after ALL real results for this completed period
+    priority INTEGER NOT NULL,
+    index_position INTEGER NOT NULL,
+    total_attended INTEGER NOT NULL,
+
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    notes TEXT, active BOOLEAN NOT NULL DEFAULT 1,
+
+    FOREIGN KEY (peep_id) REFERENCES peeps(id),
+    FOREIGN KEY (period_id) REFERENCES schedule_periods(id),
+    UNIQUE(peep_id, period_id),
+
+    CHECK(priority >= 0),
+    CHECK(index_position >= 0),
+    CHECK(total_attended >= 0)
+);
+CREATE INDEX idx_snapshots_period ON peep_order_snapshots(period_id);
+CREATE INDEX idx_snapshots_peep ON peep_order_snapshots(peep_id);
