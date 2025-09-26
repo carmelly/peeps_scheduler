@@ -18,41 +18,6 @@ def generate_event_permutations(events):
 	logging.debug(f"Total permutations: {len(index_sequences)}")
 	return index_sequences
 
-def generate_test_data(num_events, num_peeps, output_filename):
-
-	# Generate events
-	start_date = datetime.date.today()
-	events = [Event.generate_test_event(i, start_date) for i in range(num_events)]
-	event_ids = [event.id for event in events]
-
-	# Generate peeps
-	peeps = [Peep.generate_test_peep(i, i-1, event_ids) for i in range(num_peeps)]
-	# sort by priority and fix index 
-	peeps = sorted(peeps, reverse=True, key=lambda peep: peep.priority)
-	for i, peep in enumerate(peeps): 
-		peep.index = i 
-
-	# Generate dummy responses (optional, for completeness)
-	responses = []
-	for peep in peeps:
-		responses.append({
-			"timestamp": datetime.datetime.now().strftime(DATE_FORMAT),
-			"name": peep.name,
-			"preferred_role": peep.role,
-			"max_sessions": peep.event_limit,
-			"available_dates": [event.formatted_date() for event in events if event.id in peep.availability],
-		})
-
-	# Format output JSON (matches output.json structure)
-	output = {
-		"responses": responses,
-		"events": [event.to_dict() for event in events],
-		"peeps": [peep.to_dict() for peep in peeps]
-	}
-
-	save_json(output, output_filename)
-	logging.info(f"Generated test data saved to {output_filename}.")
-
 def setup_logging(verbose=False):
 	stream_log_level = logging.DEBUG if verbose else logging.INFO
 	
