@@ -49,7 +49,7 @@ class TestEventAttendeeManagement:
         
         # Should reject the 4th
         overflow_peep = peep_factory(id=4, role=Role.LEADER)
-        with pytest.raises(RuntimeError, match="Too many attendees in role Leader"):
+        with pytest.raises(RuntimeError, match="Too many attendees in role leader"):
             event.add_attendee(overflow_peep, Role.LEADER)
     
     def test_add_attendee_prevents_duplicates(self, event_factory, peep_factory):

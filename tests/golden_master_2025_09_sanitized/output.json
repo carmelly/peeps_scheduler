@@ -3,7 +3,7 @@
     {
       "timestamp": "7/16/2025 0:23:48",
       "name": "Test Person14",
-      "role": "Follower",
+      "role": "follower",
       "switch_pref": 1,
       "max_sessions": 1,
       "available_dates": [
@@ -14,7 +14,7 @@
     {
       "timestamp": "7/16/2025 14:35:11",
       "name": "Test Person5",
-      "role": "Leader",
+      "role": "leader",
       "switch_pref": 1,
       "max_sessions": 2,
       "available_dates": [
@@ -25,7 +25,7 @@
     {
       "timestamp": "7/12/2025 21:24:36",
       "name": "Test Person36",
-      "role": "Leader",
+      "role": "leader",
       "switch_pref": 1,
       "max_sessions": 4,
       "available_dates": []
@@ -33,7 +33,7 @@
     {
       "timestamp": "7/12/2025 21:34:31",
       "name": "Test Person11",
-      "role": "Leader",
+      "role": "leader",
       "switch_pref": 1,
       "max_sessions": 2,
       "available_dates": [
@@ -44,7 +44,7 @@
     {
       "timestamp": "7/18/2025 8:44:42",
       "name": "Test Person37",
-      "role": "Follower",
+      "role": "follower",
       "switch_pref": 1,
       "max_sessions": 4,
       "available_dates": [
@@ -58,7 +58,7 @@
     {
       "timestamp": "7/12/2025 21:18:38",
       "name": "Test Person2",
-      "role": "Follower",
+      "role": "follower",
       "switch_pref": 1,
       "max_sessions": 1,
       "available_dates": [
@@ -69,7 +69,7 @@
     {
       "timestamp": "7/13/2025 13:03:00",
       "name": "Test Person33",
-      "role": "Follower",
+      "role": "follower",
       "switch_pref": 1,
       "max_sessions": 2,
       "available_dates": [
@@ -80,7 +80,7 @@
     {
       "timestamp": "7/13/2025 11:52:32",
       "name": "Test Person28",
-      "role": "Follower",
+      "role": "follower",
       "switch_pref": 3,
       "max_sessions": 2,
       "available_dates": [
@@ -92,7 +92,7 @@
     {
       "timestamp": "7/12/2025 22:25:15",
       "name": "Test Person42",
-      "role": "Follower",
+      "role": "follower",
       "switch_pref": 1,
       "max_sessions": 4,
       "available_dates": [
@@ -103,7 +103,7 @@
     {
       "timestamp": "7/12/2025 21:44:06",
       "name": "Test Person10",
-      "role": "Follower",
+      "role": "follower",
       "switch_pref": 1,
       "max_sessions": 1,
       "available_dates": []
@@ -111,7 +111,7 @@
     {
       "timestamp": "7/17/2025 14:46:13",
       "name": "Test Person9",
-      "role": "Leader",
+      "role": "leader",
       "switch_pref": 1,
       "max_sessions": 2,
       "available_dates": [
@@ -122,7 +122,7 @@
     {
       "timestamp": "7/12/2025 21:35:37",
       "name": "Test Person4",
-      "role": "Leader",
+      "role": "leader",
       "switch_pref": 3,
       "max_sessions": 3,
       "available_dates": [
@@ -134,7 +134,7 @@
     {
       "timestamp": "7/12/2025 21:25:40",
       "name": "Test Person32",
-      "role": "Follower",
+      "role": "follower",
       "switch_pref": 1,
       "max_sessions": 1,
       "available_dates": [
@@ -144,7 +144,7 @@
     {
       "timestamp": "7/18/2025 0:17:37",
       "name": "Test Person41",
-      "role": "Leader",
+      "role": "leader",
       "switch_pref": 3,
       "max_sessions": 4,
       "available_dates": [
@@ -158,7 +158,7 @@
     {
       "timestamp": "7/13/2025 7:43:06",
       "name": "Test Person40",
-      "role": "Leader",
+      "role": "leader",
       "switch_pref": 1,
       "max_sessions": 1,
       "available_dates": [
@@ -170,7 +170,7 @@
     {
       "timestamp": "7/18/2025 9:26:20",
       "name": "Test Person15",
-      "role": "Leader",
+      "role": "leader",
       "switch_pref": 1,
       "max_sessions": 1,
       "available_dates": [
@@ -182,7 +182,7 @@
     {
       "timestamp": "7/12/2025 23:10:36",
       "name": "Test Person19",
-      "role": "Follower",
+      "role": "follower",
       "switch_pref": 1,
       "max_sessions": 4,
       "available_dates": [
@@ -195,7 +195,7 @@
     {
       "timestamp": "7/13/2025 6:22:43",
       "name": "Test Person18",
-      "role": "Follower",
+      "role": "follower",
       "switch_pref": 1,
       "max_sessions": 3,
       "available_dates": [
@@ -208,7 +208,7 @@
     {
       "timestamp": "7/12/2025 23:00:42",
       "name": "Test Person20",
-      "role": "Leader",
+      "role": "leader",
       "switch_pref": 3,
       "max_sessions": 4,
       "available_dates": [
@@ -221,7 +221,7 @@
     {
       "timestamp": "7/17/2025 14:47:36",
       "name": "Test Person39",
-      "role": "Leader",
+      "role": "leader",
       "switch_pref": 3,
       "max_sessions": 2,
       "available_dates": [
@@ -232,7 +232,7 @@
     {
       "timestamp": "7/16/2025 14:50:37",
       "name": "Test Person24",
-      "role": "Leader",
+      "role": "leader",
       "switch_pref": 1,
       "max_sessions": 2,
       "available_dates": [
@@ -243,7 +243,7 @@
     {
       "timestamp": "7/17/2025 11:21:01",
       "name": "Test Person31",
-      "role": "Leader",
+      "role": "leader",
       "switch_pref": 3,
       "max_sessions": 2,
       "available_dates": [
@@ -254,7 +254,7 @@
     {
       "timestamp": "7/17/2025 17:15:44",
       "name": "Test Person35",
-      "role": "Follower",
+      "role": "follower",
       "switch_pref": 2,
       "max_sessions": 4,
       "available_dates": [
@@ -266,7 +266,7 @@
     {
       "timestamp": "7/12/2025 22:36:01",
       "name": "Test Person22",
-      "role": "Follower",
+      "role": "follower",
       "switch_pref": 3,
       "max_sessions": 2,
       "available_dates": [
@@ -277,7 +277,7 @@
     {
       "timestamp": "7/12/2025 23:47:55",
       "name": "Test Person6",
-      "role": "Follower",
+      "role": "follower",
       "switch_pref": 1,
       "max_sessions": 1,
       "available_dates": []
@@ -285,7 +285,7 @@
     {
       "timestamp": "7/17/2025 18:56:39",
       "name": "Test Person16",
-      "role": "Leader",
+      "role": "leader",
       "switch_pref": 1,
       "max_sessions": 0,
       "available_dates": []
@@ -293,7 +293,7 @@
     {
       "timestamp": "7/18/2025 15:16:39",
       "name": "Test Person21",
-      "role": "Leader",
+      "role": "leader",
       "switch_pref": 1,
       "max_sessions": 1,
       "available_dates": [
@@ -304,7 +304,7 @@
     {
       "timestamp": "7/18/2025 16:19:22",
       "name": "Test Person3",
-      "role": "Leader",
+      "role": "leader",
       "switch_pref": 2,
       "max_sessions": 3,
       "available_dates": [
@@ -346,7 +346,7 @@
       "name": "Test Person7",
       "display_name": "P7",
       "email": "testperson7@testemail.com",
-      "role": "Leader",
+      "role": "leader",
       "index": 0,
       "priority": 5,
       "total_attended": 0
@@ -356,7 +356,7 @@
       "name": "Test Person12",
       "display_name": "P12",
       "email": "testperson12@testemail.com",
-      "role": "Leader",
+      "role": "leader",
       "index": 1,
       "priority": 4,
       "total_attended": 0
@@ -366,7 +366,7 @@
       "name": "Test Person13",
       "display_name": "P13",
       "email": "testperson13@testemail.com",
-      "role": "Leader",
+      "role": "leader",
       "index": 2,
       "priority": 4,
       "total_attended": 0
@@ -376,7 +376,7 @@
       "name": "Test Person17",
       "display_name": "P17",
       "email": "testperson17@testemail.com",
-      "role": "Follower",
+      "role": "follower",
       "index": 3,
       "priority": 4,
       "total_attended": 0
@@ -386,7 +386,7 @@
       "name": "Test Person27",
       "display_name": "P27",
       "email": "testperson27@testemail.com",
-      "role": "Follower",
+      "role": "follower",
       "index": 4,
       "priority": 4,
       "total_attended": 0
@@ -396,7 +396,7 @@
       "name": "Test Person30",
       "display_name": "P30",
       "email": "testperson30@testemail.com",
-      "role": "Leader",
+      "role": "leader",
       "index": 5,
       "priority": 3,
       "total_attended": 0
@@ -406,7 +406,7 @@
       "name": "Test Person21",
       "display_name": "P21",
       "email": "testperson21@testemail.com",
-      "role": "Leader",
+      "role": "leader",
       "index": 6,
       "priority": 1,
       "total_attended": 1,
@@ -424,7 +424,7 @@
       "name": "Test Person34",
       "display_name": "P34",
       "email": "testperson34@testemail.com",
-      "role": "Leader",
+      "role": "leader",
       "index": 7,
       "priority": 1,
       "total_attended": 0
@@ -434,7 +434,7 @@
       "name": "Test Person40",
       "display_name": "P40",
       "email": "testperson40@testemail.com",
-      "role": "Leader",
+      "role": "leader",
       "index": 8,
       "priority": 0,
       "total_attended": 0,
@@ -453,7 +453,7 @@
       "name": "Test Person41",
       "display_name": "P41",
       "email": "testperson41@testemail.com",
-      "role": "Leader",
+      "role": "leader",
       "index": 9,
       "priority": 0,
       "total_attended": 0,
@@ -474,7 +474,7 @@
       "name": "Test Person42",
       "display_name": "P42",
       "email": "testperson42@testemail.com",
-      "role": "Follower",
+      "role": "follower",
       "index": 10,
       "priority": 0,
       "total_attended": 0,
@@ -492,7 +492,7 @@
       "name": "Test Person8",
       "display_name": "P8",
       "email": "testperson8@testemail.com",
-      "role": "Follower",
+      "role": "follower",
       "index": 11,
       "priority": 0,
       "total_attended": 1
@@ -502,7 +502,7 @@
       "name": "Test Person16",
       "display_name": "P16",
       "email": "testperson16@testemail.com",
-      "role": "Leader",
+      "role": "leader",
       "index": 12,
       "priority": 0,
       "total_attended": 1,
@@ -517,7 +517,7 @@
       "name": "Test Person23",
       "display_name": "P23",
       "email": "testperson23@testemail.com",
-      "role": "Leader",
+      "role": "leader",
       "index": 13,
       "priority": 0,
       "total_attended": 2
@@ -527,7 +527,7 @@
       "name": "Test Person25",
       "display_name": "P25",
       "email": "testperson25@testemail.com",
-      "role": "Follower",
+      "role": "follower",
       "index": 14,
       "priority": 0,
       "total_attended": 4
@@ -537,7 +537,7 @@
       "name": "Test Person36",
       "display_name": "P36",
       "email": "testperson36@testemail.com",
-      "role": "Leader",
+      "role": "leader",
       "index": 15,
       "priority": 0,
       "total_attended": 2,
@@ -552,7 +552,7 @@
       "name": "Test Person14",
       "display_name": "P14",
       "email": "testperson14@testemail.com",
-      "role": "Follower",
+      "role": "follower",
       "index": 16,
       "priority": 0,
       "total_attended": 5,
@@ -570,7 +570,7 @@
       "name": "Test Person24",
       "display_name": "P24",
       "email": "testperson24@testemail.com",
-      "role": "Leader",
+      "role": "leader",
       "index": 17,
       "priority": 0,
       "total_attended": 4,
@@ -588,7 +588,7 @@
       "name": "Test Person2",
       "display_name": "P2",
       "email": "testperson2@testemail.com",
-      "role": "Follower",
+      "role": "follower",
       "index": 18,
       "priority": 0,
       "total_attended": 5,
@@ -606,7 +606,7 @@
       "name": "Test Person33",
       "display_name": "P33",
       "email": "testperson33@testemail.com",
-      "role": "Follower",
+      "role": "follower",
       "index": 19,
       "priority": 0,
       "total_attended": 3,
@@ -624,7 +624,7 @@
       "name": "Test Person32",
       "display_name": "P32",
       "email": "testperson32@testemail.com",
-      "role": "Follower",
+      "role": "follower",
       "index": 20,
       "priority": 0,
       "total_attended": 2,
@@ -641,7 +641,7 @@
       "name": "Test Person35",
       "display_name": "P35",
       "email": "testperson35@testemail.com",
-      "role": "Follower",
+      "role": "follower",
       "index": 21,
       "priority": 0,
       "total_attended": 2,
@@ -660,7 +660,7 @@
       "name": "Test Person22",
       "display_name": "P22",
       "email": "testperson22@testemail.com",
-      "role": "Follower",
+      "role": "follower",
       "index": 22,
       "priority": 0,
       "total_attended": 4,
@@ -678,7 +678,7 @@
       "name": "Test Person5",
       "display_name": "P5",
       "email": "testperson5@testemail.com",
-      "role": "Leader",
+      "role": "leader",
       "index": 23,
       "priority": 0,
       "total_attended": 9,
@@ -696,7 +696,7 @@
       "name": "Test Person10",
       "display_name": "P10",
       "email": "testperson10@testemail.com",
-      "role": "Follower",
+      "role": "follower",
       "index": 24,
       "priority": 0,
       "total_attended": 1,
@@ -711,7 +711,7 @@
       "name": "Test Person28",
       "display_name": "P28",
       "email": "testperson28@testemail.com",
-      "role": "Follower",
+      "role": "follower",
       "index": 25,
       "priority": 0,
       "total_attended": 1,
@@ -730,7 +730,7 @@
       "name": "Test Person29",
       "display_name": "P29",
       "email": "testperson29@testemail.com",
-      "role": "Leader",
+      "role": "leader",
       "index": 26,
       "priority": 0,
       "total_attended": 2
@@ -740,7 +740,7 @@
       "name": "Test Person6",
       "display_name": "P6",
       "email": "testperson6@testemail.com",
-      "role": "Follower",
+      "role": "follower",
       "index": 27,
       "priority": 0,
       "total_attended": 3,
@@ -755,7 +755,7 @@
       "name": "Test Person39",
       "display_name": "P39",
       "email": "testperson39@testemail.com",
-      "role": "Leader",
+      "role": "leader",
       "index": 28,
       "priority": 0,
       "total_attended": 1,
@@ -773,7 +773,7 @@
       "name": "Test Person20",
       "display_name": "P20",
       "email": "testperson20@testemail.com",
-      "role": "Leader",
+      "role": "leader",
       "index": 29,
       "priority": 0,
       "total_attended": 9,
@@ -793,7 +793,7 @@
       "name": "Test Person19",
       "display_name": "P19",
       "email": "testperson19@testemail.com",
-      "role": "Follower",
+      "role": "follower",
       "index": 30,
       "priority": 0,
       "total_attended": 9,
@@ -813,7 +813,7 @@
       "name": "Test Person18",
       "display_name": "P18",
       "email": "testperson18@testemail.com",
-      "role": "Follower",
+      "role": "follower",
       "index": 31,
       "priority": 0,
       "total_attended": 8,
@@ -833,7 +833,7 @@
       "name": "Test Person1",
       "display_name": "P1",
       "email": "testperson1@testemail.com",
-      "role": "Follower",
+      "role": "follower",
       "index": 32,
       "priority": 0,
       "total_attended": 7
@@ -843,7 +843,7 @@
       "name": "Test Person38",
       "display_name": "P38",
       "email": "testperson38@testemail.com",
-      "role": "Leader",
+      "role": "leader",
       "index": 33,
       "priority": 0,
       "total_attended": 3
@@ -853,7 +853,7 @@
       "name": "Test Person31",
       "display_name": "P31",
       "email": "testperson31@testemail.com",
-      "role": "Leader",
+      "role": "leader",
       "index": 34,
       "priority": 0,
       "total_attended": 3,
@@ -871,7 +871,7 @@
       "name": "Test Person9",
       "display_name": "P9",
       "email": "testperson9@testemail.com",
-      "role": "Leader",
+      "role": "leader",
       "index": 35,
       "priority": 0,
       "total_attended": 6,
@@ -889,7 +889,7 @@
       "name": "Test Person3",
       "display_name": "P3",
       "email": "testperson3@testemail.com",
-      "role": "Leader",
+      "role": "leader",
       "index": 36,
       "priority": 0,
       "total_attended": 7,
@@ -907,7 +907,7 @@
       "name": "Test Person11",
       "display_name": "P11",
       "email": "testperson11@testemail.com",
-      "role": "Leader",
+      "role": "leader",
       "index": 37,
       "priority": 0,
       "total_attended": 7,
@@ -925,7 +925,7 @@
       "name": "Test Person37",
       "display_name": "P37",
       "email": "testperson37@testemail.com",
-      "role": "Follower",
+      "role": "follower",
       "index": 38,
       "priority": 0,
       "total_attended": 2,
@@ -946,7 +946,7 @@
       "name": "Test Person4",
       "display_name": "P4",
       "email": "testperson4@testemail.com",
-      "role": "Leader",
+      "role": "leader",
       "index": 39,
       "priority": 0,
       "total_attended": 10,
@@ -965,7 +965,7 @@
       "name": "Test Person15",
       "display_name": "P15",
       "email": "testperson15@testemail.com",
-      "role": "Leader",
+      "role": "leader",
       "index": 40,
       "priority": 0,
       "total_attended": 4,
@@ -984,7 +984,7 @@
       "name": "Test Person26",
       "display_name": "P26",
       "email": "testperson26@testemail.com",
-      "role": "Follower",
+      "role": "follower",
       "index": 41,
       "priority": 0,
       "total_attended": 8

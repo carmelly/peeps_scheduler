@@ -6,8 +6,8 @@ from constants import DATE_FORMAT, DATESTR_FORMAT
 import constants
 
 class Role(Enum):
-	LEADER = "Leader"
-	FOLLOWER = "Follower"
+	LEADER = "leader"
+	FOLLOWER = "follower"
 
 	def opposite(self):
 		if self == Role.LEADER:

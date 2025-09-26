@@ -8,52 +8,52 @@
                 {
                     "id": 40,
                     "name": "P40",
-                    "role": "Leader"
+                    "role": "leader"
                 },
                 {
                     "id": 41,
                     "name": "P41",
-                    "role": "Leader"
+                    "role": "leader"
                 },
                 {
                     "id": 2,
                     "name": "P2",
-                    "role": "Follower"
+                    "role": "follower"
                 },
                 {
                     "id": 35,
                     "name": "P35",
-                    "role": "Follower"
+                    "role": "follower"
                 },
                 {
                     "id": 39,
                     "name": "P39",
-                    "role": "Leader"
+                    "role": "leader"
                 },
                 {
                     "id": 20,
                     "name": "P20",
-                    "role": "Leader"
+                    "role": "leader"
                 },
                 {
                     "id": 19,
                     "name": "P19",
-                    "role": "Follower"
+                    "role": "follower"
                 },
                 {
                     "id": 18,
                     "name": "P18",
-                    "role": "Follower"
+                    "role": "follower"
                 },
                 {
                     "id": 37,
                     "name": "P37",
-                    "role": "Follower"
+                    "role": "follower"
                 },
                 {
                     "id": 15,
                     "name": "P15",
-                    "role": "Leader"
+                    "role": "leader"
                 }
             ],
             "alternates": [],
@@ -68,84 +68,84 @@
                 {
                     "id": 21,
                     "name": "P21",
-                    "role": "Leader"
+                    "role": "leader"
                 },
                 {
                     "id": 42,
                     "name": "P42",
-                    "role": "Follower"
+                    "role": "follower"
                 },
                 {
                     "id": 14,
                     "name": "P14",
-                    "role": "Follower"
+                    "role": "follower"
                 },
                 {
                     "id": 24,
                     "name": "P24",
-                    "role": "Leader"
+                    "role": "leader"
                 },
                 {
                     "id": 22,
                     "name": "P22",
-                    "role": "Follower"
+                    "role": "follower"
                 },
                 {
                     "id": 5,
                     "name": "P5",
-                    "role": "Leader"
+                    "role": "leader"
                 },
                 {
                     "id": 28,
                     "name": "P28",
-                    "role": "Follower"
+                    "role": "follower"
                 },
                 {
                     "id": 31,
                     "name": "P31",
-                    "role": "Leader"
+                    "role": "leader"
                 },
                 {
                     "id": 9,
                     "name": "P9",
-                    "role": "Leader"
+                    "role": "leader"
                 },
                 {
                     "id": 3,
                     "name": "P3",
-                    "role": "Leader"
+                    "role": "leader"
                 },
                 {
                     "id": 11,
                     "name": "P11",
-                    "role": "Leader"
+                    "role": "leader"
                 },
                 {
                     "id": 19,
                     "name": "P19",
-                    "role": "Follower"
+                    "role": "follower"
                 },
                 {
                     "id": 18,
                     "name": "P18",
-                    "role": "Follower"
+                    "role": "follower"
                 },
                 {
                     "id": 37,
                     "name": "P37",
-                    "role": "Follower"
+                    "role": "follower"
                 }
             ],
             "alternates": [
                 {
                     "id": 4,
                     "name": "P4",
-                    "role": "Leader"
+                    "role": "leader"
                 },
                 {
                     "id": 20,
                     "name": "P20",
-                    "role": "Leader"
+                    "role": "leader"
                 }
             ],
             "leaders_string": "Leaders(7): P11, P21, P24, P3, P31, P5, P9 [alt: P20, P4]",
@@ -159,42 +159,42 @@
                 {
                     "id": 33,
                     "name": "P33",
-                    "role": "Follower"
+                    "role": "follower"
                 },
                 {
                     "id": 4,
                     "name": "P4",
-                    "role": "Leader"
+                    "role": "leader"
                 },
                 {
                     "id": 41,
                     "name": "P41",
-                    "role": "Leader"
+                    "role": "leader"
                 },
                 {
                     "id": 20,
                     "name": "P20",
-                    "role": "Leader"
+                    "role": "leader"
                 },
                 {
                     "id": 31,
                     "name": "P31",
-                    "role": "Leader"
+                    "role": "leader"
                 },
                 {
                     "id": 19,
                     "name": "P19",
-                    "role": "Follower"
+                    "role": "follower"
                 },
                 {
                     "id": 18,
                     "name": "P18",
-                    "role": "Follower"
+                    "role": "follower"
                 },
                 {
                     "id": 37,
                     "name": "P37",
-                    "role": "Follower"
+                    "role": "follower"
                 }
             ],
             "alternates": [],
@@ -209,59 +209,59 @@
                 {
                     "id": 32,
                     "name": "P32",
-                    "role": "Follower"
+                    "role": "follower"
                 },
                 {
                     "id": 35,
                     "name": "P35",
-                    "role": "Follower"
+                    "role": "follower"
                 },
                 {
                     "id": 39,
                     "name": "P39",
-                    "role": "Leader"
+                    "role": "leader"
                 },
                 {
                     "id": 42,
                     "name": "P42",
-                    "role": "Follower"
+                    "role": "follower"
                 },
                 {
                     "id": 24,
                     "name": "P24",
-                    "role": "Leader"
+                    "role": "leader"
                 },
                 {
                     "id": 5,
                     "name": "P5",
-                    "role": "Leader"
+                    "role": "leader"
                 },
                 {
                     "id": 9,
                     "name": "P9",
-                    "role": "Leader"
+                    "role": "leader"
                 },
                 {
                     "id": 11,
                     "name": "P11",
-                    "role": "Leader"
+                    "role": "leader"
                 },
                 {
                     "id": 19,
                     "name": "P19",
-                    "role": "Follower"
+                    "role": "follower"
                 },
                 {
                     "id": 37,
                     "name": "P37",
-                    "role": "Follower"
+                    "role": "follower"
                 }
             ],
             "alternates": [
                 {
                     "id": 20,
                     "name": "P20",
-                    "role": "Leader"
+                    "role": "leader"
                 }
             ],
             "leaders_string": "Leaders(5): P11, P24, P39, P5, P9 [alt: P20]",
@@ -275,32 +275,32 @@
                 {
                     "id": 22,
                     "name": "P22",
-                    "role": "Follower"
+                    "role": "follower"
                 },
                 {
                     "id": 28,
                     "name": "P28",
-                    "role": "Follower"
+                    "role": "follower"
                 },
                 {
                     "id": 3,
                     "name": "P3",
-                    "role": "Leader"
+                    "role": "leader"
                 },
                 {
                     "id": 33,
                     "name": "P33",
-                    "role": "Follower"
+                    "role": "follower"
                 },
                 {
                     "id": 4,
                     "name": "P4",
-                    "role": "Leader"
+                    "role": "leader"
                 },
                 {
                     "id": 35,
                     "name": "P35",
-                    "role": "Follower"
+                    "role": "follower"
                 }
             ],
             "alternates": [],
@@ -314,7 +314,7 @@
             "name": "",
             "display_name": "P7",
             "email": "testperson7@testemail.com",
-            "role": "Leader",
+            "role": "leader",
             "index": 0,
             "priority": 5,
             "total_attended": 0
@@ -324,7 +324,7 @@
             "name": "",
             "display_name": "P12",
             "email": "testperson12@testemail.com",
-            "role": "Leader",
+            "role": "leader",
             "index": 1,
             "priority": 4,
             "total_attended": 0
@@ -334,7 +334,7 @@
             "name": "",
             "display_name": "P13",
             "email": "testperson13@testemail.com",
-            "role": "Leader",
+            "role": "leader",
             "index": 2,
             "priority": 4,
             "total_attended": 0
@@ -344,7 +344,7 @@
             "name": "",
             "display_name": "P17",
             "email": "testperson17@testemail.com",
-            "role": "Follower",
+            "role": "follower",
             "index": 3,
             "priority": 4,
             "total_attended": 0
@@ -354,7 +354,7 @@
             "name": "",
             "display_name": "P27",
             "email": "testperson27@testemail.com",
-            "role": "Follower",
+            "role": "follower",
             "index": 4,
             "priority": 4,
             "total_attended": 0
@@ -364,7 +364,7 @@
             "name": "",
             "display_name": "P30",
             "email": "testperson30@testemail.com",
-            "role": "Leader",
+            "role": "leader",
             "index": 5,
             "priority": 3,
             "total_attended": 0
@@ -374,7 +374,7 @@
             "name": "",
             "display_name": "P34",
             "email": "testperson34@testemail.com",
-            "role": "Leader",
+            "role": "leader",
             "index": 6,
             "priority": 1,
             "total_attended": 0
@@ -384,7 +384,7 @@
             "name": "",
             "display_name": "P16",
             "email": "testperson16@testemail.com",
-            "role": "Leader",
+            "role": "leader",
             "index": 7,
             "priority": 1,
             "total_attended": 1,
@@ -399,7 +399,7 @@
             "name": "",
             "display_name": "P36",
             "email": "testperson36@testemail.com",
-            "role": "Leader",
+            "role": "leader",
             "index": 8,
             "priority": 1,
             "total_attended": 2,
@@ -414,7 +414,7 @@
             "name": "",
             "display_name": "P10",
             "email": "testperson10@testemail.com",
-            "role": "Follower",
+            "role": "follower",
             "index": 9,
             "priority": 1,
             "total_attended": 1,
@@ -429,7 +429,7 @@
             "name": "",
             "display_name": "P6",
             "email": "testperson6@testemail.com",
-            "role": "Follower",
+            "role": "follower",
             "index": 10,
             "priority": 1,
             "total_attended": 3,
@@ -444,7 +444,7 @@
             "name": "",
             "display_name": "P8",
             "email": "testperson8@testemail.com",
-            "role": "Follower",
+            "role": "follower",
             "index": 11,
             "priority": 0,
             "total_attended": 1
@@ -454,7 +454,7 @@
             "name": "",
             "display_name": "P23",
             "email": "testperson23@testemail.com",
-            "role": "Leader",
+            "role": "leader",
             "index": 12,
             "priority": 0,
             "total_attended": 2
@@ -464,7 +464,7 @@
             "name": "",
             "display_name": "P25",
             "email": "testperson25@testemail.com",
-            "role": "Follower",
+            "role": "follower",
             "index": 13,
             "priority": 0,
             "total_attended": 4
@@ -474,7 +474,7 @@
             "name": "",
             "display_name": "P29",
             "email": "testperson29@testemail.com",
-            "role": "Leader",
+            "role": "leader",
             "index": 14,
             "priority": 0,
             "total_attended": 2
@@ -484,7 +484,7 @@
             "name": "",
             "display_name": "P1",
             "email": "testperson1@testemail.com",
-            "role": "Follower",
+            "role": "follower",
             "index": 15,
             "priority": 0,
             "total_attended": 7
@@ -494,7 +494,7 @@
             "name": "",
             "display_name": "P38",
             "email": "testperson38@testemail.com",
-            "role": "Leader",
+            "role": "leader",
             "index": 16,
             "priority": 0,
             "total_attended": 3
@@ -504,7 +504,7 @@
             "name": "",
             "display_name": "P26",
             "email": "testperson26@testemail.com",
-            "role": "Follower",
+            "role": "follower",
             "index": 17,
             "priority": 0,
             "total_attended": 8
@@ -514,7 +514,7 @@
             "name": "",
             "display_name": "P40",
             "email": "testperson40@testemail.com",
-            "role": "Leader",
+            "role": "leader",
             "index": 18,
             "priority": 0,
             "total_attended": 1,
@@ -533,7 +533,7 @@
             "name": "",
             "display_name": "P2",
             "email": "testperson2@testemail.com",
-            "role": "Follower",
+            "role": "follower",
             "index": 19,
             "priority": 0,
             "total_attended": 6,
@@ -551,7 +551,7 @@
             "name": "",
             "display_name": "P15",
             "email": "testperson15@testemail.com",
-            "role": "Leader",
+            "role": "leader",
             "index": 20,
             "priority": 0,
             "total_attended": 5,
@@ -570,7 +570,7 @@
             "name": "",
             "display_name": "P21",
             "email": "testperson21@testemail.com",
-            "role": "Leader",
+            "role": "leader",
             "index": 21,
             "priority": 0,
             "total_attended": 2,
@@ -588,7 +588,7 @@
             "name": "",
             "display_name": "P14",
             "email": "testperson14@testemail.com",
-            "role": "Follower",
+            "role": "follower",
             "index": 22,
             "priority": 0,
             "total_attended": 6,
@@ -606,7 +606,7 @@
             "name": "",
             "display_name": "P41",
             "email": "testperson41@testemail.com",
-            "role": "Leader",
+            "role": "leader",
             "index": 23,
             "priority": 0,
             "total_attended": 2,
@@ -627,7 +627,7 @@
             "name": "",
             "display_name": "P20",
             "email": "testperson20@testemail.com",
-            "role": "Leader",
+            "role": "leader",
             "index": 24,
             "priority": 0,
             "total_attended": 11,
@@ -647,7 +647,7 @@
             "name": "",
             "display_name": "P31",
             "email": "testperson31@testemail.com",
-            "role": "Leader",
+            "role": "leader",
             "index": 25,
             "priority": 0,
             "total_attended": 5,
@@ -665,7 +665,7 @@
             "name": "",
             "display_name": "P18",
             "email": "testperson18@testemail.com",
-            "role": "Follower",
+            "role": "follower",
             "index": 26,
             "priority": 0,
             "total_attended": 11,
@@ -685,7 +685,7 @@
             "name": "",
             "display_name": "P32",
             "email": "testperson32@testemail.com",
-            "role": "Follower",
+            "role": "follower",
             "index": 27,
             "priority": 0,
             "total_attended": 3,
@@ -702,7 +702,7 @@
             "name": "",
             "display_name": "P39",
             "email": "testperson39@testemail.com",
-            "role": "Leader",
+            "role": "leader",
             "index": 28,
             "priority": 0,
             "total_attended": 3,
@@ -720,7 +720,7 @@
             "name": "",
             "display_name": "P42",
             "email": "testperson42@testemail.com",
-            "role": "Follower",
+            "role": "follower",
             "index": 29,
             "priority": 0,
             "total_attended": 2,
@@ -738,7 +738,7 @@
             "name": "",
             "display_name": "P24",
             "email": "testperson24@testemail.com",
-            "role": "Leader",
+            "role": "leader",
             "index": 30,
             "priority": 0,
             "total_attended": 6,
@@ -756,7 +756,7 @@
             "name": "",
             "display_name": "P5",
             "email": "testperson5@testemail.com",
-            "role": "Leader",
+            "role": "leader",
             "index": 31,
             "priority": 0,
             "total_attended": 11,
@@ -774,7 +774,7 @@
             "name": "",
             "display_name": "P9",
             "email": "testperson9@testemail.com",
-            "role": "Leader",
+            "role": "leader",
             "index": 32,
             "priority": 0,
             "total_attended": 8,
@@ -792,7 +792,7 @@
             "name": "",
             "display_name": "P11",
             "email": "testperson11@testemail.com",
-            "role": "Leader",
+            "role": "leader",
             "index": 33,
             "priority": 0,
             "total_attended": 9,
@@ -810,7 +810,7 @@
             "name": "",
             "display_name": "P19",
             "email": "testperson19@testemail.com",
-            "role": "Follower",
+            "role": "follower",
             "index": 34,
             "priority": 0,
             "total_attended": 13,
@@ -830,7 +830,7 @@
             "name": "",
             "display_name": "P37",
             "email": "testperson37@testemail.com",
-            "role": "Follower",
+            "role": "follower",
             "index": 35,
             "priority": 0,
             "total_attended": 6,
@@ -851,7 +851,7 @@
             "name": "",
             "display_name": "P22",
             "email": "testperson22@testemail.com",
-            "role": "Follower",
+            "role": "follower",
             "index": 36,
             "priority": 0,
             "total_attended": 6,
@@ -869,7 +869,7 @@
             "name": "",
             "display_name": "P28",
             "email": "testperson28@testemail.com",
-            "role": "Follower",
+            "role": "follower",
             "index": 37,
             "priority": 0,
             "total_attended": 3,
@@ -888,7 +888,7 @@
             "name": "",
             "display_name": "P3",
             "email": "testperson3@testemail.com",
-            "role": "Leader",
+            "role": "leader",
             "index": 38,
             "priority": 0,
             "total_attended": 9,
@@ -906,7 +906,7 @@
             "name": "",
             "display_name": "P33",
             "email": "testperson33@testemail.com",
-            "role": "Follower",
+            "role": "follower",
             "index": 39,
             "priority": 0,
             "total_attended": 5,
@@ -924,7 +924,7 @@
             "name": "",
             "display_name": "P4",
             "email": "testperson4@testemail.com",
-            "role": "Leader",
+            "role": "leader",
             "index": 40,
             "priority": 0,
             "total_attended": 12,
@@ -943,7 +943,7 @@
             "name": "",
             "display_name": "P35",
             "email": "testperson35@testemail.com",
-            "role": "Follower",
+            "role": "follower",
             "index": 41,
             "priority": 0,
             "total_attended": 5,
