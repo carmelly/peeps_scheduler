@@ -32,3 +32,4 @@ PRIVATE_DATA_ROOT = os.getenv("PEEPS_DATA_PATH", "peeps_data")
 
 # Database paths
 SCHEMA_PATH = "db/schema.sql"
+DEFAULT_DB_PATH = "peeps_data/peeps_scheduler.db"
