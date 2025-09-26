@@ -35,8 +35,9 @@ def setup_logging(verbose=False):
 		handlers=[stream_handler, file_handler]
 		)
 
-def apply_event_results( result_json, members_csv):
+def apply_event_results( result_json, members_csv, responses_csv):
 	from models import Peep, Event
+	import os
 
 	peep_rows = load_csv(members_csv)
 	fresh_peeps = []
@@ -52,11 +53,33 @@ def apply_event_results( result_json, members_csv):
 			total_attended=int(row['Total Attended']),
 			availability=[],
 			event_limit=0,
-			min_interval_days=0, 
-			active = row['Active'], 
+			min_interval_days=0,
+			active = row['Active'],
 			date_joined = row['Date Joined']
 		)
 		fresh_peeps.append(peep)
+
+	# Load response data to identify who responded
+	if not responses_csv:
+		raise ValueError("responses_csv parameter is required")
+	if not os.path.exists(responses_csv):
+		raise FileNotFoundError(f"Responses file not found: {responses_csv}")
+
+	responded_emails = set()
+	response_rows = load_csv(responses_csv)
+	for row in response_rows:
+		email = row.get('Email Address', '').strip().lower()
+		if email:  # Only add non-empty emails
+			responded_emails.add(email)
+	logging.debug(f"Found {len(responded_emails)} unique respondents in {responses_csv}")
+
+	# Set responded flag based on email match
+	for peep in fresh_peeps:
+		if peep.email and peep.email.lower() in responded_emails:
+			peep.responded = True
+			logging.debug(f"Marked peep {peep.id} ({peep.email}) as responded")
+		else:
+			peep.responded = False
 
 	with open(result_json, "r") as f:
 		result_data = json.load(f)
