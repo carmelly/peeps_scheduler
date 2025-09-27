@@ -16,7 +16,8 @@ CREATE INDEX idx_raw_output_period ON raw_output(period_name);
 CREATE INDEX idx_raw_responses_email ON raw_responses("Email Address");
 CREATE INDEX idx_raw_responses_period ON raw_responses(period_name);
 CREATE INDEX idx_raw_results_period ON raw_results(period_name);
-CREATE INDEX idx_responses_period_peep ON responses(period_id, peep_id);
+CREATE INDEX idx_responses_peep_period ON responses(peep_id, period_id);
+CREATE INDEX idx_responses_period ON responses(period_id);
 CREATE INDEX idx_snapshots_peep ON peep_order_snapshots(peep_id);
 CREATE INDEX idx_snapshots_period ON peep_order_snapshots(period_id);
 CREATE TABLE __migrations_applied__ (
@@ -107,21 +108,21 @@ CREATE TABLE event_availability (
     FOREIGN KEY (event_id) REFERENCES events(id),
     UNIQUE(response_id, event_id)
 );
-CREATE TABLE events (
+CREATE TABLE "events" (
     id INTEGER PRIMARY KEY AUTOINCREMENT,     -- Global unique event ID
     period_id INTEGER NOT NULL,               -- Foreign key to schedule_periods
     legacy_period_event_id INTEGER,           -- Original per-period ID (0,1,2,3...)
     event_datetime DATETIME NOT NULL,         -- Event date and time
     duration_minutes INTEGER NOT NULL,        -- 60, 90, or 120 minutes
-    status TEXT DEFAULT 'scheduled',           -- scheduled, cancelled, completed
+    status TEXT DEFAULT 'proposed',           -- proposed, scheduled, cancelled, completed
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    
+
     FOREIGN KEY (period_id) REFERENCES schedule_periods(id),
     UNIQUE(period_id, legacy_period_event_id),
     UNIQUE(event_datetime),                    -- No two events at same time
 
     CHECK(duration_minutes IN (60, 90, 120)),
-    CHECK(status IN ('scheduled', 'cancelled', 'completed'))
+    CHECK(status IN ('proposed', 'scheduled', 'cancelled', 'completed'))
 );
 CREATE TABLE peep_order_snapshots (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -144,14 +145,14 @@ CREATE TABLE peep_order_snapshots (
     CHECK(index_position >= 0),
     CHECK(total_attended >= 0)
 );
-CREATE TABLE peeps (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,   -- Now with AUTOINCREMENT for new peeps
-    full_name TEXT NOT NULL,                -- From "Name" column
-    display_name TEXT NOT NULL,             -- From "Display Name" column
-    primary_role TEXT NOT NULL,             -- From "Role" column
-    email TEXT UNIQUE NOT NULL,             -- From "Email Address" column
-    date_joined DATE,                       -- From "Date Joined" column
-    active BOOLEAN NOT NULL DEFAULT 1,      -- From "Active" column
+CREATE TABLE "peeps" (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    full_name TEXT NOT NULL,
+    display_name TEXT NOT NULL,
+    primary_role TEXT NOT NULL,
+    email TEXT UNIQUE NOT NULL,                 -- Enforce NOT NULL
+    date_joined DATE,
+    active BOOLEAN NOT NULL DEFAULT 1,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 
@@ -177,7 +178,8 @@ CREATE TABLE raw_members (
 	Active TEXT,
 	"Date Joined" TEXT,
 	raw_data TEXT,  -- Full row as JSON for any extra fields
-	imported_at DATETIME DEFAULT CURRENT_TIMESTAMP, data_quality_notes TEXT DEFAULT '', reconstructed_flag INTEGER DEFAULT 0,
+	imported_at DATETIME DEFAULT CURRENT_TIMESTAMP, data_quality_notes TEXT DEFAULT '', reconstructed_flag INTEGER DEFAULT 0, email_check_constraint TEXT
+    CHECK("Email Address" IS NOT NULL AND TRIM("Email Address") != ''),
 	UNIQUE(period_name, csv_id)  -- Prevent duplicate imports
 );
 CREATE TABLE raw_output (
@@ -203,7 +205,8 @@ CREATE TABLE raw_responses (
 	"Questions or Comments for Organizers" TEXT,
 	"Questions or Comments for Leilani" TEXT,
 	raw_data TEXT,  -- Full row as JSON for schema variations
-	imported_at DATETIME DEFAULT CURRENT_TIMESTAMP, data_quality_notes TEXT DEFAULT '', reconstructed_flag INTEGER DEFAULT 0,
+	imported_at DATETIME DEFAULT CURRENT_TIMESTAMP, data_quality_notes TEXT DEFAULT '', reconstructed_flag INTEGER DEFAULT 0, email_check_constraint TEXT
+    CHECK("Email Address" IS NOT NULL AND TRIM("Email Address") != ''),
 	UNIQUE(period_name, row_number, Name, "Email Address")  -- Prevent duplicate imports
 );
 CREATE TABLE raw_results (
@@ -212,7 +215,7 @@ CREATE TABLE raw_results (
 	results_json TEXT,  -- Complete JSON as text
 	imported_at DATETIME DEFAULT CURRENT_TIMESTAMP
 , data_quality_notes TEXT DEFAULT '', reconstructed_flag INTEGER DEFAULT 0);
-CREATE TABLE responses (
+CREATE TABLE "responses" (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     peep_id INTEGER NOT NULL,                    -- Renamed from member_id
     period_id INTEGER NOT NULL,
@@ -229,11 +232,10 @@ CREATE TABLE responses (
     FOREIGN KEY (peep_id) REFERENCES peeps(id),
     FOREIGN KEY (period_id) REFERENCES schedule_periods(id),
     UNIQUE(peep_id, period_id),
-
-    CHECK(response_role IN ('leader', 'follower')),
+    CHECK(max_sessions >= 0),                    -- Changed from > 0 to >= 0
+    CHECK(min_interval_days >= 0),
     CHECK(switch_preference IN (1, 2, 3)),
-    CHECK(max_sessions > 0),
-    CHECK(min_interval_days >= 0)
+    CHECK(response_role IN ('leader', 'follower'))
 );
 CREATE TABLE schedule_periods (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
