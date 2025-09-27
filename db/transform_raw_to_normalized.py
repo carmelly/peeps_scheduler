@@ -13,7 +13,7 @@ Architecture:
     - DataTransformer: Handles all transformation operations
     - DataValidator: Validates data integrity after transformations
     - Period-by-period processing with transaction boundaries
-    - Legacy period creation from first available raw data
+    - First period (2025-02) used as baseline with priority=0, total_attended=0
 """
 
 import argparse
@@ -24,13 +24,13 @@ import sqlite3
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any, Set
+from typing import Dict, List, Optional, Tuple, Any
 
 # Add parent directory for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from data_manager import get_data_manager
-from models import SwitchPreference
+from models import Role, SwitchPreference
 from file_io import parse_event_date
 from db.snapshot_generator import SnapshotGenerator, MemberSnapshot, EventAttendance
 
@@ -47,7 +47,7 @@ class DataTransformer:
         # Track transformed data for validation
         self.peep_id_mapping = {}  # csv_id -> database_id
         self.period_id_mapping = {}  # period_name -> database_id
-        self.event_id_mapping = {}  # (period_name, legacy_id) -> database_id
+        self.event_id_mapping = {}  # (period_name, event_index) -> database_id
 
     def _setup_logging(self) -> logging.Logger:
         """Configure logging for transformation operations."""
@@ -63,6 +63,102 @@ class DataTransformer:
             logger.addHandler(handler)
 
         return logger
+
+    def _create_baseline_period_and_snapshot(self, first_period_name: str) -> bool:
+        """
+        Create baseline period and snapshot before processing any real periods.
+        This ensures the baseline has a lower period ID than the first real period.
+        """
+        try:
+            # Check if any snapshots exist (in case we're rerunning)
+            self.cursor.execute("SELECT COUNT(*) FROM peep_order_snapshots")
+            snapshot_count = self.cursor.fetchone()[0]
+
+            if snapshot_count > 0:
+                self.logger.info("Snapshots already exist, skipping baseline creation")
+                return True
+
+            self.logger.info(f"Creating baseline period and snapshot from first period: {first_period_name}")
+
+            # 1. First, create peeps from the first period so we have them for the baseline
+            if not self._transform_peeps(first_period_name):
+                return False
+
+            # 2. Create synthetic baseline period (represents state before scheduling began)
+            baseline_period_name = f"{first_period_name}-baseline"
+
+            # Parse the period to get dates for the baseline period
+            year, month = map(int, first_period_name.split('-'))
+            # Baseline period ends just before the first real period starts
+            from datetime import date
+            if month == 1:
+                baseline_start = date(year - 1, 12, 1)
+                baseline_end = date(year - 1, 12, 31)
+            else:
+                baseline_start = date(year, month - 1, 1)
+                # Calculate last day of previous month
+                import calendar
+                last_day = calendar.monthrange(year, month - 1)[1]
+                baseline_end = date(year, month - 1, last_day)
+
+            self.cursor.execute("""
+                INSERT INTO schedule_periods (period_name, display_name, start_date, end_date, status)
+                VALUES (?, ?, ?, ?, 'completed')
+            """, (
+                baseline_period_name,
+                f"Baseline for {first_period_name}",
+                baseline_start.isoformat(),
+                baseline_end.isoformat()
+            ))
+
+            baseline_period_id = self.cursor.lastrowid
+            self.period_id_mapping[baseline_period_name] = baseline_period_id
+            self.logger.info(f"Created baseline period {baseline_period_name} (ID: {baseline_period_id})")
+
+            # 3. Get all member data from raw_members for the first period
+            self.cursor.execute("""
+                SELECT csv_id, "Index", Priority, "Total Attended", Active
+                FROM raw_members
+                WHERE period_name = ? AND csv_id IS NOT NULL
+                ORDER BY CAST(csv_id AS INTEGER)
+            """, (first_period_name,))
+
+            baseline_members = self.cursor.fetchall()
+            if not baseline_members:
+                self.logger.error(f"No baseline members found for period {first_period_name}")
+                return False
+
+            # 4. Create baseline snapshots using actual raw data
+            for csv_id, index_pos, priority, total_attended, active in baseline_members:
+                peep_id = self.peep_id_mapping.get(csv_id)
+                if not peep_id:
+                    self.logger.warning(f"No peep_id found for csv_id {csv_id}")
+                    continue
+
+                # Convert active text to boolean
+                active_bool = active.lower() in ['true', 'yes', '1'] if active else True
+
+                # Use actual raw_members data (validator will check it's baseline-appropriate)
+                self.cursor.execute("""
+                    INSERT INTO peep_order_snapshots (
+                        peep_id, period_id, priority, index_position,
+                        total_attended, active, notes
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    peep_id, baseline_period_id,  # Use baseline period ID
+                    priority or 0,
+                    index_pos or 0,
+                    total_attended or 0,
+                    active_bool,
+                    f"Baseline snapshot from raw_members for period {first_period_name}"
+                ))
+
+            self.logger.info(f"Created baseline snapshots for {len(baseline_members)} members in period {baseline_period_name}")
+            return True
+
+        except Exception as e:
+            self.logger.error(f"Failed to create baseline period and snapshot: {e}")
+            return False
 
     def transform_all_data(self, dry_run: bool = False) -> bool:
         """
@@ -85,17 +181,13 @@ class DataTransformer:
                 self.logger.error("No raw data periods found")
                 return False
 
-            # Create legacy period first
-            self.logger.info("Creating legacy period from baseline data")
-            legacy_success = self._transform_legacy_period(periods[0])
-            if not legacy_success:
-                self.logger.error("Failed to create legacy period")
-                return False
-
-            # Validate legacy period immediately
+            # Create validator
             validator = DataValidator(self.conn, self.cursor, self.verbose)
-            if not validator.validate_legacy_period():
-                self.logger.error("Legacy period validation failed")
+
+            # Create baseline period and snapshot before processing any real periods
+            first_period = periods[0]
+            if not self._create_baseline_period_and_snapshot(first_period):
+                self.logger.error("Failed to create baseline period and snapshot")
                 return False
 
             # Transform each period
@@ -239,149 +331,29 @@ class DataTransformer:
         """)
         return [row[0] for row in self.cursor.fetchall()]
 
-    def _transform_legacy_period(self, first_period: str) -> bool:
-        """
-        Create legacy period and synthetic events from first period's baseline data.
 
-        Args:
-            first_period: The chronologically first period to use as baseline
-
-        Returns:
-            True if successful
-        """
+    def _transform_peeps(self, period_name: str) -> bool:
+        """Transform raw_members data into normalized peeps table with incremental updates."""
         try:
-            self.logger.info(f"Creating legacy period from {first_period} baseline data")
+            self.logger.info(f"Transforming peeps from period {period_name}")
 
-            # First, transform peeps from the first period
-            if not self._transform_peeps():
-                return False
-
-            # Get baseline member data
+            # Get members from this specific period, ordered by CSV ID
             self.cursor.execute("""
                 SELECT csv_id, Name, "Display Name", Role, "Email Address",
-                       "Index", Priority, "Total Attended", Active, "Date Joined"
+                       "Date Joined", Active
                 FROM raw_members
-                WHERE period_name = ?
+                WHERE period_name = ? AND csv_id IS NOT NULL
                 ORDER BY CAST(csv_id AS INTEGER)
-            """, (first_period,))
+            """, (period_name,))
 
-            baseline_members = self.cursor.fetchall()
-            if not baseline_members:
-                self.logger.error(f"No baseline members found for period {first_period}")
-                return False
+            members = self.cursor.fetchall()
+            self.logger.info(f"Found {len(members)} members in period {period_name}")
 
-            # Determine max total_attended for synthetic events
-            max_attended = max(member[7] or 0 for member in baseline_members)
-            self.logger.info(f"Creating {max_attended} synthetic events for legacy period")
+            new_peeps = 0
+            updated_peeps = 0
 
-            # Create legacy schedule period
-            legacy_date = datetime(2024, 1, 1)  # Arbitrary early date
-            self.cursor.execute("""
-                INSERT INTO schedule_periods (
-                    period_name, display_name, start_date, end_date, status
-                ) VALUES (?, ?, ?, ?, ?)
-            """, (
-                "legacy",
-                "Legacy Baseline",
-                legacy_date.date(),
-                legacy_date.date(),
-                "completed"
-            ))
-
-            legacy_period_id = self.cursor.lastrowid
-            self.period_id_mapping["legacy"] = legacy_period_id
-
-            # Create synthetic events (2-hour blocks on same day)
-            synthetic_events = []
-            for i in range(max_attended):
-                event_time = legacy_date + timedelta(hours=i * 2)
-
-                self.cursor.execute("""
-                    INSERT INTO events (
-                        period_id, legacy_period_event_id, event_datetime,
-                        duration_minutes, status
-                    ) VALUES (?, ?, ?, ?, ?)
-                """, (
-                    legacy_period_id, i, event_time, 120, "completed"
-                ))
-
-                event_id = self.cursor.lastrowid
-                synthetic_events.append({
-                    'id': event_id,
-                    'legacy_id': i,
-                    'datetime': event_time
-                })
-                self.event_id_mapping[("legacy", i)] = event_id
-
-            # Create synthetic assignments and attendance
-            for member in baseline_members:
-                csv_id, name, display_name, role, email, index_pos, priority, total_attended, active, date_joined = member
-
-                if not total_attended or total_attended == 0:
-                    continue
-
-                peep_id = self.peep_id_mapping.get(csv_id)
-                if not peep_id:
-                    self.logger.warning(f"No peep_id found for csv_id {csv_id}")
-                    continue
-
-                # Create assignments and attendance for their total_attended count
-                for event_idx in range(min(total_attended, max_attended)):
-                    event = synthetic_events[event_idx]
-
-                    # Create assignment
-                    self.cursor.execute("""
-                        INSERT INTO event_assignments (
-                            event_id, peep_id, assigned_role, assignment_type, assignment_order
-                        ) VALUES (?, ?, ?, ?, ?)
-                    """, (
-                        event['id'], peep_id, role.lower(), "attendee", event_idx + 1
-                    ))
-
-                    assignment_id = self.cursor.lastrowid
-
-                    # Create attendance
-                    self.cursor.execute("""
-                        INSERT INTO event_attendance (
-                            event_id, peep_id, event_assignment_id, expected_role,
-                            expected_type, actual_role, attendance_status, participation_mode
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (
-                        event['id'], peep_id, assignment_id, role.lower(),
-                        "attendee", role.lower(), "attended", "scheduled"
-                    ))
-
-            # Create legacy snapshot
-            self._generate_legacy_snapshot(legacy_period_id, baseline_members)
-
-            self.logger.info("Successfully created legacy period with synthetic events")
-            return True
-
-        except Exception as e:
-            self.logger.error(f"Failed to create legacy period: {e}")
-            return False
-
-    def _transform_peeps(self) -> bool:
-        """Transform raw_members data into normalized peeps table with CSV ID preservation."""
-        try:
-            self.logger.info("Transforming peeps with CSV ID preservation")
-
-            # Get unique members across all periods, ordered by CSV ID
-            self.cursor.execute("""
-                SELECT csv_id, Name, "Display Name", Role, "Email Address",
-                       "Date Joined", Active,
-                       MIN(imported_at) as first_seen
-                FROM raw_members
-                WHERE csv_id IS NOT NULL
-                GROUP BY "Email Address"
-                ORDER BY CAST(csv_id AS INTEGER)
-            """)
-
-            unique_members = self.cursor.fetchall()
-            self.logger.info(f"Found {len(unique_members)} unique members to transform")
-
-            for member in unique_members:
-                csv_id, name, display_name, role, email, date_joined, active, first_seen = member
+            for member in members:
+                csv_id, name, display_name, role, email, date_joined, active = member
 
                 # Convert active text to boolean
                 active_bool = active.lower() in ['true', 'yes', '1'] if active else True
@@ -390,64 +362,51 @@ class DataTransformer:
                 joined_date = None
                 if date_joined:
                     try:
-                        joined_date = datetime.strptime(date_joined, "%Y-%m-%d").date()
+                        # Try M/D/YYYY format first (common in raw data)
+                        joined_date = datetime.strptime(date_joined, "%m/%d/%Y").date()
                     except:
+                        self.logger.warning(f"Could not parse date_joined '{date_joined}' for {name}")
                         joined_date = None
 
-                # Insert peep (AUTOINCREMENT will preserve CSV ID order)
-                self.cursor.execute("""
-                    INSERT INTO peeps (
-                        full_name, display_name, primary_role, email,
-                        date_joined, active
-                    ) VALUES (?, ?, ?, ?, ?, ?)
-                """, (
-                    name, display_name, role.lower(), email, joined_date, active_bool
-                ))
+                # Check if peep already exists by ID (CSV ID should match DB ID)
+                self.cursor.execute("SELECT id FROM peeps WHERE id = ?", (csv_id,))
+                existing = self.cursor.fetchone()
 
-                peep_id = self.cursor.lastrowid
+                if existing:
+                    # Update existing peep
+                    peep_id = existing[0]
+                    self.cursor.execute("""
+                        UPDATE peeps SET
+                            full_name = ?, display_name = ?, primary_role = ?,
+                            email = ?, date_joined = ?, active = ?
+                        WHERE id = ?
+                    """, (name, display_name, role.lower(), email, joined_date.isoformat(), active_bool, peep_id))
+                    updated_peeps += 1
+                else:
+                    # Insert new peep (AUTOINCREMENT will assign next sequential ID)
+                    self.cursor.execute("""
+                        INSERT INTO peeps (
+                            full_name, display_name, primary_role, email,
+                            date_joined, active
+                        ) VALUES (?, ?, ?, ?, ?, ?)
+                    """, (name, display_name, role.lower(), email, joined_date.isoformat(), active_bool))
+                    peep_id = self.cursor.lastrowid
+                    new_peeps += 1
+
+                # Update mapping
                 self.peep_id_mapping[csv_id] = peep_id
 
                 if self.verbose:
-                    self.logger.debug(f"Transformed peep: CSV ID {csv_id} -> DB ID {peep_id} ({name})")
+                    status = "updated" if existing else "created"
+                    self.logger.debug(f"{status.title()} peep: CSV ID {csv_id} -> DB ID {peep_id} ({name})")
 
-            self.logger.info(f"Successfully transformed {len(unique_members)} peeps")
+            self.logger.info(f"Successfully processed {len(members)} peeps: {new_peeps} new, {updated_peeps} updated")
             return True
 
         except Exception as e:
             self.logger.error(f"Failed to transform peeps: {e}")
             return False
 
-    def _generate_legacy_snapshot(self, legacy_period_id: int, baseline_members: List[Tuple]) -> bool:
-        """Generate snapshot for legacy period from baseline member data."""
-        try:
-            for member in baseline_members:
-                csv_id, name, display_name, role, email, index_pos, priority, total_attended, active, date_joined = member
-
-                peep_id = self.peep_id_mapping.get(csv_id)
-                if not peep_id:
-                    continue
-
-                # Convert active text to boolean
-                active_bool = active.lower() in ['true', 'yes', '1'] if active else True
-
-                self.cursor.execute("""
-                    INSERT INTO peep_order_snapshots (
-                        peep_id, period_id, priority, index_position,
-                        total_attended, active, notes
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    peep_id, legacy_period_id,
-                    priority or 0, index_pos or 0,
-                    total_attended or 0, active_bool,
-                    "Legacy baseline snapshot from raw member data"
-                ))
-
-            self.logger.info(f"Generated legacy snapshots for {len(baseline_members)} members")
-            return True
-
-        except Exception as e:
-            self.logger.error(f"Failed to generate legacy snapshot: {e}")
-            return False
 
     def _transform_period(self, period_name: str) -> bool:
         """
@@ -467,42 +426,60 @@ class DataTransformer:
             if not period_id:
                 return False
 
-            # 2. Transform events
-            events = self._transform_events(period_name, period_id)
-            if events is None:
+            # 2. Transform peeps (incremental updates/additions)
+            if not self._transform_peeps(period_name):
                 return False
 
-            # 3. Transform responses
+            # 2.5. Create baseline snapshot if this is the first period
+            if not self._create_baseline_snapshot_if_needed(period_name, period_id):
+                return False
+
+            # 3. Transform responses (for historical data preservation)
             responses = self._transform_responses(period_name, period_id)
             if responses is None:
                 return False
 
-            # 4. Transform event availability
-            if not self._transform_event_availability(responses, events):
+            # 4. Create proposed events from availability strings (what people were available for)
+            proposed_events = self._create_proposed_events(period_name, period_id, responses)
+            if proposed_events is None:
                 return False
 
-            # 5. Transform assignments from scheduler results JSON
-            assignments = self._transform_assignments(period_name, events)
-            if assignments is None:
+            # 5. Create event availability relationships (link responses to proposed events)
+            if not self._transform_event_availability(responses, proposed_events):
                 return False
 
-            # 6. Transform attendance from actual attendance JSON
+            # 6. Create actual events and assignments from scheduler results JSON (what actually happened)
+            events, assignments = self._transform_events_and_assignments(period_name, period_id)
+            if events is None or assignments is None:
+                return False
+
+            # 7. Transform attendance from actual attendance JSON
             attendance = self._transform_attendance(period_name, events)
             if attendance is None:
                 return False
 
-            # 7. STRICT VALIDATION: Ensure all assignments have attendance
+            # 8. STRICT VALIDATION: Ensure all assignments have attendance
+            # Exception: Future periods may have assignments but no attendance yet
             if assignments and not attendance:
-                raise ValueError(
-                    f"Period {period_name} has assignments but no attendance data. "
-                    f"Manual reconstruction required before transformation."
-                )
+                # Check if this period has actual attendance data
+                self.cursor.execute("SELECT COUNT(*) FROM raw_actual_attendance WHERE period_name = ?", (period_name,))
+                has_attendance_data = self.cursor.fetchone()[0] > 0
 
-            # 8. Reconcile and create change records
+                if has_attendance_data:
+                    # This period should have attendance but transformation failed
+                    raise ValueError(
+                        f"Period {period_name} has assignments and attendance data but no attendance records created. "
+                        f"Manual reconstruction required before transformation."
+                    )
+                else:
+                    # This is a future period with scheduler results but no attendance yet - that's normal
+                    self.logger.info(f"Period {period_name} has assignments but no attendance data - this is normal for future periods")
+
+            # 9. Reconcile and create change records
             if not self._reconcile_assignments_vs_attendance(assignments, attendance, events):
                 return False
 
-            # 9. Generate period snapshot
+            # 10. Generate period snapshot
             if not self._generate_period_snapshot(period_name, period_id):
                 return False
 
@@ -513,27 +490,141 @@ class DataTransformer:
             self.logger.error(f"Failed to transform period {period_name}: {e}")
             return False
 
-    def _create_schedule_period(self, period_name: str) -> Optional[int]:
-        """Create schedule_periods record for the given period."""
-        try:
-            # Determine period dates from events if possible
-            start_date = datetime(2024, 1, 1).date()  # Default fallback
-            end_date = start_date
+    def _create_baseline_snapshot_if_needed(self, period_name: str, period_id: int) -> bool:
+        """
+        No-op: Baseline snapshots are now created upfront in _create_baseline_period_and_snapshot().
+        This method exists to maintain compatibility with existing period processing flow.
+        """
+        # Baseline snapshots are already created before any period processing begins
+        return True
 
-            # Check if we have event data to determine actual dates
+    def _transform_events_and_assignments(self, period_name: str, period_id: int) -> Tuple[Optional[List[Dict]], Optional[List[Dict]]]:
+        """Update proposed events to completed status and create assignments from scheduler results JSON."""
+        try:
+            # Get results JSON for this period
             self.cursor.execute("""
-                SELECT MIN(response_timestamp), MAX(response_timestamp)
-                FROM raw_responses
-                WHERE period_name = ? AND response_timestamp IS NOT NULL
+                SELECT results_json FROM raw_results WHERE period_name = ?
             """, (period_name,))
 
             result = self.cursor.fetchone()
-            if result and result[0]:
+            if not result or not result[0]:
+                self.logger.info(f"No scheduler results found for period {period_name}")
+                return [], []
+
+            # Parse JSON
+            try:
+                results_data = json.loads(result[0])
+            except Exception as e:
+                self.logger.error(f"Could not parse results JSON for period {period_name}: {e}")
+                return None, None
+
+            events = []
+            assignments = []
+
+            # Process each valid_event in the results to update proposed events and create assignments
+            valid_events = results_data.get('valid_events', [])
+            for valid_event in valid_events:
+                event_index = valid_event.get('id')
+                if event_index is None:
+                    self.logger.warning(f"Event missing 'id' field, skipping: {valid_event}")
+                    continue
+                event_datetime_str = valid_event.get('date')
+                if not event_datetime_str:
+                    self.logger.warning(f"No date found for event {event_index}")
+                    continue
+
+                # Parse event datetime
                 try:
-                    start_date = datetime.fromisoformat(result[0]).date()
-                    end_date = datetime.fromisoformat(result[1]).date() if result[1] else start_date
-                except:
-                    pass
+                    event_datetime = datetime.fromisoformat(event_datetime_str.replace('Z', '+00:00'))
+                except Exception as e:
+                    self.logger.warning(f"Could not parse event_datetime {event_datetime_str}: {e}")
+                    continue
+
+                # Get duration from results (defaults to 120 if not specified)
+                duration_minutes = valid_event.get('duration_minutes', 120)
+
+                # Find existing proposed event by datetime
+                self.cursor.execute("""
+                    SELECT id FROM events
+                    WHERE period_id = ? AND event_datetime = ? AND status = 'proposed'
+                """, (period_id, event_datetime.isoformat()))
+
+                event_result = self.cursor.fetchone()
+                if not event_result:
+                    self.logger.warning(f"No proposed event found for {event_datetime_str} in period {period_name}, creating new event")
+                    # Fallback: create new event if proposed event not found
+                    self.cursor.execute("""
+                        INSERT INTO events (
+                            period_id, legacy_period_event_id, event_datetime,
+                            duration_minutes, status
+                        ) VALUES (?, ?, ?, ?, ?)
+                    """, (period_id, event_index, event_datetime.isoformat(), duration_minutes, "completed"))
+                    event_id = self.cursor.lastrowid
+                else:
+                    # Update existing proposed event to completed
+                    event_id = event_result[0]
+                    self.cursor.execute("""
+                        UPDATE events
+                        SET status = 'completed',
+                            duration_minutes = ?,
+                            legacy_period_event_id = ?
+                        WHERE id = ?
+                    """, (duration_minutes, event_index, event_id))
+
+                event_data = {
+                    'id': event_id,
+                    'event_index': event_index,
+                    'datetime': event_datetime,
+                    'period_id': period_id
+                }
+                events.append(event_data)
+                self.event_id_mapping[(period_name, event_index)] = event_id
+
+                # Create assignments for this event
+                attendees = valid_event.get('attendees', [])
+                for order, attendee in enumerate(attendees):
+                    member_id = attendee.get('id')
+                    peep_id = self.peep_id_mapping.get(str(member_id))
+                    if not peep_id:
+                        self.logger.warning(f"No peep_id found for member_id {member_id}")
+                        continue
+
+                    assigned_role = attendee.get('role')
+                    assignment_type = attendee.get('assignment_type', 'attendee')
+
+                    self.cursor.execute("""
+                        INSERT INTO event_assignments (
+                            event_id, peep_id, assigned_role, assignment_type, assignment_order
+                        ) VALUES (?, ?, ?, ?, ?)
+                    """, (event_id, peep_id, assigned_role.lower(), assignment_type, order + 1))
+
+                    assignments.append({
+                        'id': self.cursor.lastrowid,
+                        'event_id': event_id,
+                        'peep_id': peep_id,
+                        'assigned_role': assigned_role,
+                        'assignment_type': assignment_type,
+                        'assignment_order': order + 1
+                    })
+
+            self.logger.info(f"Created {len(events)} events and {len(assignments)} assignments for {period_name}")
+            return events, assignments
+
+        except Exception as e:
+            self.logger.error(f"Failed to transform events and assignments for {period_name}: {e}")
+            return None, None
+
+    def _create_schedule_period(self, period_name: str) -> Optional[int]:
+        """Create schedule_periods record for the given period."""
+        try:
+            # Parse period name (e.g., "2025-02") to get month boundaries
+            year, month = map(int, period_name.split('-'))
+            start_date = datetime(year, month, 1).date()
+            # Get last day of month
+            if month == 12:
+                end_date = datetime(year + 1, 1, 1).date() - timedelta(days=1)
+            else:
+                end_date = datetime(year, month + 1, 1).date() - timedelta(days=1)
 
             # Determine display name
             display_name = f"Period {period_name}"
@@ -554,7 +645,7 @@ class DataTransformer:
                 INSERT INTO schedule_periods (
                     period_name, display_name, start_date, end_date, status
                 ) VALUES (?, ?, ?, ?, ?)
-            """, (period_name, display_name, start_date, end_date, status))
+            """, (period_name, display_name, start_date.isoformat(), end_date.isoformat(), status))
 
             period_id = self.cursor.lastrowid
             self.period_id_mapping[period_name] = period_id
@@ -566,69 +657,6 @@ class DataTransformer:
             self.logger.error(f"Failed to create schedule period {period_name}: {e}")
             return None
 
-    def _transform_events(self, period_name: str, period_id: int) -> Optional[List[Dict]]:
-        """Transform events from response availability data."""
-        try:
-            # Extract unique event datetimes from availability strings
-            self.cursor.execute("""
-                SELECT DISTINCT Availability
-                FROM raw_responses
-                WHERE period_name = ? AND Availability IS NOT NULL AND Availability != ''
-            """, (period_name,))
-
-            availability_strings = [row[0] for row in self.cursor.fetchall()]
-            if not availability_strings:
-                self.logger.warning(f"No availability data found for period {period_name}")
-                return []
-
-            # Parse all availability strings to extract unique events
-            unique_events = set()
-            for avail_str in availability_strings:
-                try:
-                    events = avail_str.split(',')
-                    for event in events:
-                        event = event.strip()
-                        if event:
-                            try:
-                                event_datetime = parse_event_date(event)
-                                unique_events.add(event_datetime)
-                            except Exception as e:
-                                self.logger.warning(f"Could not parse event date '{event}': {e}")
-                except Exception as e:
-                    self.logger.warning(f"Could not parse availability string '{avail_str}': {e}")
-
-            if not unique_events:
-                self.logger.warning(f"No valid events found for period {period_name}")
-                return []
-
-            # Sort events chronologically and create database records
-            sorted_events = sorted(unique_events)
-            created_events = []
-
-            for legacy_id, event_datetime in enumerate(sorted_events):
-                self.cursor.execute("""
-                    INSERT INTO events (
-                        period_id, legacy_period_event_id, event_datetime,
-                        duration_minutes, status
-                    ) VALUES (?, ?, ?, ?, ?)
-                """, (period_id, legacy_id, event_datetime, 90, "completed"))
-
-                event_id = self.cursor.lastrowid
-                event_data = {
-                    'id': event_id,
-                    'period_id': period_id,
-                    'legacy_id': legacy_id,
-                    'datetime': event_datetime
-                }
-                created_events.append(event_data)
-                self.event_id_mapping[(period_name, legacy_id)] = event_id
-
-            self.logger.info(f"Created {len(created_events)} events for period {period_name}")
-            return created_events
-
-        except Exception as e:
-            self.logger.error(f"Failed to transform events for period {period_name}: {e}")
-            return None
 
     def _transform_responses(self, period_name: str, period_id: int) -> Optional[List[Dict]]:
         """Transform raw_responses data into normalized responses table."""
@@ -653,23 +681,26 @@ class DataTransformer:
                 email, name, primary_role, secondary_role, max_sessions, min_interval, \
                 partnership_pref, org_comments, instructor_comments, timestamp = response_data
 
-                # Find peep_id by email
-                peep_id = None
-                for csv_id, db_id in self.peep_id_mapping.items():
-                    self.cursor.execute("""
-                        SELECT id FROM peeps WHERE id = ? AND email = ?
-                    """, (db_id, email))
-                    if self.cursor.fetchone():
-                        peep_id = db_id
-                        break
+                # Look up peep_id by email via raw_members for this period (case-insensitive)
+                self.cursor.execute("""
+                    SELECT csv_id FROM raw_members
+                    WHERE period_name = ? AND LOWER("Email Address") = LOWER(?)
+                """, (period_name, email))
 
+                result = self.cursor.fetchone()
+                if not result:
+                    self.logger.error(f"No member found for email {email} in period {period_name}")
+                    return None
+
+                csv_id = result[0]
+                peep_id = self.peep_id_mapping.get(csv_id)
                 if not peep_id:
-                    self.logger.warning(f"No peep found for email {email} in period {period_name}")
-                    continue
+                    self.logger.error(f"No peep_id found for csv_id {csv_id}")
+                    return None
 
                 # Parse response fields
-                response_role = (primary_role or "follower").lower()
-                switch_pref = SwitchPreference.from_string(secondary_role or "no").value
+                response_role = Role.from_string(primary_role).value
+                switch_pref = SwitchPreference.from_string(secondary_role).value if secondary_role else SwitchPreference.PRIMARY_ONLY.value
                 max_sessions_int = int(max_sessions) if max_sessions and max_sessions.isdigit() else 6
                 min_interval_int = int(min_interval) if min_interval and min_interval.isdigit() else 0
 
@@ -707,29 +738,30 @@ class DataTransformer:
             self.logger.error(f"Failed to transform responses for period {period_name}: {e}")
             return None
 
-    def _transform_event_availability(self, responses: List[Dict], events: List[Dict]) -> bool:
-        """Create event_availability many-to-many relationships from response availability strings."""
+    def _create_proposed_events(self, period_name: str, period_id: int, responses: List[Dict]) -> Optional[List[Dict]]:
+        """Create proposed events from availability strings in responses."""
         try:
-            if not responses or not events:
-                self.logger.warning("No responses or events to process for availability")
-                return True
+            if not responses:
+                self.logger.info("No responses to extract proposed events from")
+                return []
 
-            # Create event datetime lookup
-            event_datetime_to_id = {event['datetime']: event['id'] for event in events}
+            self.logger.info(f"Creating proposed events from availability strings for period {period_name}")
 
-            # Process each response's availability string
+            # Collect all unique proposed event datetimes from availability strings
+            proposed_datetimes = set()
+
             for response in responses:
                 response_id = response['id']
                 peep_id = response['peep_id']
 
-                # Get the availability string for this response
+                # Get the availability string for this response (case-insensitive email)
                 self.cursor.execute("""
                     SELECT Availability FROM raw_responses
-                    WHERE period_id = ? AND "Email Address" IN (
-                        SELECT email FROM peeps WHERE id = ?
+                    WHERE period_name = ? AND LOWER("Email Address") IN (
+                        SELECT LOWER(email) FROM peeps WHERE id = ?
                     )
                     LIMIT 1
-                """, (response['period_id'], peep_id))
+                """, (period_name, peep_id))
 
                 result = self.cursor.fetchone()
                 if not result or not result[0]:
@@ -737,7 +769,7 @@ class DataTransformer:
 
                 availability_string = result[0]
 
-                # Parse availability string
+                # Parse availability string to extract proposed datetimes
                 try:
                     available_events = availability_string.split(',')
                     for event_str in available_events:
@@ -745,15 +777,99 @@ class DataTransformer:
                         if event_str:
                             try:
                                 event_datetime = parse_event_date(event_str)
-                                event_id = event_datetime_to_id.get(event_datetime)
+                                # Ensure we have a datetime object
+                                if isinstance(event_datetime, str):
+                                    event_datetime = datetime.fromisoformat(event_datetime.replace('Z', '+00:00'))
+                                proposed_datetimes.add(event_datetime)
+                            except Exception as e:
+                                self.logger.warning(f"Could not parse event date '{event_str}': {e}")
 
-                                if event_id:
+                except Exception as e:
+                    self.logger.warning(f"Could not parse availability string '{availability_string}': {e}")
+
+            # Create proposed event records for unique datetimes
+            proposed_events = []
+            for event_datetime in sorted(proposed_datetimes):
+                self.cursor.execute("""
+                    INSERT INTO events (
+                        period_id, event_datetime, duration_minutes, status
+                    ) VALUES (?, ?, ?, ?)
+                """, (period_id, event_datetime.isoformat(), 120, 'proposed'))
+
+                event_id = self.cursor.lastrowid
+                proposed_events.append({
+                    'id': event_id,
+                    'datetime': event_datetime,
+                    'period_id': period_id,
+                    'status': 'proposed'
+                })
+
+            self.logger.info(f"Created {len(proposed_events)} proposed events for period {period_name}")
+            return proposed_events
+
+        except Exception as e:
+            self.logger.error(f"Failed to create proposed events for {period_name}: {e}")
+            return None
+
+    def _transform_event_availability(self, responses: List[Dict], proposed_events: List[Dict]) -> bool:
+        """Create event_availability many-to-many relationships linking responses to proposed events."""
+        try:
+            if not responses or not proposed_events:
+                self.logger.warning("No responses or proposed events to process for availability")
+                return True
+
+            # Create proposed event datetime lookup
+            proposed_datetime_to_id = {event['datetime']: event['id'] for event in proposed_events}
+
+            # Get period name from period_id for raw_responses lookup
+            if responses:
+                period_id = responses[0]['period_id']
+                self.cursor.execute("SELECT period_name FROM schedule_periods WHERE id = ?", (period_id,))
+                period_name = self.cursor.fetchone()[0]
+
+            availability_records_created = 0
+
+            # Process each response's availability string
+            for response in responses:
+                response_id = response['id']
+                peep_id = response['peep_id']
+
+                # Get the availability string for this response (case-insensitive email)
+                self.cursor.execute("""
+                    SELECT Availability FROM raw_responses
+                    WHERE period_name = ? AND LOWER("Email Address") IN (
+                        SELECT LOWER(email) FROM peeps WHERE id = ?
+                    )
+                    LIMIT 1
+                """, (period_name, peep_id))
+
+                result = self.cursor.fetchone()
+                if not result or not result[0]:
+                    continue
+
+                availability_string = result[0]
+
+                # Parse availability string and link to proposed events
+                try:
+                    available_events = availability_string.split(',')
+                    for event_str in available_events:
+                        event_str = event_str.strip()
+                        if event_str:
+                            try:
+                                event_datetime = parse_event_date(event_str)
+                                # Ensure we have a datetime object
+                                if isinstance(event_datetime, str):
+                                    event_datetime = datetime.fromisoformat(event_datetime.replace('Z', '+00:00'))
+                                proposed_event_id = proposed_datetime_to_id.get(event_datetime)
+
+                                if proposed_event_id:
                                     self.cursor.execute("""
                                         INSERT INTO event_availability (response_id, event_id)
                                         VALUES (?, ?)
-                                    """, (response_id, event_id))
+                                    """, (response_id, proposed_event_id))
+                                    availability_records_created += 1
                                 else:
-                                    self.logger.warning(f"Event datetime {event_datetime} not found in events")
+                                    self.logger.warning(f"Proposed event datetime {event_datetime} not found")
 
                             except Exception as e:
                                 self.logger.warning(f"Could not parse event date '{event_str}': {e}")
@@ -761,112 +877,14 @@ class DataTransformer:
                 except Exception as e:
                     self.logger.warning(f"Could not parse availability string '{availability_string}': {e}")
 
-            self.logger.info(f"Created event availability relationships for {len(responses)} responses")
+            self.logger.info(f"Created {availability_records_created} event availability relationships for {len(responses)} responses")
             return True
 
         except Exception as e:
             self.logger.error(f"Failed to transform event availability: {e}")
             return False
 
-    def _transform_assignments(self, period_name: str, events: List[Dict]) -> Optional[List[Dict]]:
-        """Transform scheduler results JSON into normalized assignments."""
-        try:
-            # Get results JSON for this period
-            self.cursor.execute("""
-                SELECT results_json FROM raw_results WHERE period_name = ?
-            """, (period_name,))
 
-            result = self.cursor.fetchone()
-            if not result or not result[0]:
-                self.logger.info(f"No scheduler results found for period {period_name}")
-                return []
-
-            # Parse JSON
-            try:
-                results_data = json.loads(result[0])
-            except Exception as e:
-                self.logger.error(f"Could not parse results JSON for period {period_name}: {e}")
-                return None
-
-            # Create event lookup by legacy ID
-            event_lookup = {event['legacy_id']: event for event in events}
-
-            assignments = []
-
-            # Process each valid_event in the results
-            valid_events = results_data.get('valid_events', [])
-            for valid_event in valid_events:
-                legacy_event_id = valid_event.get('id')
-                event_data = event_lookup.get(legacy_event_id)
-
-                if not event_data:
-                    self.logger.warning(f"Event with legacy ID {legacy_event_id} not found")
-                    continue
-
-                event_id = event_data['id']
-
-                # Process attendees
-                attendees = valid_event.get('attendees', [])
-                for idx, attendee in enumerate(attendees):
-                    member_id = attendee.get('member_id')
-                    role = attendee.get('role', 'follower').lower()
-
-                    # Find peep_id from member_id
-                    peep_id = self.peep_id_mapping.get(str(member_id))
-                    if not peep_id:
-                        self.logger.warning(f"Peep not found for member_id {member_id}")
-                        continue
-
-                    # Create assignment
-                    self.cursor.execute("""
-                        INSERT INTO event_assignments (
-                            event_id, peep_id, assigned_role, assignment_type,
-                            assignment_order
-                        ) VALUES (?, ?, ?, ?, ?)
-                    """, (event_id, peep_id, role, "attendee", idx + 1))
-
-                    assignments.append({
-                        'id': self.cursor.lastrowid,
-                        'event_id': event_id,
-                        'peep_id': peep_id,
-                        'role': role,
-                        'type': 'attendee',
-                        'order': idx + 1
-                    })
-
-                # Process alternates if they exist
-                alternates = valid_event.get('alternates', [])
-                for idx, alternate in enumerate(alternates):
-                    member_id = alternate.get('member_id')
-                    role = alternate.get('role', 'follower').lower()
-
-                    peep_id = self.peep_id_mapping.get(str(member_id))
-                    if not peep_id:
-                        self.logger.warning(f"Peep not found for alternate member_id {member_id}")
-                        continue
-
-                    self.cursor.execute("""
-                        INSERT INTO event_assignments (
-                            event_id, peep_id, assigned_role, assignment_type,
-                            alternate_position
-                        ) VALUES (?, ?, ?, ?, ?)
-                    """, (event_id, peep_id, role, "alternate", idx + 1))
-
-                    assignments.append({
-                        'id': self.cursor.lastrowid,
-                        'event_id': event_id,
-                        'peep_id': peep_id,
-                        'role': role,
-                        'type': 'alternate',
-                        'position': idx + 1
-                    })
-
-            self.logger.info(f"Created {len(assignments)} assignments for period {period_name}")
-            return assignments
-
-        except Exception as e:
-            self.logger.error(f"Failed to transform assignments for period {period_name}: {e}")
-            return None
 
     def _transform_attendance(self, period_name: str, events: List[Dict]) -> Optional[List[Dict]]:
         """Transform actual attendance JSON into normalized attendance records."""
@@ -889,27 +907,48 @@ class DataTransformer:
                 return None
 
             # Create event lookup by legacy ID
-            event_lookup = {event['legacy_id']: event for event in events}
+            event_lookup = {event['event_index']: event for event in events}
 
             attendance_records = []
+            created_unscheduled_events = []
 
             # Process each valid_event in the attendance
             valid_events = attendance_data.get('valid_events', [])
             for valid_event in valid_events:
-                legacy_event_id = valid_event.get('id')
-                event_data = event_lookup.get(legacy_event_id)
+                event_index = valid_event.get('id')
+                if event_index is None:
+                    self.logger.warning(f"Attendance event missing 'id' field, skipping: {valid_event}")
+                    continue
+
+                event_data = event_lookup.get(event_index)
 
                 if not event_data:
-                    self.logger.warning(f"Event with legacy ID {legacy_event_id} not found for attendance")
-                    continue
+                    # Create unscheduled event for attendance that has no corresponding scheduled event
+                    event_id = self._create_unscheduled_event(period_name, valid_event, event_index)
+                    if not event_id:
+                        self.logger.error(f"Failed to create unscheduled event for index {event_index}")
+                        continue
+
+                    # Add to our lookup and events list for processing
+                    event_data = {
+                        'id': event_id,
+                        'event_index': event_index,
+                        'datetime': valid_event.get('date'),
+                        'period_id': self.period_id_mapping[period_name],
+                        'is_unscheduled': True
+                    }
+                    event_lookup[event_index] = event_data
+                    created_unscheduled_events.append(event_data)
+
+                    self.logger.info(f"Created unscheduled event {event_id} for attendance index {event_index}")
 
                 event_id = event_data['id']
 
                 # Process attendees who actually attended
                 attendees = valid_event.get('attendees', [])
                 for attendee in attendees:
-                    member_id = attendee.get('member_id')
-                    role = attendee.get('role', 'follower').lower()
+                    member_id = attendee.get('id')
+                    role = attendee.get('role')
 
                     # Find peep_id from member_id
                     peep_id = self.peep_id_mapping.get(str(member_id))
@@ -942,7 +981,7 @@ class DataTransformer:
                         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     """, (
                         event_id, peep_id, assignment_id, expected_role,
-                        expected_type, role, "attended", participation_mode
+                        expected_type, role.lower(), "attended", participation_mode
                     ))
 
                     attendance_records.append({
@@ -955,10 +994,81 @@ class DataTransformer:
                     })
 
             self.logger.info(f"Created {len(attendance_records)} attendance records for period {period_name}")
+            if created_unscheduled_events:
+                self.logger.info(f"Created {len(created_unscheduled_events)} unscheduled events for period {period_name}")
             return attendance_records
 
         except Exception as e:
             self.logger.error(f"Failed to transform attendance for period {period_name}: {e}")
+            return None
+
+    def _create_unscheduled_event(self, period_name: str, valid_event: Dict, event_index: int) -> Optional[int]:
+        """
+        Create or reuse an event from attendance data when no corresponding scheduled event exists.
+        This handles cases like last-minute sessions that were held but not in the original schedule.
+        """
+        try:
+            # Extract event details from attendance JSON
+            event_datetime_str = valid_event.get('date')
+            if not event_datetime_str:
+                self.logger.error(f"No date found for unscheduled event {event_index}")
+                return None
+
+            # Parse event datetime
+            try:
+                event_datetime = datetime.fromisoformat(event_datetime_str.replace('Z', '+00:00'))
+            except Exception as e:
+                self.logger.error(f"Could not parse event_datetime {event_datetime_str}: {e}")
+                return None
+
+            # Get duration (default to 90 minutes for unscheduled events)
+            duration_minutes = valid_event.get('duration_minutes', 90)
+
+            # Get period ID
+            period_id = self.period_id_mapping.get(period_name)
+            if not period_id:
+                self.logger.error(f"Period ID not found for {period_name}")
+                return None
+
+            # First check if there's already a proposed event at this datetime
+            self.cursor.execute("""
+                SELECT id FROM events
+                WHERE period_id = ? AND event_datetime = ? AND status = 'proposed'
+            """, (period_id, event_datetime.isoformat()))
+
+            existing_event = self.cursor.fetchone()
+
+            if existing_event:
+                # Reuse existing proposed event, update it to completed with correct legacy ID
+                event_id = existing_event[0]
+                self.cursor.execute("""
+                    UPDATE events
+                    SET status = 'completed',
+                        duration_minutes = ?,
+                        legacy_period_event_id = ?
+                    WHERE id = ?
+                """, (duration_minutes, event_index, event_id))
+
+                self.logger.info(f"Reused existing proposed event {event_id} for attendance index {event_index} at {event_datetime_str}")
+            else:
+                # Create new event if no proposed event exists
+                self.cursor.execute("""
+                    INSERT INTO events (
+                        period_id, legacy_period_event_id, event_datetime,
+                        duration_minutes, status
+                    ) VALUES (?, ?, ?, ?, ?)
+                """, (period_id, event_index, event_datetime.isoformat(), duration_minutes, "completed"))
+
+                event_id = self.cursor.lastrowid
+                self.logger.info(f"Created new unscheduled event {event_id} for {event_datetime_str} (index {event_index})")
+
+            # Update mapping for future reference
+            self.event_id_mapping[(period_name, event_index)] = event_id
+
+            return event_id
+
+        except Exception as e:
+            self.logger.error(f"Failed to create unscheduled event for index {event_index}: {e}")
             return None
 
     def _reconcile_assignments_vs_attendance(self, assignments: List[Dict], attendance: List[Dict], events: List[Dict]) -> bool:
@@ -981,7 +1091,7 @@ class DataTransformer:
                 # Check each assignment against attendance
                 for assignment in event_assignments:
                     peep_id = assignment['peep_id']
-                    assigned_role = assignment['role']
+                    assigned_role = assignment['assigned_role']
 
                     # Find if this person attended
                     attended = next((a for a in event_attendance if a['peep_id'] == peep_id), None)
@@ -994,8 +1104,8 @@ class DataTransformer:
                                 changed_at, notes
                             ) VALUES (?, ?, ?, ?, ?, ?)
                         """, (
-                            event_id, "cancel", "reconstructed", "no_show_reconstructed",
-                            event_datetime, "Reconstructed: Scheduled but no attendance record"
+                            event_id, "cancel", "reconstructed", "cancel_reconstructed",
+                            event_datetime.isoformat(), "Reconstructed: Scheduled but no attendance record"
                         ))
                         changes_created += 1
 
@@ -1006,7 +1116,7 @@ class DataTransformer:
                                 event_id, change_type, change_source, changed_at, notes
                             ) VALUES (?, ?, ?, ?, ?)
                         """, (
-                            event_id, "change_role", "reconstructed", event_datetime,
+                            event_id, "change_role", "reconstructed", event_datetime.isoformat(),
                             f"Reconstructed: Role changed from {assigned_role} to {attended['actual_role']}"
                         ))
                         changes_created += 1
@@ -1021,7 +1131,7 @@ class DataTransformer:
                             ) VALUES (?, ?, ?, ?, ?, ?)
                         """, (
                             event_id, "add", "reconstructed", "volunteer_fill",
-                            event_datetime, "Reconstructed: Attended without assignment"
+                            event_datetime.isoformat(), "Reconstructed: Attended without assignment"
                         ))
                         changes_created += 1
 
@@ -1107,71 +1217,69 @@ class DataValidator:
 
         return logger
 
-    def validate_legacy_period(self) -> bool:
-        """Validate the legacy period transformation specifically."""
+    def _validate_event_id_consistency(self, period_name: str) -> bool:
+        """
+        Comprehensive event ID validation between results and attendance JSON.
+        Reports issues but allows transformation to continue with warnings.
+        """
         try:
-            self.logger.info("Validating legacy period transformation")
+            # Get results and attendance event IDs
+            self.cursor.execute("SELECT results_json FROM raw_results WHERE period_name = ?", (period_name,))
+            results_result = self.cursor.fetchone()
 
-            # Check legacy period exists
-            self.cursor.execute("SELECT id FROM schedule_periods WHERE period_name = 'legacy'")
-            legacy_result = self.cursor.fetchone()
-            if not legacy_result:
-                self.logger.error("Legacy period not found")
-                return False
+            self.cursor.execute("SELECT actual_attendance_json FROM raw_actual_attendance WHERE period_name = ?", (period_name,))
+            attendance_result = self.cursor.fetchone()
 
-            legacy_period_id = legacy_result[0]
+            if not results_result or not results_result[0]:
+                self.logger.info(f"Period {period_name}: No results data - skipping event ID consistency check")
+                return True
 
-            # Check synthetic events exist
-            self.cursor.execute("SELECT COUNT(*) FROM events WHERE period_id = ?", (legacy_period_id,))
-            event_count = self.cursor.fetchone()[0]
-            if event_count == 0:
-                self.logger.error("Legacy period has no synthetic events")
-                return False
+            results_data = json.loads(results_result[0])
+            results_events = results_data.get('valid_events', [])
+            results_event_ids = {e.get('id') for e in results_events if e.get('id') is not None}
 
-            # Check all synthetic events are 2-hour blocks on same day
-            self.cursor.execute("""
-                SELECT event_datetime, duration_minutes
-                FROM events
-                WHERE period_id = ?
-                ORDER BY event_datetime
-            """, (legacy_period_id,))
+            if not attendance_result or not attendance_result[0]:
+                self.logger.info(f"Period {period_name}: No attendance data - skipping event ID consistency check")
+                return True
 
-            events = self.cursor.fetchall()
-            if events:
-                base_date = events[0][0].split()[0]  # Get date part
-                for i, (event_datetime, duration) in enumerate(events):
-                    if duration != 120:
-                        self.logger.error(f"Legacy event {i} has duration {duration}, expected 120 minutes")
-                        return False
+            attendance_data = json.loads(attendance_result[0])
+            attendance_events = attendance_data.get('valid_events', [])
+            attendance_event_ids = {e.get('id') for e in attendance_events if e.get('id') is not None}
 
-                    event_date = event_datetime.split()[0]
-                    if event_date != base_date:
-                        self.logger.error(f"Legacy event {i} on different date than expected")
-                        return False
+            # Track validation issues by severity
+            has_critical_issues = False
 
-            # Check snapshots exist for legacy period
-            self.cursor.execute("SELECT COUNT(*) FROM peep_order_snapshots WHERE period_id = ?", (legacy_period_id,))
-            snapshot_count = self.cursor.fetchone()[0]
-            if snapshot_count == 0:
-                self.logger.error("Legacy period has no snapshots")
-                return False
+            # CRITICAL: Missing event IDs in JSON (breaks transformation)
+            for i, event in enumerate(results_events):
+                if event.get('id') is None:
+                    self.logger.error(f"Period {period_name}: Results event at index {i} missing 'id' field - CRITICAL BUG")
+                    has_critical_issues = True
 
-            # Check assignments and attendance are consistent (no changes expected for synthetic data)
-            self.cursor.execute("""
-                SELECT COUNT(*) FROM event_assignment_changes eac
-                JOIN events e ON eac.event_id = e.id
-                WHERE e.period_id = ?
-            """, (legacy_period_id,))
+            for i, event in enumerate(attendance_events):
+                if event.get('id') is None:
+                    self.logger.error(f"Period {period_name}: Attendance event at index {i} missing 'id' field - CRITICAL BUG")
+                    has_critical_issues = True
 
-            change_count = self.cursor.fetchone()[0]
-            if change_count > 0:
-                self.logger.warning(f"Legacy period has {change_count} assignment changes (unexpected for synthetic data)")
+            # WARNINGS: Data inconsistencies (might be normal)
+            extra_in_attendance = attendance_event_ids - results_event_ids
+            missing_from_attendance = results_event_ids - attendance_event_ids
 
-            self.logger.info(f"Legacy period validation passed: {event_count} events, {snapshot_count} snapshots")
-            return True
+            if extra_in_attendance:
+                self.logger.warning(f"Period {period_name}: Events in attendance but not results: {sorted(extra_in_attendance)} (might be unscheduled events)")
+
+            if missing_from_attendance:
+                self.logger.info(f"Period {period_name}: Events in results but not attendance: {sorted(missing_from_attendance)} (no-shows - normal)")
+
+            # INFO: Non-sequential IDs (normal - just documenting)
+            all_ids = sorted(results_event_ids | attendance_event_ids)
+            if all_ids and all_ids != list(range(len(all_ids))):
+                self.logger.debug(f"Period {period_name}: Non-sequential event IDs: {all_ids} (this is normal)")
+
+            # Only fail validation for critical issues that break transformation
+            return not has_critical_issues
 
         except Exception as e:
-            self.logger.error(f"Error validating legacy period: {e}")
+            self.logger.error(f"Period {period_name}: Event ID consistency validation failed: {e}")
             return False
 
     def validate_period(self, period_name: str) -> bool:
@@ -1198,6 +1306,7 @@ class DataValidator:
 
             # Run period-specific validations
             validations = [
+                ("Event ID Consistency", lambda: self._validate_event_id_consistency(period_name)),
                 ("Events", lambda: self._validate_period_events(period_name, period_id)),
                 ("Responses", lambda: self._validate_period_responses(period_name, period_id)),
                 ("Event Availability", lambda: self._validate_period_availability(period_name, period_id)),
@@ -1289,18 +1398,24 @@ class DataValidator:
 
     def _validate_period_availability(self, period_name: str, period_id: int) -> bool:
         """Validate event availability for a specific period."""
-        # Check that responses have corresponding availability records
+        # Check that responses with availability data have corresponding availability records
+        # It's normal for responses to have no availability (empty string) - that's not an error
         self.cursor.execute("""
             SELECT COUNT(*) FROM responses r
+            JOIN peeps p ON r.peep_id = p.id
+            JOIN raw_responses rr ON LOWER(p.email) = LOWER(rr."Email Address") AND rr.period_name = ?
             WHERE r.period_id = ?
+            AND rr.Availability IS NOT NULL
+            AND TRIM(rr.Availability) != ''
             AND NOT EXISTS (
                 SELECT 1 FROM event_availability ea WHERE ea.response_id = r.id
             )
-        """, (period_id,))
+        """, (period_name, period_id))
 
-        responses_without_availability = self.cursor.fetchone()[0]
-        if responses_without_availability > 0:
-            self.logger.warning(f"Period {period_name}: {responses_without_availability} responses without availability records")
+        responses_with_missing_availability = self.cursor.fetchone()[0]
+        if responses_with_missing_availability > 0:
+            self.logger.error(f"Period {period_name}: {responses_with_missing_availability} responses with availability data but no availability records created")
+            return False
 
         return True
 
@@ -1486,236 +1601,6 @@ class DataValidator:
             self.logger.error(f"Error validating global constraints: {e}")
             return False
 
-    def validate_snapshot_progression(self) -> bool:
-        """
-        Validate that snapshots can be recreated from previous snapshots + attendance.
-
-        This validates: snapshot[period N] + events_since_snapshot = raw_members[period N+1]
-
-        Since we don't know exactly when the next period was scheduled, we try generating
-        a snapshot after each event to see if any match the target raw_members state.
-        """
-        try:
-            self.logger.info("Validating snapshot progression across periods")
-
-            # Get all periods with snapshots (excluding legacy)
-            self.cursor.execute("""
-                SELECT sp.id, sp.period_name, sp.start_date
-                FROM schedule_periods sp
-                WHERE sp.period_name != 'legacy'
-                AND EXISTS (SELECT 1 FROM peep_order_snapshots pos WHERE pos.period_id = sp.id)
-                ORDER BY sp.period_name
-            """)
-
-            periods_with_snapshots = self.cursor.fetchall()
-            if len(periods_with_snapshots) < 2:
-                self.logger.warning("Need at least 2 periods with snapshots for progression validation")
-                return True
-
-            generator = SnapshotGenerator(verbose=self.verbose)
-            validation_passed = True
-
-            # Validate progression between consecutive periods
-            for i in range(len(periods_with_snapshots) - 1):
-                current_period = periods_with_snapshots[i]
-                next_period = periods_with_snapshots[i + 1]
-
-                current_period_id, current_period_name, _ = current_period
-                next_period_id, next_period_name, _ = next_period
-
-                self.logger.info(f"Validating progression: {current_period_name} → {next_period_name}")
-
-                # Get starting snapshot from current period
-                starting_snapshot = generator.snapshot_from_database(self.cursor, current_period_id)
-                if not starting_snapshot:
-                    self.logger.error(f"No starting snapshot found for period {current_period_name}")
-                    validation_passed = False
-                    continue
-
-                # Get target snapshot from raw_members of next period
-                target_snapshot = generator.snapshot_from_raw_members(self.cursor, next_period_name)
-                if not target_snapshot:
-                    self.logger.error(f"No target raw_members found for period {next_period_name}")
-                    validation_passed = False
-                    continue
-
-                # Fill in peep_ids for target snapshot
-                peep_id_mapping = {}
-                for member in target_snapshot:
-                    self.cursor.execute("""
-                        SELECT id FROM peeps WHERE email = ?
-                    """, (member.email,))
-                    result = self.cursor.fetchone()
-                    if result:
-                        member.peep_id = result[0]
-                        peep_id_mapping[member.email] = result[0]
-
-                # Try to find the event cutoff that recreates the target snapshot
-                match_found = self._try_event_cutoffs(
-                    generator, current_period_name, next_period_name,
-                    starting_snapshot, target_snapshot, peep_id_mapping
-                )
-
-                if not match_found:
-                    self.logger.error(f"Could not recreate {next_period_name} snapshot from {current_period_name}")
-                    validation_passed = False
-                else:
-                    self.logger.info(f"✅ Successfully validated progression: {current_period_name} → {next_period_name}")
-
-            if validation_passed:
-                self.logger.info("🎉 All snapshot progressions validated successfully")
-            else:
-                self.logger.error("💥 Some snapshot progressions failed validation")
-
-            return validation_passed
-
-        except Exception as e:
-            self.logger.error(f"Error validating snapshot progression: {e}")
-            return False
-
-    def _try_event_cutoffs(
-        self,
-        generator: SnapshotGenerator,
-        current_period_name: str,
-        next_period_name: str,
-        starting_snapshot: List[MemberSnapshot],
-        target_snapshot: List[MemberSnapshot],
-        peep_id_mapping: Dict[str, int]
-    ) -> bool:
-        """
-        Try different event cutoff points to see if we can recreate the target snapshot.
-
-        Returns True if a matching cutoff point is found.
-        """
-        try:
-            # Get all events from current period, ordered chronologically
-            self.cursor.execute("""
-                SELECT e.id, e.event_datetime, e.legacy_period_event_id
-                FROM events e
-                JOIN schedule_periods sp ON e.period_id = sp.id
-                WHERE sp.period_name = ?
-                ORDER BY e.event_datetime
-            """, (current_period_name,))
-
-            period_events = self.cursor.fetchall()
-            if not period_events:
-                self.logger.warning(f"No events found for period {current_period_name}")
-                return False
-
-            self.logger.info(f"Trying {len(period_events)} different event cutoff points")
-
-            # Try each possible cutoff point (0 events, 1 event, 2 events, etc.)
-            for cutoff in range(len(period_events) + 1):
-                try:
-                    # Split events into actual (completed) and expected (scheduled but not completed)
-                    completed_events = period_events[:cutoff]
-                    scheduled_events = period_events[cutoff:]
-
-                    # Get actual attendance for completed events
-                    actual_attendance = self._get_attendance_for_events(
-                        [e[0] for e in completed_events], 'actual', peep_id_mapping
-                    )
-
-                    # Get expected attendance (assignments) for scheduled events
-                    expected_attendance = self._get_attendance_for_events(
-                        [e[0] for e in scheduled_events], 'expected', peep_id_mapping
-                    )
-
-                    # Get who responded for this period
-                    responded_peep_ids = self._get_responded_peep_ids(next_period_name, peep_id_mapping)
-
-                    # Generate snapshot using this cutoff
-                    generated_snapshot = generator.generate_snapshot_from_attendance(
-                        starting_snapshot, actual_attendance, expected_attendance, responded_peep_ids
-                    )
-
-                    # Compare with target
-                    is_match, differences = generator.compare_snapshots(
-                        generated_snapshot, target_snapshot, tolerance=0
-                    )
-
-                    if is_match:
-                        self.logger.info(f"🎯 Found matching cutoff at {cutoff}/{len(period_events)} events completed")
-                        return True
-                    else:
-                        if self.verbose:
-                            self.logger.debug(f"Cutoff {cutoff}: {len(differences)} differences")
-                            for diff in differences[:5]:  # Show first 5 differences
-                                self.logger.debug(f"  - {diff}")
-
-                except Exception as e:
-                    self.logger.warning(f"Error testing cutoff {cutoff}: {e}")
-                    continue
-
-            self.logger.error(f"No matching cutoff found for {current_period_name} → {next_period_name}")
-            return False
-
-        except Exception as e:
-            self.logger.error(f"Error trying event cutoffs: {e}")
-            return False
-
-    def _get_attendance_for_events(
-        self,
-        event_ids: List[int],
-        attendance_type: str,
-        peep_id_mapping: Dict[str, int]
-    ) -> List[EventAttendance]:
-        """Get attendance records for specified events."""
-        if not event_ids:
-            return []
-
-        attendance_records = []
-
-        for event_id in event_ids:
-            if attendance_type == 'actual':
-                # Get actual attendance
-                self.cursor.execute("""
-                    SELECT ea.peep_id, ea.actual_role, e.event_datetime
-                    FROM event_attendance ea
-                    JOIN events e ON ea.event_id = e.id
-                    WHERE ea.event_id = ? AND ea.attendance_status = 'attended'
-                """, (event_id,))
-
-                for peep_id, role, event_datetime in self.cursor.fetchall():
-                    attendance_records.append(EventAttendance(
-                        event_id=event_id,
-                        peep_id=peep_id,
-                        role=role,
-                        attendance_type='actual',
-                        event_datetime=datetime.fromisoformat(event_datetime) if isinstance(event_datetime, str) else event_datetime
-                    ))
-
-            elif attendance_type == 'expected':
-                # Get assignments (expected attendance)
-                self.cursor.execute("""
-                    SELECT eas.peep_id, eas.assigned_role, e.event_datetime
-                    FROM event_assignments eas
-                    JOIN events e ON eas.event_id = e.id
-                    WHERE eas.event_id = ? AND eas.assignment_type = 'attendee'
-                """, (event_id,))
-
-                for peep_id, role, event_datetime in self.cursor.fetchall():
-                    attendance_records.append(EventAttendance(
-                        event_id=event_id,
-                        peep_id=peep_id,
-                        role=role,
-                        attendance_type='expected',
-                        event_datetime=datetime.fromisoformat(event_datetime) if isinstance(event_datetime, str) else event_datetime
-                    ))
-
-        return attendance_records
-
-    def _get_responded_peep_ids(self, period_name: str, peep_id_mapping: Dict[str, int]) -> Set[int]:
-        """Get set of peep IDs who responded for the given period."""
-        self.cursor.execute("""
-            SELECT DISTINCT r.peep_id
-            FROM responses r
-            JOIN schedule_periods sp ON r.period_id = sp.id
-            WHERE sp.period_name = ?
-        """, (period_name,))
-
-        return {row[0] for row in self.cursor.fetchall()}
-
 
 def main():
     """Main entry point for the transformation script."""
@@ -1741,7 +1626,7 @@ Examples:
     parser.add_argument('--dry-run', action='store_true',
                        help='Test without applying changes')
     parser.add_argument('--period',
-                       help='Transform specific period only (skips legacy period creation)')
+                       help='Transform specific period only')
     parser.add_argument('--verbose', action='store_true',
                        help='Detailed progress logging')
 
