@@ -368,7 +368,7 @@ class PeriodReporter:
             'add': 'People added (volunteer fills)',
             'cancel': 'People cancelled/removed',
             'change_role': 'Role changes (leader ↔ follower)',
-            'promote_alternate': 'Alternates promoted to attendee',
+            'promote_alternate': 'Alternates promoted to main attendee',
             'add_alternate': 'People added as alternates'
         }
 
@@ -699,19 +699,38 @@ class PeriodReporter:
             people = self.cursor.fetchall()
 
             if people:
+                output.append("#### Assignments & Attendance")
                 output.append("```")
-                output.append("Person               | Assigned Role | Attended Role | Mode         | Changes")
-                output.append("---------------------|---------------|---------------|--------------|--------")
+                output.append("Person               | Type      | Role      | Attended? | Actual Role | Changes               | Issues")
+                output.append("---------------------|-----------|-----------|-----------|-------------|----------------------|-------")
+
+                # Get period status for this event once
+                self.cursor.execute("""
+                    SELECT sp.status FROM schedule_periods sp
+                    JOIN events e ON e.period_id = sp.id
+                    WHERE e.id = ? LIMIT 1
+                """, (event_id,))
+                period_status_result = self.cursor.fetchone()
+                is_completed = period_status_result and period_status_result[0] == 'completed'
 
                 for peep_id, name in people:
                     # Get assignment
                     self.cursor.execute("""
-                        SELECT assigned_role, assignment_type
+                        SELECT assigned_role, assignment_type, assignment_order, alternate_position
                         FROM event_assignments
                         WHERE event_id = ? AND peep_id = ?
                     """, (event_id, peep_id))
                     assignment = self.cursor.fetchone()
-                    assigned_role = f"{assignment[0]} ({assignment[1]})" if assignment else "-"
+
+                    if assignment:
+                        assigned_role, assignment_type, order, alt_pos = assignment
+                        type_display = assignment_type.title()
+                        if assignment_type == 'alternate' and alt_pos:
+                            type_display = f"Alt #{alt_pos}"
+                        role_display = assigned_role.title()
+                    else:
+                        type_display = "-"
+                        role_display = "-"
 
                     # Get attendance
                     self.cursor.execute("""
@@ -720,8 +739,20 @@ class PeriodReporter:
                         WHERE event_id = ? AND peep_id = ?
                     """, (event_id, peep_id))
                     attendance = self.cursor.fetchone()
-                    attended_role = attendance[0] if attendance else "-"
-                    mode = attendance[1] if attendance else "-"
+
+                    if attendance:
+                        actual_role, participation_mode = attendance
+                        attended_display = "Yes"
+                        actual_role_display = actual_role.title()
+
+                        # Add participation mode info for non-scheduled attendance
+                        if participation_mode == 'volunteer_fill':
+                            attended_display = "Yes (Vol)"
+                        elif participation_mode == 'alternate_promoted':
+                            attended_display = "Yes (Prom)"
+                    else:
+                        attended_display = "No"
+                        actual_role_display = "-"
 
                     # Get changes
                     self.cursor.execute("""
@@ -732,40 +763,38 @@ class PeriodReporter:
                     changes_result = self.cursor.fetchone()
                     changes = changes_result[0] if changes_result and changes_result[0] else "-"
 
-                    # Highlight issues (only when discrepancies lack change records)
-                    # But only for completed periods
+                    # Detect issues (only for completed periods)
                     issues = []
                     has_changes = changes != "-"
 
-                    # Get period status for this event
-                    self.cursor.execute("""
-                        SELECT sp.status FROM schedule_periods sp
-                        JOIN events e ON e.period_id = sp.id
-                        WHERE e.id = ? LIMIT 1
-                    """, (event_id,))
-                    period_status_result = self.cursor.fetchone()
-                    is_completed = period_status_result and period_status_result[0] == 'completed'
-
                     if is_completed:
+                        # Only flag missing attendance as an issue for main attendees, not alternates
+                        # (Alternates not attending is normal behavior and doesn't need change records)
                         if assignment and not attendance and not has_changes:
-                            issues.append("NO_SHOW_UNDOCUMENTED")
+                            if assignment_type == 'attendee':  # Only flag main attendees
+                                issues.append("NO_CHANGE")
+                            # Alternates not attending is normal - no issue
                         elif attendance and not assignment and not has_changes:
-                            issues.append("VOLUNTEER_UNDOCUMENTED")
-                        elif assignment and attendance and assignment[0] != attendance[0] and not has_changes:
-                            issues.append("ROLE_CHANGE_UNDOCUMENTED")
+                            issues.append("UNDOC_VOL")
+                        elif assignment and attendance and assigned_role != actual_role and not has_changes:
+                            issues.append("ROLE_CHG")
 
+                    # Format displays with truncation
                     name_display = name[:20]
-                    assigned_display = assigned_role[:13] if assigned_role != "-" else "-"
-                    attended_display = attended_role[:13] if attended_role != "-" else "-"
-                    mode_display = mode[:12] if mode != "-" else "-"
-                    changes_display = changes[:20] if changes != "-" else "-"
+                    type_display = type_display[:9]
+                    role_display = role_display[:9]
+                    attended_display = attended_display[:9]
+                    actual_role_display = actual_role_display[:11]
+                    changes_display = changes[:21] if changes != "-" else "-"
+                    issues_display = ",".join(issues) if issues else "✓"
 
-                    if issues:
-                        changes_display += f" ⚠️{','.join(issues)}"
-
-                    output.append(f"{name_display:20} | {assigned_display:13} | {attended_display:13} | {mode_display:12} | {changes_display}")
+                    output.append(f"{name_display:20} | {type_display:9} | {role_display:9} | {attended_display:9} | {actual_role_display:11} | {changes_display:21} | {issues_display}")
 
                 output.append("```")
+
+                # Add legend for abbreviations
+                output.append("")
+                output.append("**Legend:** Vol=Volunteer Fill, Prom=Alternate Promoted, Alt #N=Alternate Position N")
             else:
                 output.append("No assignments or attendance.")
 
@@ -793,7 +822,8 @@ class PeriodReporter:
 
         issues_found = []
 
-        # Find people assigned but didn't attend WITHOUT a change record documenting it
+        # Find MAIN ATTENDEES assigned but didn't attend WITHOUT a change record documenting it
+        # (Alternates not attending is normal and doesn't need cancel records)
         self.cursor.execute("""
             SELECT e.id, p.display_name, ea.assigned_role
             FROM event_assignments ea
@@ -801,6 +831,7 @@ class PeriodReporter:
             JOIN schedule_periods sp ON e.period_id = sp.id
             JOIN peeps p ON ea.peep_id = p.id
             WHERE sp.period_name = ?
+            AND ea.assignment_type = 'attendee'  -- Only check main attendees
             AND NOT EXISTS (
                 SELECT 1 FROM event_attendance att
                 WHERE att.event_id = ea.event_id AND att.peep_id = ea.peep_id
@@ -853,6 +884,25 @@ class PeriodReporter:
         undocumented_role_changes = self.cursor.fetchall()
         for event_id, name, assigned_role, actual_role in undocumented_role_changes:
             issues_found.append(f"🔄 Event {event_id}: {name} assigned as {assigned_role} but attended as {actual_role} (NO CHANGE RECORD)")
+
+        # Find alternate promotions WITHOUT a change record documenting it
+        self.cursor.execute("""
+            SELECT e.id, p.display_name, att.actual_role
+            FROM event_attendance att
+            JOIN events e ON att.event_id = e.id
+            JOIN schedule_periods sp ON e.period_id = sp.id
+            JOIN peeps p ON att.peep_id = p.id
+            WHERE sp.period_name = ?
+            AND att.participation_mode = 'alternate_promoted'
+            AND NOT EXISTS (
+                SELECT 1 FROM event_assignment_changes eac
+                WHERE eac.event_id = att.event_id AND eac.peep_id = att.peep_id AND eac.change_type = 'promote_alternate'
+            )
+        """, (period_name,))
+
+        undocumented_alt_promotions = self.cursor.fetchall()
+        for event_id, name, role in undocumented_alt_promotions:
+            issues_found.append(f"🔼 Event {event_id}: {name} attended as {role} (alternate promoted) but missing promote_alternate change record")
 
         if issues_found:
             for issue in issues_found:
