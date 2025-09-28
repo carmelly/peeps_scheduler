@@ -625,7 +625,39 @@ class DataTransformer:
                         'assignment_order': order + 1
                     })
 
+                # Create alternate assignments for this event
+                alternates = valid_event.get('alternates', [])
+                for alt_pos, alternate in enumerate(alternates):
+                    member_id = alternate.get('id')
+                    peep_id = self.peep_id_mapping.get(str(member_id))
+                    if not peep_id:
+                        self.logger.warning(f"No peep_id found for alternate member_id {member_id}")
+                        continue
+
+                    assigned_role = alternate.get('role')
+
+                    self.cursor.execute("""
+                        INSERT INTO event_assignments (
+                            event_id, peep_id, assigned_role, assignment_type, alternate_position
+                        ) VALUES (?, ?, ?, ?, ?)
+                    """, (event_id, peep_id, assigned_role.lower(), 'alternate', alt_pos + 1))
+
+                    assignments.append({
+                        'id': self.cursor.lastrowid,
+                        'event_id': event_id,
+                        'peep_id': peep_id,
+                        'assigned_role': assigned_role,
+                        'assignment_type': 'alternate',
+                        'alternate_position': alt_pos + 1
+                    })
+
+                if alternates:
+                    self.logger.debug(f"Created {len(alternates)} alternate assignments for event {event_id}")
+
             self.logger.info(f"Created {len(events)} events and {len(assignments)} assignments for {period_name}")
+            alternates_count = sum(1 for a in assignments if a['assignment_type'] == 'alternate')
+            if alternates_count > 0:
+                self.logger.info(f"  Including {alternates_count} alternate assignments")
             return events, assignments
 
         except Exception as e:
@@ -1132,22 +1164,25 @@ class DataTransformer:
                 for assignment in event_assignments:
                     peep_id = assignment['peep_id']
                     assigned_role = assignment['assigned_role']
+                    assignment_type = assignment['assignment_type']
 
                     # Find if this person attended
                     attended = next((a for a in event_attendance if a['peep_id'] == peep_id), None)
 
                     if not attended:
-                        # Scheduled but didn't attend (only for events that had attendance)
-                        self.cursor.execute("""
-                            INSERT INTO event_assignment_changes (
-                                event_id, peep_id, change_type, change_source,
-                                changed_at, notes
-                            ) VALUES (?, ?, ?, ?, ?, ?)
-                        """, (
-                            event_id, peep_id, "cancel", "reconstructed", event_datetime.isoformat(), 
-                            "Reconstructed: Scheduled but no attendance record"
-                        ))
-                        changes_created += 1
+                        # Only create cancel records for main attendees who didn't attend
+                        # (Alternates not attending is normal behavior - no cancel record needed)
+                        if assignment_type == 'attendee':
+                            self.cursor.execute("""
+                                INSERT INTO event_assignment_changes (
+                                    event_id, peep_id, change_type, change_source,
+                                    changed_at, notes
+                                ) VALUES (?, ?, ?, ?, ?, ?)
+                            """, (
+                                event_id, peep_id, "cancel", "reconstructed", event_datetime.isoformat(),
+                                "Reconstructed: Scheduled but no attendance record"
+                            ))
+                            changes_created += 1
 
                     elif attended['actual_role'] != assigned_role:
                         # Role change
@@ -1161,11 +1196,16 @@ class DataTransformer:
                         ))
                         changes_created += 1
 
-                # Check for attendees not in assignments (volunteer fill-ins)
+                # Check for attendees not in assignments (volunteer fill-ins and alternate promotions)
                 volunteer_fills_in_event = [a for a in event_attendance if a['participation_mode'] == 'volunteer_fill']
+                alternate_promotions_in_event = [a for a in event_attendance if a['participation_mode'] == 'alternate_promoted']
+
                 if volunteer_fills_in_event:
                     self.logger.debug(f"Processing {len(volunteer_fills_in_event)} volunteer fills for event {event_id}")
+                if alternate_promotions_in_event:
+                    self.logger.debug(f"Processing {len(alternate_promotions_in_event)} alternate promotions for event {event_id}")
 
+                # Create 'add' changes for volunteer fills (truly unscheduled attendees)
                 for attended in event_attendance:
                     if attended['participation_mode'] == 'volunteer_fill':
                         self.logger.debug(f"Creating 'add' change for volunteer fill: peep_id={attended['peep_id']}, event_id={event_id}")
@@ -1180,6 +1220,22 @@ class DataTransformer:
                         ))
                         changes_created += 1
                         self.logger.debug(f"Successfully created 'add' change for peep_id={attended['peep_id']}")
+
+                # Create 'promote_alternate' changes for alternate promotions
+                for attended in event_attendance:
+                    if attended['participation_mode'] == 'alternate_promoted':
+                        self.logger.debug(f"Creating 'promote_alternate' change for alternate promotion: peep_id={attended['peep_id']}, event_id={event_id}")
+                        self.cursor.execute("""
+                            INSERT INTO event_assignment_changes (
+                                event_id, peep_id, change_type, change_source,
+                                changed_at, notes
+                            ) VALUES (?, ?, ?, ?, ?, ?)
+                        """, (
+                            event_id, attended['peep_id'], "promote_alternate", "reconstructed",
+                            event_datetime.isoformat(), "Reconstructed: Alternate promoted to attendee"
+                        ))
+                        changes_created += 1
+                        self.logger.debug(f"Successfully created 'promote_alternate' change for peep_id={attended['peep_id']}")
 
             if changes_created > 0:
                 self.logger.info(f"Created {changes_created} assignment change records")
@@ -1655,16 +1711,20 @@ class DataValidator:
         changes = self.cursor.fetchall()
         change_types = {row[0]: row for row in changes}
 
-        # Validate: Missing "cancel" changes for scheduled but didn't attend
+        # Validate: Missing "cancel" changes for MAIN ATTENDEES who didn't attend
+        # (Alternates not attending is normal and doesn't need cancel records)
         for peep_id, assignment in assignments.items():
             if peep_id not in attendance:
-                # Should have a "cancel" change record
-                if "cancel" not in change_types:
-                    self.logger.warning(
-                        f"Period {period_name}, Event {legacy_id}: "
-                        f"{assignment['name']} scheduled but didn't attend - missing 'cancel' change record"
-                    )
-                    issues += 1
+                # Only flag missing cancel records for main attendees, not alternates
+                if assignment['type'] == 'attendee':
+                    # Should have a "cancel" change record
+                    if "cancel" not in change_types:
+                        self.logger.warning(
+                            f"Period {period_name}, Event {legacy_id}: "
+                            f"{assignment['name']} (main attendee) scheduled but didn't attend - missing 'cancel' change record"
+                        )
+                        issues += 1
+                # Alternates not attending is normal - no validation needed
 
         # Validate: Missing "add" changes for volunteer fill-ins
         volunteer_fill_peeps = {
@@ -1689,6 +1749,32 @@ class DataValidator:
             self.logger.warning(
                 f"Period {period_name}, Event {legacy_id}: "
                 f"{len(volunteer_fill_peeps)} volunteer fills but {len(add_change_peeps)} 'add' change records"
+            )
+            issues += 1
+
+        # Validate: Missing "promote_alternate" changes for alternate promotions
+        alternate_promoted_peeps = {
+            peep_id for peep_id, att in attendance.items()
+            if att['mode'] == 'alternate_promoted'
+        }
+
+        # Find 'promote_alternate' change records for people who were promoted from alternate
+        promote_changes_all = [c for c in changes if c[0] == 'promote_alternate']
+        promote_change_peeps = {
+            c[3] for c in changes if c[0] == 'promote_alternate' and c[3] in alternate_promoted_peeps
+        }
+
+        # Debug logging
+        if alternate_promoted_peeps and self.verbose:
+            self.logger.debug(f"Period {period_name}, Event {legacy_id}: alternate_promoted_peeps={alternate_promoted_peeps}")
+            self.logger.debug(f"Period {period_name}, Event {legacy_id}: all promote_alternate changes={[(c[0], c[3]) for c in promote_changes_all]}")
+            self.logger.debug(f"Period {period_name}, Event {legacy_id}: matching promote_change_peeps={promote_change_peeps}")
+
+        missing_promote_changes = alternate_promoted_peeps - promote_change_peeps
+        if missing_promote_changes:
+            self.logger.warning(
+                f"Period {period_name}, Event {legacy_id}: "
+                f"{len(alternate_promoted_peeps)} alternate promotions but {len(promote_change_peeps)} 'promote_alternate' change records"
             )
             issues += 1
 
