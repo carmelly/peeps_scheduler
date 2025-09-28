@@ -476,7 +476,25 @@ class DataTransformer:
                     self.logger.info(f"Period {period_name} has assignments but no attendance data - this is normal for future periods")
 
             # 9. Reconcile and create change records
-            if not self._reconcile_assignments_vs_attendance(assignments, attendance, events):
+            # Get the period status to determine if we should create change records
+            self.cursor.execute("SELECT status FROM schedule_periods WHERE id = ?", (period_id,))
+            period_status = self.cursor.fetchone()[0]
+
+            # Get ALL events for this period (including any unscheduled events created during attendance transformation)
+            self.cursor.execute("""
+                SELECT id, legacy_period_event_id, event_datetime, status
+                FROM events
+                WHERE period_id = ?
+                ORDER BY event_datetime
+            """, (period_id,))
+            all_events = [{
+                'id': row[0],
+                'legacy_id': row[1],
+                'datetime': datetime.fromisoformat(row[2].replace('Z', '+00:00')),
+                'status': row[3]
+            } for row in self.cursor.fetchall()]
+
+            if not self._reconcile_assignments_vs_attendance(assignments, attendance, all_events, period_status):
                 return False
 
             # 10. Generate period snapshot
@@ -629,17 +647,23 @@ class DataTransformer:
             # Determine display name
             display_name = f"Period {period_name}"
 
-            # Determine status (completed if we have results/attendance)
-            status = "completed"
-            self.cursor.execute("""
-                SELECT COUNT(*) FROM raw_results WHERE period_name = ?
-                UNION ALL
-                SELECT COUNT(*) FROM raw_actual_attendance WHERE period_name = ?
-            """, (period_name, period_name))
+            # Determine status based on data availability
+            # completed: has both results and attendance
+            # active: has results but no attendance (scheduled but not yet held)
+            # draft: has responses but no results (not yet scheduled)
 
-            results = self.cursor.fetchall()
-            if not any(count[0] > 0 for count in results):
-                status = "draft"
+            self.cursor.execute("SELECT COUNT(*) FROM raw_results WHERE period_name = ?", (period_name,))
+            has_results = self.cursor.fetchone()[0] > 0
+
+            self.cursor.execute("SELECT COUNT(*) FROM raw_actual_attendance WHERE period_name = ?", (period_name,))
+            has_attendance = self.cursor.fetchone()[0] > 0
+
+            if has_results and has_attendance:
+                status = "completed"
+            elif has_results and not has_attendance:
+                status = "active"  # Scheduled but events haven't happened yet
+            else:
+                status = "draft"  # Not yet scheduled
 
             self.cursor.execute("""
                 INSERT INTO schedule_periods (
@@ -1071,11 +1095,21 @@ class DataTransformer:
             self.logger.error(f"Failed to create unscheduled event for index {event_index}: {e}")
             return None
 
-    def _reconcile_assignments_vs_attendance(self, assignments: List[Dict], attendance: List[Dict], events: List[Dict]) -> bool:
+    def _reconcile_assignments_vs_attendance(self, assignments: List[Dict], attendance: List[Dict], events: List[Dict], period_status: str) -> bool:
         """Create event_assignment_changes for all discrepancies between scheduled vs actual."""
         try:
             if not assignments and not attendance:
                 self.logger.info("No assignments or attendance to reconcile")
+                return True
+
+            # Skip change record creation for future periods (active status)
+            # Only create change records for completed periods where events have actually happened
+            if period_status == 'active':
+                self.logger.info(f"Period status is 'active' - skipping change record creation (future period)")
+                return True
+
+            if assignments and not attendance:
+                self.logger.info("Period has assignments but no attendance - skipping change record creation (no attendance data)")
                 return True
 
             changes_created = 0
@@ -1088,6 +1122,12 @@ class DataTransformer:
                 event_assignments = [a for a in assignments if a['event_id'] == event_id]
                 event_attendance = [a for a in attendance if a['event_id'] == event_id]
 
+                # Only process change records for completed periods with actual attendance
+                # Skip individual events without attendance in completed periods
+                if not event_attendance and event_assignments and period_status == 'completed':
+                    self.logger.debug(f"Event {event_id} has assignments but no attendance - skipping change records (incomplete event data)")
+                    continue
+
                 # Check each assignment against attendance
                 for assignment in event_assignments:
                     peep_id = assignment['peep_id']
@@ -1097,15 +1137,15 @@ class DataTransformer:
                     attended = next((a for a in event_attendance if a['peep_id'] == peep_id), None)
 
                     if not attended:
-                        # Scheduled but didn't attend
+                        # Scheduled but didn't attend (only for events that had attendance)
                         self.cursor.execute("""
                             INSERT INTO event_assignment_changes (
-                                event_id, change_type, change_source, change_reason,
+                                event_id, peep_id, change_type, change_source,
                                 changed_at, notes
                             ) VALUES (?, ?, ?, ?, ?, ?)
                         """, (
-                            event_id, "cancel", "reconstructed", "cancel_reconstructed",
-                            event_datetime.isoformat(), "Reconstructed: Scheduled but no attendance record"
+                            event_id, peep_id, "cancel", "reconstructed", event_datetime.isoformat(), 
+                            "Reconstructed: Scheduled but no attendance record"
                         ))
                         changes_created += 1
 
@@ -1113,29 +1153,38 @@ class DataTransformer:
                         # Role change
                         self.cursor.execute("""
                             INSERT INTO event_assignment_changes (
-                                event_id, change_type, change_source, changed_at, notes
-                            ) VALUES (?, ?, ?, ?, ?)
+                                event_id, peep_id, change_type, change_source, changed_at, notes
+                            ) VALUES (?, ?, ?, ?, ?, ?)
                         """, (
-                            event_id, "change_role", "reconstructed", event_datetime.isoformat(),
+                            event_id, peep_id, "change_role", "reconstructed", event_datetime.isoformat(),
                             f"Reconstructed: Role changed from {assigned_role} to {attended['actual_role']}"
                         ))
                         changes_created += 1
 
                 # Check for attendees not in assignments (volunteer fill-ins)
+                volunteer_fills_in_event = [a for a in event_attendance if a['participation_mode'] == 'volunteer_fill']
+                if volunteer_fills_in_event:
+                    self.logger.debug(f"Processing {len(volunteer_fills_in_event)} volunteer fills for event {event_id}")
+
                 for attended in event_attendance:
                     if attended['participation_mode'] == 'volunteer_fill':
+                        self.logger.debug(f"Creating 'add' change for volunteer fill: peep_id={attended['peep_id']}, event_id={event_id}")
                         self.cursor.execute("""
                             INSERT INTO event_assignment_changes (
-                                event_id, change_type, change_source, change_reason,
+                                event_id, peep_id, change_type, change_source,
                                 changed_at, notes
                             ) VALUES (?, ?, ?, ?, ?, ?)
                         """, (
-                            event_id, "add", "reconstructed", "volunteer_fill",
+                            event_id, attended['peep_id'], "add", "reconstructed",
                             event_datetime.isoformat(), "Reconstructed: Attended without assignment"
                         ))
                         changes_created += 1
+                        self.logger.debug(f"Successfully created 'add' change for peep_id={attended['peep_id']}")
 
-            self.logger.info(f"Created {changes_created} assignment change records")
+            if changes_created > 0:
+                self.logger.info(f"Created {changes_created} assignment change records")
+            else:
+                self.logger.debug("No assignment changes needed (no discrepancies found)")
             return True
 
         except Exception as e:
@@ -1501,7 +1550,9 @@ class DataValidator:
         return True
 
     def _validate_period_changes(self, period_name: str, period_id: int) -> bool:
-        """Validate assignment changes for a specific period."""
+        """Validate assignment changes for a specific period with comprehensive accuracy checks."""
+        validation_passed = True
+
         # Check that changes have proper timestamps (should use event datetime)
         self.cursor.execute("""
             SELECT COUNT(*) FROM event_assignment_changes eac
@@ -1526,7 +1577,150 @@ class DataValidator:
         if non_reconstructed > 0:
             self.logger.warning(f"Period {period_name}: {non_reconstructed} assignment changes not marked as 'reconstructed'")
 
-        return True
+        # ENHANCED VALIDATION: Check assignment change accuracy
+        accuracy_issues = self._validate_assignment_change_accuracy(period_name, period_id)
+        if accuracy_issues > 0:
+            self.logger.warning(f"Period {period_name}: {accuracy_issues} assignment change accuracy issues detected")
+            # Don't fail validation - just report issues for "good enough" approach
+
+        return validation_passed
+
+    def _validate_assignment_change_accuracy(self, period_name: str, period_id: int) -> int:
+        """
+        Validate that assignment changes accurately reflect discrepancies between
+        scheduled assignments and actual attendance.
+        """
+        issues_found = 0
+
+        try:
+            # Check period status to determine if we should validate assignment changes
+            self.cursor.execute("SELECT status FROM schedule_periods WHERE id = ?", (period_id,))
+            period_status = self.cursor.fetchone()[0]
+
+            # Skip validation for future periods (active status)
+            if period_status == 'active':
+                self.logger.info(f"Period {period_name}: Active period detected - skipping assignment change accuracy validation (future period)")
+                return 0
+
+            # Get all events for this period
+            self.cursor.execute("""
+                SELECT id, legacy_period_event_id, event_datetime
+                FROM events
+                WHERE period_id = ?
+                ORDER BY event_datetime
+            """, (period_id,))
+
+            events = self.cursor.fetchall()
+
+            for event_id, legacy_id, event_datetime in events:
+                issues_found += self._validate_event_change_accuracy(
+                    period_name, event_id, legacy_id, event_datetime
+                )
+
+        except Exception as e:
+            self.logger.error(f"Period {period_name}: Assignment change accuracy validation failed: {e}")
+            issues_found += 1
+
+        return issues_found
+
+    def _validate_event_change_accuracy(self, period_name: str, event_id: int,
+                                      legacy_id: int, event_datetime: str) -> int:
+        """Validate assignment changes for a specific event."""
+        issues = 0
+
+        # Get assignments for this event
+        self.cursor.execute("""
+            SELECT ea.peep_id, ea.assigned_role, ea.assignment_type, p.display_name
+            FROM event_assignments ea
+            JOIN peeps p ON ea.peep_id = p.id
+            WHERE ea.event_id = ?
+        """, (event_id,))
+        assignments = {row[0]: {'role': row[1], 'type': row[2], 'name': row[3]} for row in self.cursor.fetchall()}
+
+        # Get attendance for this event
+        self.cursor.execute("""
+            SELECT att.peep_id, att.actual_role, att.participation_mode, p.display_name
+            FROM event_attendance att
+            JOIN peeps p ON att.peep_id = p.id
+            WHERE att.event_id = ?
+        """, (event_id,))
+        attendance = {row[0]: {'role': row[1], 'mode': row[2], 'name': row[3]} for row in self.cursor.fetchall()}
+
+        # Get recorded changes for this event
+        self.cursor.execute("""
+            SELECT change_type, change_reason, notes, peep_id
+            FROM event_assignment_changes
+            WHERE event_id = ?
+        """, (event_id,))
+        changes = self.cursor.fetchall()
+        change_types = {row[0]: row for row in changes}
+
+        # Validate: Missing "cancel" changes for scheduled but didn't attend
+        for peep_id, assignment in assignments.items():
+            if peep_id not in attendance:
+                # Should have a "cancel" change record
+                if "cancel" not in change_types:
+                    self.logger.warning(
+                        f"Period {period_name}, Event {legacy_id}: "
+                        f"{assignment['name']} scheduled but didn't attend - missing 'cancel' change record"
+                    )
+                    issues += 1
+
+        # Validate: Missing "add" changes for volunteer fill-ins
+        volunteer_fill_peeps = {
+            peep_id for peep_id, att in attendance.items()
+            if att['mode'] == 'volunteer_fill'
+        }
+
+        # Find 'add' change records for people who attended without being assigned
+        add_changes_all = [c for c in changes if c[0] == 'add']
+        add_change_peeps = {
+            c[3] for c in changes if c[0] == 'add' and c[3] in volunteer_fill_peeps
+        }
+
+        # Debug logging
+        if volunteer_fill_peeps and self.verbose:
+            self.logger.debug(f"Period {period_name}, Event {legacy_id}: volunteer_fill_peeps={volunteer_fill_peeps}")
+            self.logger.debug(f"Period {period_name}, Event {legacy_id}: all add changes={[(c[0], c[3]) for c in add_changes_all]}")
+            self.logger.debug(f"Period {period_name}, Event {legacy_id}: matching add_change_peeps={add_change_peeps}")
+
+        missing_add_changes = volunteer_fill_peeps - add_change_peeps
+        if missing_add_changes:
+            self.logger.warning(
+                f"Period {period_name}, Event {legacy_id}: "
+                f"{len(volunteer_fill_peeps)} volunteer fills but {len(add_change_peeps)} 'add' change records"
+            )
+            issues += 1
+
+        # Validate: Missing "change_role" for role mismatches
+        role_changes = 0
+        for peep_id in assignments.keys() & attendance.keys():
+            assigned_role = assignments[peep_id]['role']
+            actual_role = attendance[peep_id]['role']
+            if assigned_role != actual_role:
+                role_changes += 1
+
+        actual_role_changes = len([c for c in changes if c[0] == 'change_role'])
+        if role_changes != actual_role_changes:
+            self.logger.warning(
+                f"Period {period_name}, Event {legacy_id}: "
+                f"{role_changes} role mismatches but {actual_role_changes} 'change_role' records"
+            )
+            issues += 1
+
+        # Log summary for events with discrepancies
+        if assignments or attendance:
+            scheduled_count = len(assignments)
+            attended_count = len(attendance)
+            changes_count = len(changes)
+
+            if changes_count > 0:
+                self.logger.debug(
+                    f"Period {period_name}, Event {legacy_id}: "
+                    f"{scheduled_count} scheduled, {attended_count} attended, {changes_count} changes"
+                )
+
+        return issues
 
     def _validate_period_snapshots(self, period_name: str, period_id: int) -> bool:
         """Validate snapshots for a specific period."""
