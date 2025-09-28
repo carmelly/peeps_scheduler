@@ -2,6 +2,7 @@ CREATE INDEX idx_assignments_event_type ON event_assignments(event_id, assignmen
 CREATE INDEX idx_availability_response ON event_availability(response_id);
 CREATE INDEX idx_eac_changed_at ON event_assignment_changes(changed_at);
 CREATE INDEX idx_eac_event ON event_assignment_changes(event_id);
+CREATE INDEX idx_eac_peep ON event_assignment_changes(peep_id);
 CREATE INDEX idx_event_attendance_event ON event_attendance(event_id);
 CREATE INDEX idx_event_attendance_mode ON event_attendance(participation_mode);
 CREATE INDEX idx_event_attendance_peep ON event_attendance(peep_id);
@@ -35,7 +36,7 @@ CREATE TABLE event_assignment_changes (
     notes TEXT,
 
     changed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    changed_by TEXT,
+    changed_by TEXT, peep_id INTEGER REFERENCES peeps(id),
 
     FOREIGN KEY (event_id) REFERENCES events(id),
 
