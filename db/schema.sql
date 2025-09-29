@@ -1,5 +1,7 @@
 CREATE INDEX idx_assignments_event_type ON event_assignments(event_id, assignment_type);
 CREATE INDEX idx_availability_response ON event_availability(response_id);
+CREATE INDEX idx_backup_snapshots_period_peep ON peep_order_snapshots_backup(period_id, peep_id);
+CREATE INDEX idx_backup_snapshots_timestamp ON peep_order_snapshots_backup(backup_timestamp);
 CREATE INDEX idx_eac_changed_at ON event_assignment_changes(changed_at);
 CREATE INDEX idx_eac_event ON event_assignment_changes(event_id);
 CREATE INDEX idx_eac_peep ON event_assignment_changes(peep_id);
@@ -141,6 +143,30 @@ CREATE TABLE peep_order_snapshots (
     FOREIGN KEY (peep_id) REFERENCES peeps(id),
     FOREIGN KEY (period_id) REFERENCES schedule_periods(id),
     UNIQUE(peep_id, period_id),
+
+    CHECK(priority >= 0),
+    CHECK(index_position >= 0),
+    CHECK(total_attended >= 0)
+);
+CREATE TABLE peep_order_snapshots_backup (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    peep_id INTEGER NOT NULL,
+    period_id INTEGER NOT NULL,
+
+    -- State after ALL real results for this completed period
+    priority INTEGER NOT NULL,
+    index_position INTEGER NOT NULL,
+    total_attended INTEGER NOT NULL,
+
+    active BOOLEAN NOT NULL DEFAULT 1,
+    notes TEXT,
+
+    -- Backup metadata
+    backup_timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    backup_reason TEXT DEFAULT 'Pre-regeneration backup of corrupted priority calculations',
+
+    FOREIGN KEY (peep_id) REFERENCES peeps(id),
+    FOREIGN KEY (period_id) REFERENCES schedule_periods(id),
 
     CHECK(priority >= 0),
     CHECK(index_position >= 0),
