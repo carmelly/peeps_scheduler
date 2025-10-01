@@ -44,7 +44,7 @@ def apply_event_results( result_json, members_csv, responses_csv):
 	for row in peep_rows:
 		peep = Peep(
 			id=row['id'],
-			name=row['Name'],
+			full_name=row['Name'],
 			display_name=row['Display Name'],
 			email=row['Email Address'],
 			role=row['Role'],
