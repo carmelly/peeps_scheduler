@@ -4,8 +4,8 @@ import logging
 import utils
 from scheduler import Scheduler
 
-def apply_results(period_folder):
-	actual_attendance_file = os.path.join(period_folder, "actual_attendance.json")
+def apply_results(period_folder, results_filename="actual_attendance.json"):
+	actual_attendance_file = os.path.join(period_folder, results_filename)
 	members_file = os.path.join(period_folder, "members.csv")
 	responses_file = os.path.join(period_folder, "responses.csv")
 
@@ -54,6 +54,7 @@ def main():
 	# Apply results command
 	apply_parser = subparsers.add_parser('apply-results', help='Apply actual attendance to update members CSV')
 	apply_parser.add_argument('--period-folder', required=True, help='Path to period folder containing actual_attendance.json, members.csv, and responses.csv')
+	apply_parser.add_argument('--results-file', default='actual_attendance.json', help='Filename of results JSON (default: actual_attendance.json)')
 
 	args = parser.parse_args()
 	utils.setup_logging(verbose=args.verbose)
@@ -63,7 +64,7 @@ def main():
 		scheduler = Scheduler(data_folder=args.data_folder, max_events=args.max_events)
 		scheduler.run(generate_test_data=args.generate_tests, load_from_csv=args.load_from_csv)
 	elif args.command == 'apply-results':
-		apply_results(args.period_folder)
+		apply_results(args.period_folder, args.results_file)
 	else:
 		parser.print_help()
 		
