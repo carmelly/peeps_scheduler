@@ -705,14 +705,14 @@ class EventSequence:
 		Returns:
 			tuple: A tuple of (event ID, sorted leader IDs, sorted follower IDs) for each event in the sequence.
 		"""
-	
+
 		return tuple(
 			(
-			event.id, 
-			tuple(sorted(peep.id for peep in event.leaders)), 
+			event.id,
+			tuple(sorted(peep.id for peep in event.leaders)),
 			tuple(sorted(peep.id for peep in event.followers))
 			)
-			for event in self.valid_events
+			for event in sorted(self.valid_events, key=lambda e: e.id)
 		)
 
 	def __eq__(self, other):
