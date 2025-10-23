@@ -46,12 +46,12 @@ def parse_availability(responses_file, members_file):
 	return availability, unavailable, non_responders
 
 def print_availability(availability, unavailable, non_responders):
-	
+
 	for date in sorted(availability.keys(), key=lambda d:parse_event_date(d)):
 		print(f"\n📅  {date}")
 		print(f"    Leaders  ({len(availability[date]['leader'])}): {', '.join(availability[date]['leader'])} ( + {', '.join(availability[date]['leader_fill'])})")
 		print(f"    Followers({len(availability[date]['follower'])}): {', '.join(availability[date]['follower'])} ( + {', '.join(availability[date]['follower_fill'])})")
-	
+
 	print("\n🚫  No availability:")
 	for name in sorted(unavailable):
 		print(f"  - {name}")
@@ -60,9 +60,10 @@ def print_availability(availability, unavailable, non_responders):
 	for name in sorted(non_responders):
 		print(f"  - {name}")
 
-if __name__ == "__main__":
+def run_availability_report(data_folder):
+	"""Generate and print availability report for a given data period."""
 	dm = get_data_manager()
-	period_path = dm.get_period_path("2025-10")
+	period_path = dm.get_period_path(data_folder)
 	responses_file = period_path / "responses.csv"
 	members_file = period_path / "members.csv"
 	availability, unavailable, non_responders = parse_availability(responses_file, members_file)

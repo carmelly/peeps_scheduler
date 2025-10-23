@@ -56,6 +56,10 @@ def main():
 	apply_parser.add_argument('--period-folder', required=True, help='Path to period folder containing actual_attendance.json, members.csv, and responses.csv')
 	apply_parser.add_argument('--results-file', default='actual_attendance.json', help='Filename of results JSON (default: actual_attendance.json)')
 
+	# Availability report command
+	availability_parser = subparsers.add_parser('availability-report', help='Generate availability report from responses')
+	availability_parser.add_argument('--data-folder', type=str, default=default_data_folder, required=(default_data_folder is None), help='Path to data folder')
+
 	args = parser.parse_args()
 	utils.setup_logging(verbose=args.verbose)
 
@@ -65,6 +69,9 @@ def main():
 		scheduler.run(generate_test_data=args.generate_tests, load_from_csv=args.load_from_csv)
 	elif args.command == 'apply-results':
 		apply_results(args.period_folder, args.results_file)
+	elif args.command == 'availability-report':
+		from availability_report import run_availability_report
+		run_availability_report(args.data_folder)
 	else:
 		parser.print_help()
 		
