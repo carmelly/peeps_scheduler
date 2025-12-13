@@ -1,12 +1,7 @@
-import csv
 from collections import defaultdict
 from data_manager import DataManager, get_data_manager
 from models import Role, SwitchPreference
-from file_io import parse_event_date
-
-def load_csv(filename):
-	with open(filename, newline='', encoding='utf-8') as csvfile:
-		return list(csv.DictReader(csvfile))
+from file_io import parse_event_date, load_csv
 
 def parse_availability(responses_file, members_file):
 	members = {row["Email Address"].strip().lower(): row for row in load_csv(members_file)}
@@ -22,10 +17,10 @@ def parse_availability(responses_file, members_file):
 
 		member = members.get(email)
 		if not member:
-			print(f"⚠️  Skipping unmatched email: {email}")
+			print(f"WARNING: Skipping unmatched email: {email}")
 			continue
-		if email in responders: 
-			print(f"⚠️  Duplicate email: {email}")
+		if email in responders:
+			print(f"WARNING: Duplicate email: {email}")
 			continue
 		responders.add(email)
 
@@ -47,16 +42,16 @@ def parse_availability(responses_file, members_file):
 
 def print_availability(availability, unavailable, non_responders):
 
-	for date in sorted(availability.keys(), key=lambda d:parse_event_date(d)):
-		print(f"\n📅  {date}")
+	for date in sorted(availability.keys(), key=lambda d:parse_event_date(d)[0]):
+		print(f"\n{date}")
 		print(f"    Leaders  ({len(availability[date]['leader'])}): {', '.join(availability[date]['leader'])} ( + {', '.join(availability[date]['leader_fill'])})")
 		print(f"    Followers({len(availability[date]['follower'])}): {', '.join(availability[date]['follower'])} ( + {', '.join(availability[date]['follower_fill'])})")
 
-	print("\n🚫  No availability:")
+	print("\nNo availability:")
 	for name in sorted(unavailable):
 		print(f"  - {name}")
 
-	print("\n❌  Did not respond:")
+	print("\nDid not respond:")
 	for name in sorted(non_responders):
 		print(f"  - {name}")
 

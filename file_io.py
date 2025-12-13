@@ -42,13 +42,17 @@ def load_csv(filename, required_columns=[]):
 		dict_reader = csv.DictReader(csvfile, fieldnames=fieldnames)
 		rows = []
 		
-		# Replace smart quotes (’) with ASCII quotes ('))
-		def _normalize_quotes(s):
-			return s.replace("’", "'").replace("‘", "'").replace("“", '"').replace("”", '"')
-		
-		# Strip whitespace and normalize quotes for every value 
+		# Replace smart quotes (’) with ASCII quotes (') and normalize whitespace
+		def _normalize_text(s):
+			s = s.replace("’", "'").replace("‘", "'").replace("“", '"').replace("”", '"')
+			# Normalize multiple spaces to single space
+			import re
+			s = re.sub(r'\s+', ' ', s)
+			return s
+
+		# Strip whitespace, normalize quotes and whitespace for every value
 		for row in dict_reader:
-			cleaned = {k: _normalize_quotes(v.strip()) if v else "" for k, v in row.items()}
+			cleaned = {k: _normalize_text(v.strip()) if v else "" for k, v in row.items()}
 			rows.append(cleaned)
 
 		return rows
@@ -150,40 +154,107 @@ def convert_to_json(response_csv_path, peeps_csv_path, output_json_path):
 	save_json(output, output_json_path)
 
 def extract_events(rows):
-	"""Parse 'Event:' rows from responses to construct Event objects."""
+	"""
+	Extract events from responses.csv.
+
+	Supports two modes:
+	1. Event rows (backward compatibility): Rows with Name starting with "Event:"
+	2. Auto-derive from availability: If no Event rows, scan availability strings
+
+	Returns:
+		dict: event_map with event_id as key and Event object as value
+	"""
 	event_map = {}
 	event_counter = 0
 
-	for row in rows:
-		name = row.get("Name", "")
-		if not name or not name.startswith("Event:"):
-			continue
+	# First, check if there are Event rows (backward compatibility)
+	event_rows = [row for row in rows if row.get("Name", "").startswith("Event:")]
 
-		parts = name.split("Event: ", 1)
-		if len(parts) < 2 or not parts[1]:
-			raise ValueError(f"Malformed event row: missing date in 'Name' field -> {name}")
+	if event_rows:
+		# Use Event rows (old format)
+		for row in event_rows:
+			name = row.get("Name", "")
+			parts = name.split("Event: ", 1)
+			if len(parts) < 2 or not parts[1]:
+				raise ValueError(f"Malformed event row: missing date in 'Name' field -> {name}")
 
-		date_str = parts[1].strip()
-		event_date = parse_event_date(date_str)
+			date_str = parts[1].strip()
+			event_id, duration_from_str, display_name = parse_event_date(date_str)
 
-		duration_str = row.get("Event Duration", "")
-		if not duration_str:
-			raise ValueError(f"Missing Event Duration for event row: {name}")
-		try:
-			duration = int(duration_str)
-		except ValueError:
-			raise ValueError(f"Invalid Event Duration value: {duration_str}")
-		if duration not in constants.CLASS_CONFIG:
-			raise ValueError(f"Duration {duration} not in CLASS_CONFIG")
+			# For old format Event rows, duration comes from Event Duration column
+			duration_str = row.get("Event Duration", "")
+			if duration_str:
+				try:
+					duration = int(duration_str)
+				except ValueError:
+					raise ValueError(f"Invalid Event Duration value: {duration_str}")
+			elif duration_from_str is not None:
+				# New format Event row with time range
+				duration = duration_from_str
+			else:
+				raise ValueError(f"Missing Event Duration for event row: {name}")
 
-		event = Event.from_dict({
-			"id": event_counter,
-			"date": event_date,
-			"duration_minutes": duration,
-		})
-		event.id = event_counter
-		event_map[event_date] = event
-		event_counter += 1
+			if duration not in constants.CLASS_CONFIG:
+				raise ValueError(f"Duration {duration} not in CLASS_CONFIG")
+
+			event = Event.from_dict({
+				"id": event_counter,
+				"date": event_id,
+				"duration_minutes": duration,
+			})
+			event.id = event_counter
+			event_map[event_id] = event
+			event_counter += 1
+
+	else:
+		# Auto-derive events from availability strings
+		unique_events = {}  # event_id -> (duration, display_name)
+
+		for row in rows:
+			name = row.get("Name", "")
+			if not name:
+				continue
+
+			availability_str = row.get("Availability", "")
+			if not availability_str:
+				continue
+
+			# Split availability by comma and parse each date string
+			date_strings = [s.strip() for s in availability_str.split(",") if s.strip()]
+
+			for date_str in date_strings:
+				try:
+					event_id, duration, display_name = parse_event_date(date_str)
+
+					if duration is None:
+						raise ValueError(f"Cannot auto-derive event duration from '{date_str}' - time range required")
+
+					if duration not in constants.CLASS_CONFIG:
+						raise ValueError(f"Duration {duration} minutes not in CLASS_CONFIG (valid: {list(constants.CLASS_CONFIG.keys())})")
+
+					# Track unique events
+					if event_id not in unique_events:
+						unique_events[event_id] = (duration, display_name)
+					else:
+						# Verify consistency if same event appears multiple times
+						existing_duration, _ = unique_events[event_id]
+						if existing_duration != duration:
+							raise ValueError(f"Inconsistent duration for event {event_id}: {existing_duration} vs {duration}")
+
+				except ValueError as e:
+					logging.warning(f"Skipping invalid availability string '{date_str}' for {name}: {e}")
+					continue
+
+		# Create Event objects from unique events
+		for event_id, (duration, display_name) in sorted(unique_events.items()):
+			event = Event.from_dict({
+				"id": event_counter,
+				"date": event_id,
+				"duration_minutes": duration,
+			})
+			event.id = event_counter
+			event_map[event_id] = event
+			event_counter += 1
 
 	return event_map
 
@@ -212,12 +283,13 @@ def process_responses(rows, peeps, event_map):
 		peep.switch_pref = SwitchPreference.from_string(row["Secondary Role"])
 		peep.responded = True
 
-		available_strs = [s for s in row.get("Availability", "").split(",") if s]
+		available_strs = [s.strip() for s in row.get("Availability", "").split(",") if s.strip()]
 		for date_str in available_strs:
-			date_id = parse_event_date(date_str)
-			event = event_map.get(date_id)
+			event_id, _, _ = parse_event_date(date_str)
+			event = event_map.get(event_id)
 			if not event:
-				raise ValueError(f"{name} listed availability for unknown event: {date_id}")
+				logging.warning(f"{name} listed availability for unknown event: {event_id}")
+				continue
 			peep.availability.append(event.id)
 
 		responses_data.append({
@@ -233,17 +305,129 @@ def process_responses(rows, peeps, event_map):
 
 # -- Miscellaneous --
 
+def parse_time_range(time_str):
+	"""
+	Parse a time range string and return start time, end time, and duration.
+
+	Handles formats like:
+	- "5:30pm to 7pm"
+	- "5pm to 6:30pm"
+	- "4pm to 5:30pm"
+
+	Returns:
+		tuple: (start_time_str, end_time_str, duration_minutes)
+		Example: ("17:30", "19:00", 90)
+	"""
+	import re
+
+	# Split on " to "
+	parts = time_str.lower().split(" to ")
+	if len(parts) != 2:
+		raise ValueError(f"Invalid time range format (expected 'X to Y'): {time_str}")
+
+	start_str, end_str = parts[0].strip(), parts[1].strip()
+
+	def parse_time(t):
+		"""Parse a single time like '5:30pm' or '5pm' into 24-hour format."""
+		# Match patterns like "5:30pm", "5pm", "17:30"
+		match = re.match(r'^(\d{1,2})(?::(\d{2}))?([ap]m)?$', t)
+		if not match:
+			raise ValueError(f"Invalid time format: {t}")
+
+		hour = int(match.group(1))
+		minute = int(match.group(2)) if match.group(2) else 0
+		meridiem = match.group(3)
+
+		if meridiem:
+			if meridiem == 'pm' and hour != 12:
+				hour += 12
+			elif meridiem == 'am' and hour == 12:
+				hour = 0
+
+		if hour < 0 or hour > 23 or minute < 0 or minute > 59:
+			raise ValueError(f"Time out of range: {t}")
+
+		return datetime.time(hour, minute)
+
+	start_time = parse_time(start_str)
+	end_time = parse_time(end_str)
+
+	# Calculate duration in minutes
+	start_minutes = start_time.hour * 60 + start_time.minute
+	end_minutes = end_time.hour * 60 + end_time.minute
+
+	if end_minutes <= start_minutes:
+		raise ValueError(f"End time must be after start time: {time_str}")
+
+	duration = end_minutes - start_minutes
+
+	return (start_time.strftime("%H:%M"), end_time.strftime("%H:%M"), duration)
+
 def parse_event_date(date_str):
 	"""
-	Parse an event date string and return a formatted datetime string.
+	Parse an event date string and return event ID, duration (if present), and display name.
 	Assumes the event is in the current year.
-	TODO: fix for next year if date has passed, but right now we're testing
-	with old dates.
 
-	Expected input format: "Weekday Month Day - H[AM/PM]" (e.g., "March 5 - 4PM")
-	Output format: "YYYY-MM-DD HH:MM"
+	Supports two formats:
+	1. New format with time range: "Friday January 9th - 5:30pm to 7pm"
+	2. Old format (backward compatibility): "Friday October 17 - 5pm"
+
+	Returns:
+		tuple: (event_id, duration_minutes or None, display_name)
+		Example: ("2026-01-09 17:30", 90, "Friday January 9th - 5:30pm to 7pm")
 	"""
+	import re
+
+	# Strip any trailing notes in parentheses
 	date_str = date_str.split('(')[0].strip()
-	dt = datetime.datetime.strptime(date_str, constants.DATESTR_FORMAT)
-	dt = dt.replace(year=datetime.datetime.now().year)
-	return dt.strftime("%Y-%m-%d %H:%M")
+	display_name = date_str
+
+	# Check if this is a time range format (contains " to ")
+	has_time_range = " to " in date_str
+
+	if has_time_range:
+		# New format: "Friday January 9th - 5:30pm to 7pm"
+		# Split on " - " to separate date from time range
+		parts = date_str.split(" - ")
+		if len(parts) != 2:
+			raise ValueError(f"Invalid event date format (expected 'Date - Time Range'): {date_str}")
+
+		date_part = parts[0].strip()
+		time_range_part = parts[1].strip()
+
+		# Remove ordinal suffixes (st, nd, rd, th) from date
+		date_part = re.sub(r'(\d+)(st|nd|rd|th)', r'\1', date_part)
+
+		# Parse the date part (e.g., "Friday January 9")
+		try:
+			dt = datetime.datetime.strptime(date_part, "%A %B %d")
+		except ValueError as e:
+			raise ValueError(f"Invalid date format in '{date_str}': {e}")
+
+		# Parse the time range to get start time and duration
+		start_time_str, end_time_str, duration = parse_time_range(time_range_part)
+
+		# Set year to current year (or next year if date has passed)
+		dt = dt.replace(year=datetime.datetime.now().year)
+
+		# Combine date with start time
+		start_hour, start_minute = map(int, start_time_str.split(':'))
+		dt = dt.replace(hour=start_hour, minute=start_minute)
+
+		event_id = dt.strftime("%Y-%m-%d %H:%M")
+		return (event_id, duration, display_name)
+
+	else:
+		# Old format: "Friday October 17 - 5pm" (backward compatibility)
+		# Remove ordinal suffixes if present
+		date_str_normalized = re.sub(r'(\d+)(st|nd|rd|th)', r'\1', date_str)
+
+		try:
+			dt = datetime.datetime.strptime(date_str_normalized, constants.DATESTR_FORMAT)
+		except ValueError:
+			# Try without ordinals in original
+			dt = datetime.datetime.strptime(date_str, constants.DATESTR_FORMAT)
+
+		dt = dt.replace(year=datetime.datetime.now().year)
+		event_id = dt.strftime("%Y-%m-%d %H:%M")
+		return (event_id, None, display_name)
