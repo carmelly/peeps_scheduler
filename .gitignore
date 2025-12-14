@@ -10,7 +10,7 @@ __pycache__/
 
 # Claude Code configuration
 .claude/
-CLAUDE.md
+CLAUDE.md*
 
 # Obsidian vault configuration
 .obsidian/
