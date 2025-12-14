@@ -349,7 +349,9 @@
             "role": "leader",
             "index": 0,
             "priority": 5,
-            "total_attended": 0
+            "total_attended": 0,
+            "active": false,
+            "date_joined": ""
         },
         {
             "id": 12,
@@ -359,7 +361,9 @@
             "role": "leader",
             "index": 1,
             "priority": 4,
-            "total_attended": 0
+            "total_attended": 0,
+            "active": false,
+            "date_joined": ""
         },
         {
             "id": 13,
@@ -369,7 +373,9 @@
             "role": "leader",
             "index": 2,
             "priority": 4,
-            "total_attended": 0
+            "total_attended": 0,
+            "active": false,
+            "date_joined": ""
         },
         {
             "id": 17,
@@ -379,7 +385,9 @@
             "role": "follower",
             "index": 3,
             "priority": 4,
-            "total_attended": 0
+            "total_attended": 0,
+            "active": false,
+            "date_joined": ""
         },
         {
             "id": 27,
@@ -389,7 +397,9 @@
             "role": "follower",
             "index": 4,
             "priority": 4,
-            "total_attended": 0
+            "total_attended": 0,
+            "active": false,
+            "date_joined": ""
         },
         {
             "id": 30,
@@ -399,7 +409,9 @@
             "role": "leader",
             "index": 5,
             "priority": 3,
-            "total_attended": 0
+            "total_attended": 0,
+            "active": false,
+            "date_joined": "3/6/2025"
         },
         {
             "id": 21,
@@ -410,6 +422,8 @@
             "index": 6,
             "priority": 1,
             "total_attended": 1,
+            "active": true,
+            "date_joined": "",
             "availability": [
                 1,
                 4
@@ -427,7 +441,9 @@
             "role": "leader",
             "index": 7,
             "priority": 1,
-            "total_attended": 0
+            "total_attended": 0,
+            "active": true,
+            "date_joined": "5/2/2025"
         },
         {
             "id": 40,
@@ -438,6 +454,8 @@
             "index": 8,
             "priority": 0,
             "total_attended": 0,
+            "active": true,
+            "date_joined": "6/13/2025",
             "availability": [
                 0,
                 1,
@@ -457,6 +475,8 @@
             "index": 9,
             "priority": 0,
             "total_attended": 0,
+            "active": true,
+            "date_joined": "6/20/2025",
             "availability": [
                 0,
                 1,
@@ -478,6 +498,8 @@
             "index": 10,
             "priority": 0,
             "total_attended": 0,
+            "active": true,
+            "date_joined": "7/6/2025",
             "availability": [
                 1,
                 4
@@ -495,7 +517,9 @@
             "role": "follower",
             "index": 11,
             "priority": 0,
-            "total_attended": 1
+            "total_attended": 1,
+            "active": true,
+            "date_joined": ""
         },
         {
             "id": 16,
@@ -506,6 +530,8 @@
             "index": 12,
             "priority": 0,
             "total_attended": 1,
+            "active": true,
+            "date_joined": "",
             "availability": [],
             "switch_pref": 1,
             "responded": true,
@@ -520,7 +546,9 @@
             "role": "leader",
             "index": 13,
             "priority": 0,
-            "total_attended": 2
+            "total_attended": 2,
+            "active": true,
+            "date_joined": ""
         },
         {
             "id": 25,
@@ -530,7 +558,9 @@
             "role": "follower",
             "index": 14,
             "priority": 0,
-            "total_attended": 4
+            "total_attended": 4,
+            "active": true,
+            "date_joined": ""
         },
         {
             "id": 36,
@@ -541,6 +571,8 @@
             "index": 15,
             "priority": 0,
             "total_attended": 2,
+            "active": true,
+            "date_joined": "5/5/2025",
             "availability": [],
             "switch_pref": 1,
             "responded": true,
@@ -556,6 +588,8 @@
             "index": 16,
             "priority": 0,
             "total_attended": 5,
+            "active": true,
+            "date_joined": "",
             "availability": [
                 1,
                 4
@@ -574,6 +608,8 @@
             "index": 17,
             "priority": 0,
             "total_attended": 4,
+            "active": true,
+            "date_joined": "",
             "availability": [
                 1,
                 4
@@ -592,6 +628,8 @@
             "index": 18,
             "priority": 0,
             "total_attended": 5,
+            "active": true,
+            "date_joined": "",
             "availability": [
                 0,
                 1
@@ -610,6 +648,8 @@
             "index": 19,
             "priority": 0,
             "total_attended": 3,
+            "active": true,
+            "date_joined": "5/2/2025",
             "availability": [
                 2,
                 3
@@ -628,6 +668,8 @@
             "index": 20,
             "priority": 0,
             "total_attended": 2,
+            "active": true,
+            "date_joined": "4/5/2025",
             "availability": [
                 1
             ],
@@ -645,6 +687,8 @@
             "index": 21,
             "priority": 0,
             "total_attended": 2,
+            "active": true,
+            "date_joined": "5/2/2025",
             "availability": [
                 0,
                 1,
@@ -664,6 +708,8 @@
             "index": 22,
             "priority": 0,
             "total_attended": 4,
+            "active": true,
+            "date_joined": "",
             "availability": [
                 2,
                 4
@@ -682,6 +728,8 @@
             "index": 23,
             "priority": 0,
             "total_attended": 9,
+            "active": true,
+            "date_joined": "",
             "availability": [
                 1,
                 4
@@ -700,6 +748,8 @@
             "index": 24,
             "priority": 0,
             "total_attended": 1,
+            "active": true,
+            "date_joined": "",
             "availability": [],
             "switch_pref": 1,
             "responded": true,
@@ -715,6 +765,8 @@
             "index": 25,
             "priority": 0,
             "total_attended": 1,
+            "active": true,
+            "date_joined": "",
             "availability": [
                 2,
                 3,
@@ -733,7 +785,9 @@
             "role": "leader",
             "index": 26,
             "priority": 0,
-            "total_attended": 2
+            "total_attended": 2,
+            "active": true,
+            "date_joined": ""
         },
         {
             "id": 6,
@@ -744,6 +798,8 @@
             "index": 27,
             "priority": 0,
             "total_attended": 3,
+            "active": true,
+            "date_joined": "",
             "availability": [],
             "switch_pref": 1,
             "responded": true,
@@ -759,6 +815,8 @@
             "index": 28,
             "priority": 0,
             "total_attended": 1,
+            "active": true,
+            "date_joined": "6/4/2025",
             "availability": [
                 0,
                 1
@@ -777,6 +835,8 @@
             "index": 29,
             "priority": 0,
             "total_attended": 9,
+            "active": true,
+            "date_joined": "",
             "availability": [
                 0,
                 1,
@@ -797,6 +857,8 @@
             "index": 30,
             "priority": 0,
             "total_attended": 9,
+            "active": true,
+            "date_joined": "",
             "availability": [
                 0,
                 1,
@@ -817,6 +879,8 @@
             "index": 31,
             "priority": 0,
             "total_attended": 8,
+            "active": true,
+            "date_joined": "",
             "availability": [
                 0,
                 1,
@@ -836,7 +900,9 @@
             "role": "follower",
             "index": 32,
             "priority": 0,
-            "total_attended": 7
+            "total_attended": 7,
+            "active": true,
+            "date_joined": ""
         },
         {
             "id": 38,
@@ -846,7 +912,9 @@
             "role": "leader",
             "index": 33,
             "priority": 0,
-            "total_attended": 3
+            "total_attended": 3,
+            "active": true,
+            "date_joined": "5/12/2025"
         },
         {
             "id": 31,
@@ -857,6 +925,8 @@
             "index": 34,
             "priority": 0,
             "total_attended": 3,
+            "active": true,
+            "date_joined": "4/3/2025",
             "availability": [
                 3,
                 4
@@ -875,6 +945,8 @@
             "index": 35,
             "priority": 0,
             "total_attended": 6,
+            "active": true,
+            "date_joined": "",
             "availability": [
                 1,
                 4
@@ -893,6 +965,8 @@
             "index": 36,
             "priority": 0,
             "total_attended": 7,
+            "active": true,
+            "date_joined": "",
             "availability": [
                 2,
                 4
@@ -911,6 +985,8 @@
             "index": 37,
             "priority": 0,
             "total_attended": 7,
+            "active": true,
+            "date_joined": "",
             "availability": [
                 1,
                 4
@@ -929,6 +1005,8 @@
             "index": 38,
             "priority": 0,
             "total_attended": 2,
+            "active": true,
+            "date_joined": "5/12/2025",
             "availability": [
                 0,
                 1,
@@ -950,6 +1028,8 @@
             "index": 39,
             "priority": 0,
             "total_attended": 10,
+            "active": true,
+            "date_joined": "",
             "availability": [
                 2,
                 3,
@@ -969,6 +1049,8 @@
             "index": 40,
             "priority": 0,
             "total_attended": 4,
+            "active": true,
+            "date_joined": "",
             "availability": [
                 0,
                 1,
@@ -987,7 +1069,9 @@
             "role": "follower",
             "index": 41,
             "priority": 0,
-            "total_attended": 8
+            "total_attended": 8,
+            "active": true,
+            "date_joined": ""
         }
     ]
 }

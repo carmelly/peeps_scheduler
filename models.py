@@ -121,12 +121,14 @@ class Peep:
 		peep_dict = {
 			"id": self.id,
 			"name": self.full_name,
-			"display_name": self.display_name, 
+			"display_name": self.display_name,
 			'email': self.email,
 			"role": self.role.value,
-			"index": self.index, 
-			"priority": self.priority, 
+			"index": self.index,
+			"priority": self.priority,
 			"total_attended": self.total_attended,
+			"active": self.active,
+			"date_joined": self.date_joined,
 		}
 		if self.responded: 
 			peep_dict.update({

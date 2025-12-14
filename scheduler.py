@@ -237,10 +237,12 @@ class Scheduler:
 		peeps, events = file_io.load_data_from_json(str(self.output_json))
 		responders = [p for p in peeps if p.responded]
 		no_availability = [p.name for p in responders if not p.availability]
-		non_responders = [p.name for p in peeps if not p.responded]
+		non_responders = [p.name for p in peeps if not p.responded and p.active]
 		num_available = len([p for p in responders if p.availability])
+		num_active = len([p for p in peeps if p.active])
+		
 		if self.interactive:
-			print(f"\n📋 Mini Availability Report: {len(responders)} responses /  {num_available} available / {len(peeps)} total")
+			print(f"\n📋 Mini Availability Report: {len(responders)} responses /  {num_available} available / {num_active} active / {len(peeps)} total")
 			print("  🚫  No availability:", ", ".join(sorted(no_availability)) if no_availability else "None")
 			print("  ❌  Did not respond:", ", ".join(sorted(non_responders)) if non_responders else "None")
 			print()
