@@ -579,6 +579,8 @@ class Event:
 	def get_participants_str(self, role: Role = None) -> str:
 		"""
 		Return a formatted string listing assigned attendees and alternates.
+		Attendees are listed in alphabetical order, while alternates are listed 
+		in order of assignment. 
 
 		If a role is provided, returns participants for that role only.
 		If no role is given, returns both leaders and followers sections.
@@ -587,7 +589,7 @@ class Event:
 		"""
 		def format_group(role: Role) -> str:
 			attendees = sorted(self.get_attendees(role), key=lambda p: p.name)
-			alternates = sorted(self.get_alternates(role), key=lambda p: p.name)
+			alternates = self.get_alternates(role)  # Preserve assignment order
 
 			name_str = ', '.join(
 				f"*{peep.name}" if peep.role != role else peep.name

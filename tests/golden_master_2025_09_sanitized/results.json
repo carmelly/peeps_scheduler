@@ -148,7 +148,7 @@
                     "role": "leader"
                 }
             ],
-            "leaders_string": "Leaders(7): P11, P21, P24, P3, P31, P5, P9 [alt: P20, P4]",
+            "leaders_string": "Leaders(7): P11, P21, P24, P3, P31, P5, P9 [alt: P4, P20]",
             "followers_string": "Followers(7): P14, P18, P19, P22, P28, P37, P42"
         },
         {
