@@ -15,7 +15,8 @@ from file_io import (
 	save_event_sequence,
 	save_peeps_csv,
 	load_json,
-	save_json
+	save_json,
+	normalize_email
 )
 from models import Event, EventSequence, Role, SwitchPreference, Peep
 
@@ -682,3 +683,50 @@ class TestIntegration:
 		assert bob.switch_pref == SwitchPreference.PRIMARY_ONLY
 		assert bob.availability == [1]
 		assert bob.responded is True
+
+
+class TestEmailNormalization:
+	"""Tests for email normalization (Gmail dot handling)."""
+
+	def test_normalize_email_gmail_removes_dots(self):
+		"""Gmail addresses should have dots removed from local part."""
+		assert normalize_email("john.smith@gmail.com") == "johnsmith@gmail.com"
+		assert normalize_email("John.Smith@Gmail.COM") == "johnsmith@gmail.com"
+
+	def test_normalize_email_non_gmail_preserves_dots(self):
+		"""Non-Gmail addresses should keep dots in local part."""
+		assert normalize_email("john.smith@outlook.com") == "john.smith@outlook.com"
+		assert normalize_email("user.name@company.com") == "user.name@company.com"
+
+	def test_normalize_email_empty_and_none(self):
+		"""Empty string and None should return empty string."""
+		assert normalize_email("") == ""
+		assert normalize_email(None) == ""
+
+	def test_gmail_dot_matching_integration(self):
+		"""End-to-end: Gmail response with dots should match peep without dots."""
+		peeps_content = """id,Name,Display Name,Email Address,Role,Index,Priority,Total Attended,Active,Date Joined
+1,John Smith,John,johnsmith@gmail.com,Leader,0,1,1,TRUE,2022-01-01
+"""
+		responses_rows = [{
+			"Name": "John Smith",
+			"Email Address": "john.smith@gmail.com",  # Has dots
+			"Primary Role": "Leader",
+			"Secondary Role": "I only want to be scheduled in my primary role",
+			"Max Sessions": "1",
+			"Availability": "",
+			"Min Interval Days": "0",
+			"Timestamp": "2025-07-01 12:00"
+		}]
+
+		with tempfile.NamedTemporaryFile(mode="w", delete=False, newline='') as f:
+			f.write(peeps_content)
+			f.flush()
+			tmp_name = f.name
+
+		peeps = load_peeps(tmp_name)
+		os.remove(tmp_name)
+
+		# Should match despite different dots
+		updated_peeps, responses = process_responses(responses_rows, peeps, {})
+		assert updated_peeps[0].responded is True

@@ -1,16 +1,16 @@
 from collections import defaultdict
 from data_manager import DataManager, get_data_manager
 from models import Role, SwitchPreference
-from file_io import parse_event_date, load_csv
+from file_io import parse_event_date, load_csv, normalize_email
 
 def parse_availability(responses_file, members_file):
-	members = {row["Email Address"].strip().lower(): row for row in load_csv(members_file)}
+	members = {normalize_email(row["Email Address"]): row for row in load_csv(members_file)}
 	availability = defaultdict(lambda: {"leader": [], "follower": [], "leader_fill": [], "follower_fill": []})
 	unavailable = []
 	responders = set()
 
 	for row in load_csv(responses_file):
-		email = row["Email Address"].strip().lower()
+		email = normalize_email(row["Email Address"])
 		role = Role.from_string(row["Primary Role"].strip())
 		switch_pref = SwitchPreference.from_string(row["Secondary Role"].strip())
 		dates = [d.strip() for d in row["Availability"].split(",") if d.strip()]

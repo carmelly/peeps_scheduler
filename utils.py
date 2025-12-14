@@ -1,10 +1,10 @@
 from collections import defaultdict
 import json
 import logging
-import datetime 
+import datetime
 import itertools
 from constants import DATE_FORMAT, DATESTR_FORMAT
-from file_io import load_csv, save_json
+from file_io import load_csv, save_json, normalize_email
 from models import EventSequence, Peep, Event, Role, SwitchPreference
 
 def generate_event_permutations(events):
@@ -68,14 +68,14 @@ def apply_event_results( result_json, members_csv, responses_csv):
 	responded_emails = set()
 	response_rows = load_csv(responses_csv)
 	for row in response_rows:
-		email = row.get('Email Address', '').strip().lower()
+		email = normalize_email(row.get('Email Address', ''))
 		if email:  # Only add non-empty emails
 			responded_emails.add(email)
 	logging.debug(f"Found {len(responded_emails)} unique respondents in {responses_csv}")
 
 	# Set responded flag based on email match
 	for peep in fresh_peeps:
-		if peep.email and peep.email.lower() in responded_emails:
+		if peep.email and normalize_email(peep.email) in responded_emails:
 			peep.responded = True
 			logging.debug(f"Marked peep {peep.id} ({peep.email}) as responded")
 		else:

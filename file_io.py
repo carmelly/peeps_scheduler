@@ -19,6 +19,23 @@ RESPONSES_CSV_FIELDS = [
 	'Max Sessions', 'Availability'
 ]
 
+def normalize_email(email):
+	"""
+	Normalize email for matching. Removes dots from Gmail addresses only.
+	Gmail ignores dots, so john.smith@gmail.com == johnsmith@gmail.com.
+	"""
+	if not email:
+		return ""
+
+	email = email.strip().lower()
+
+	if email.endswith('@gmail.com'):
+		local, domain = email.rsplit('@', 1)
+		local = local.replace('.', '')
+		return f"{local}@{domain}"
+
+	return email
+
 # -- CSV-related --
 
 def load_csv(filename, required_columns=[]):
@@ -64,7 +81,7 @@ def load_peeps(peeps_csv_path):
 	emails = []
 
 	for peep in peeps:
-		email = peep.email.lower()
+		email = normalize_email(peep.email)
 		if peep.active:
 			if not email:
 				raise ValueError(f"Active peep '{peep.full_name}' is missing an email.")
@@ -267,11 +284,11 @@ def process_responses(rows, peeps, event_map):
 		if not name or name.startswith("Event:"):
 			continue
 
-		email = row.get("Email Address", "").lower()
+		email = normalize_email(row.get("Email Address", ""))
 		if not email:
 			raise ValueError(f"Missing email for row: {name}")
 
-		peep = next((p for p in peeps if p.email.lower() == email), None)
+		peep = next((p for p in peeps if normalize_email(p.email) == email), None)
 		if not peep:
 			raise ValueError(f"No matching peep found for email: {email} (row: {name})")
 		if not peep.active: 
