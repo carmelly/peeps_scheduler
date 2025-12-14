@@ -744,7 +744,7 @@ class EventSequence:
 		)
 		result += f"\t"
 		for event in sorted_events:
-			result += f"\n\t{event}, {event.duration_minutes} mins, ${event.price_per_person:.0f}/person"
+			result += f"\n\t{event.formatted_date()}, {event.duration_minutes} mins, ${event.price_per_person:.0f}/person"
 			result += f"\n\t  {event.get_participants_str(Role.LEADER)}"
 			result += f"\n\t  {event.get_participants_str(Role.FOLLOWER)}"
 
