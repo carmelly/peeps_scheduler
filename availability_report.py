@@ -40,9 +40,9 @@ def parse_availability(responses_file, members_file):
 	]
 	return availability, unavailable, non_responders
 
-def print_availability(availability, unavailable, non_responders):
+def print_availability(availability, unavailable, non_responders, year=None):
 
-	for date in sorted(availability.keys(), key=lambda d:parse_event_date(d)[0]):
+	for date in sorted(availability.keys(), key=lambda d:parse_event_date(d, year=year)[0]):
 		print(f"\n{date}")
 		print(f"    Leaders  ({len(availability[date]['leader'])}): {', '.join(availability[date]['leader'])} ( + {', '.join(availability[date]['leader_fill'])})")
 		print(f"    Followers({len(availability[date]['follower'])}): {', '.join(availability[date]['follower'])} ( + {', '.join(availability[date]['follower_fill'])})")
@@ -62,4 +62,14 @@ def run_availability_report(data_folder):
 	responses_file = period_path / "responses.csv"
 	members_file = period_path / "members.csv"
 	availability, unavailable, non_responders = parse_availability(responses_file, members_file)
-	print_availability(availability, unavailable, non_responders)
+
+	# Extract year from data_folder (e.g., "2026-01" -> 2026)
+	# Handle both absolute paths and folder names
+	from pathlib import Path
+	folder_name = Path(data_folder).name
+	try:
+		year = int(folder_name[:4]) if folder_name and len(folder_name) >= 4 and folder_name[:4].isdigit() else None
+	except (ValueError, TypeError):
+		year = None
+
+	print_availability(availability, unavailable, non_responders, year=year)

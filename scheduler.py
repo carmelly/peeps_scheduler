@@ -220,7 +220,17 @@ class Scheduler:
 			responses_csv = (self.period_path / 'responses.csv').as_posix()
 			peeps_csv = (self.period_path / 'members.csv').as_posix()
 			logging.info(f"Loading data from {peeps_csv} and {responses_csv}")
-			file_io.convert_to_json(str(responses_csv), str(peeps_csv), str(self.output_json))
+
+			# Extract year from data_folder (e.g., "2026-01" -> 2026)
+			# Handle both absolute paths and folder names
+			from pathlib import Path
+			folder_name = Path(self.data_folder).name
+			try:
+				year = int(folder_name[:4]) if folder_name and len(folder_name) >= 4 and folder_name[:4].isdigit() else None
+			except (ValueError, TypeError):
+				year = None
+
+			file_io.convert_to_json(str(responses_csv), str(peeps_csv), str(self.output_json), year=year)
 
 		logging.info(f"Loading data from {self.output_json}")
 		

@@ -354,6 +354,33 @@ class TestTimeDateParsing:
 		assert event_id == f"{datetime.datetime.now().year}-07-05 13:00"
 		assert duration is None
 
+	def test_parse_event_date_with_custom_year_new_format(self):
+		"""Test that custom year parameter works with new time range format."""
+		date_str = "Friday January 9th - 5:30pm to 7pm"
+		event_id, duration, display_name = parse_event_date(date_str, year=2026)
+
+		assert event_id == "2026-01-09 17:30"
+		assert duration == 90
+		assert display_name == date_str
+
+	def test_parse_event_date_with_custom_year_old_format(self):
+		"""Test that custom year parameter works with old backward compatibility format."""
+		date_str = "Saturday July 5 - 1pm"
+		event_id, duration, display_name = parse_event_date(date_str, year=2026)
+
+		assert event_id == "2026-07-05 13:00"
+		assert duration is None
+		assert display_name == "Saturday July 5 - 1pm"
+
+	def test_parse_event_date_year_defaults_to_current_year(self):
+		"""Test that when year parameter is None, defaults to current year."""
+		date_str = "Monday January 12th - 5pm to 6:30pm"
+		event_id, duration, display_name = parse_event_date(date_str, year=None)
+
+		current_year = datetime.datetime.now().year
+		assert event_id == f"{current_year}-01-12 17:00"
+		assert duration == 90
+
 
 class TestEventExtraction:
 	"""Tests for event extraction from responses (old Event rows + new auto-derive)."""

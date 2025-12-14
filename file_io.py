@@ -156,12 +156,12 @@ def save_event_sequence(sequence: EventSequence, filename):
 
 # -- Response conversion --
 
-def convert_to_json(response_csv_path, peeps_csv_path, output_json_path):
+def convert_to_json(response_csv_path, peeps_csv_path, output_json_path, year=None):
 	"""Main function: convert responses and members CSVs into output.json."""
 	peeps = load_peeps(peeps_csv_path)
 	response_rows = load_responses(response_csv_path)
-	event_map = extract_events(response_rows)
-	updated_peeps, responses_data = process_responses(response_rows, peeps, event_map)
+	event_map = extract_events(response_rows, year=year)
+	updated_peeps, responses_data = process_responses(response_rows, peeps, event_map, year=year)
 
 	output = {
 		"responses": responses_data,
@@ -170,13 +170,17 @@ def convert_to_json(response_csv_path, peeps_csv_path, output_json_path):
 	}
 	save_json(output, output_json_path)
 
-def extract_events(rows):
+def extract_events(rows, year=None):
 	"""
 	Extract events from responses.csv.
 
 	Supports two modes:
 	1. Event rows (backward compatibility): Rows with Name starting with "Event:"
 	2. Auto-derive from availability: If no Event rows, scan availability strings
+
+	Args:
+		rows: List of response rows
+		year: Optional year for date parsing. Defaults to current year if not provided.
 
 	Returns:
 		dict: event_map with event_id as key and Event object as value
@@ -196,7 +200,7 @@ def extract_events(rows):
 				raise ValueError(f"Malformed event row: missing date in 'Name' field -> {name}")
 
 			date_str = parts[1].strip()
-			event_id, duration_from_str, display_name = parse_event_date(date_str)
+			event_id, duration_from_str, display_name = parse_event_date(date_str, year=year)
 
 			# For old format Event rows, duration comes from Event Duration column
 			duration_str = row.get("Event Duration", "")
@@ -241,7 +245,7 @@ def extract_events(rows):
 
 			for date_str in date_strings:
 				try:
-					event_id, duration, display_name = parse_event_date(date_str)
+					event_id, duration, display_name = parse_event_date(date_str, year=year)
 
 					if duration is None:
 						raise ValueError(f"Cannot auto-derive event duration from '{date_str}' - time range required")
@@ -275,7 +279,7 @@ def extract_events(rows):
 
 	return event_map
 
-def process_responses(rows, peeps, event_map):
+def process_responses(rows, peeps, event_map, year=None):
 	"""Update peep objects from responses and return updated peeps and response summaries."""
 	responses_data = []
 
@@ -302,7 +306,7 @@ def process_responses(rows, peeps, event_map):
 
 		available_strs = [s.strip() for s in row.get("Availability", "").split(",") if s.strip()]
 		for date_str in available_strs:
-			event_id, _, _ = parse_event_date(date_str)
+			event_id, _, _ = parse_event_date(date_str, year=year)
 			event = event_map.get(event_id)
 			if not event:
 				logging.warning(f"{name} listed availability for unknown event: {event_id}")
@@ -380,20 +384,26 @@ def parse_time_range(time_str):
 
 	return (start_time.strftime("%H:%M"), end_time.strftime("%H:%M"), duration)
 
-def parse_event_date(date_str):
+def parse_event_date(date_str, year=None):
 	"""
 	Parse an event date string and return event ID, duration (if present), and display name.
-	Assumes the event is in the current year.
 
 	Supports two formats:
 	1. New format with time range: "Friday January 9th - 5:30pm to 7pm"
 	2. Old format (backward compatibility): "Friday October 17 - 5pm"
+
+	Args:
+		date_str: Date string to parse
+		year: Optional year to use. Defaults to current year if not provided.
 
 	Returns:
 		tuple: (event_id, duration_minutes or None, display_name)
 		Example: ("2026-01-09 17:30", 90, "Friday January 9th - 5:30pm to 7pm")
 	"""
 	import re
+
+	if year is None:
+		year = datetime.datetime.now().year
 
 	# Strip any trailing notes in parentheses
 	date_str = date_str.split('(')[0].strip()
@@ -424,8 +434,8 @@ def parse_event_date(date_str):
 		# Parse the time range to get start time and duration
 		start_time_str, end_time_str, duration = parse_time_range(time_range_part)
 
-		# Set year to current year (or next year if date has passed)
-		dt = dt.replace(year=datetime.datetime.now().year)
+		# Set year from parameter or current year
+		dt = dt.replace(year=year)
 
 		# Combine date with start time
 		start_hour, start_minute = map(int, start_time_str.split(':'))
@@ -445,6 +455,6 @@ def parse_event_date(date_str):
 			# Try without ordinals in original
 			dt = datetime.datetime.strptime(date_str, constants.DATESTR_FORMAT)
 
-		dt = dt.replace(year=datetime.datetime.now().year)
+		dt = dt.replace(year=year)
 		event_id = dt.strftime("%Y-%m-%d %H:%M")
 		return (event_id, None, display_name)
