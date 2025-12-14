@@ -561,6 +561,7 @@ class TestResponseProcessing:
 				"Secondary Role": "I'm happy to dance my secondary role if it lets me attend when my primary is full",
 				"Max Sessions": "2",
 				"Availability": "Saturday July 5 - 1pm, Monday July 7 - 11am",  # Monday not in events
+				"Min Interval Days": "0",
 				"Timestamp": "2025-07-01 12:00"
 			}
 		]

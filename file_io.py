@@ -16,7 +16,7 @@ PEEPS_CSV_FIELDS = [
 
 RESPONSES_CSV_FIELDS = [
 	'Name', 'Email Address', 'Primary Role', 'Secondary Role',
-	'Max Sessions', 'Availability'
+	'Max Sessions', 'Availability', 'Min Interval Days'
 ]
 
 def normalize_email(email):
@@ -296,7 +296,7 @@ def process_responses(rows, peeps, event_map):
 
 		peep.role = Role.from_string(row["Primary Role"])
 		peep.event_limit = int(row["Max Sessions"])
-		peep.min_interval_days = int(row.get("Min Interval Days", 0))
+		peep.min_interval_days = int(row["Min Interval Days"])
 		peep.switch_pref = SwitchPreference.from_string(row["Secondary Role"])
 		peep.responded = True
 
