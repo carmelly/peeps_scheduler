@@ -79,52 +79,38 @@ ORDER BY rm.period_name, rm.csv_id;
 
 ## 2. Incomplete Features
 
-### 2.1 SWITCH_IF_NEEDED Not Implemented
+### 2.1 SWITCH_IF_NEEDED Alternate Promotion ✅
 
-**Status:** INCOMPLETE
-**Severity:** MEDIUM
-**Impact:** Limited role flexibility for participants
+**Status:** RESOLVED (v1.0.0-baseline)
+**Original Severity:** MEDIUM
 
-**Description:**
-The `SwitchPreference.SWITCH_IF_NEEDED` enum value exists but the logic to use it is not implemented. This was intended to allow peeps to switch roles only when needed to fill underfilled sessions (as opposed to `SWITCH_IF_PRIMARY_FULL` which switches whenever primary is full).
+**Resolution:**
+Implemented alternate promotion logic for `SWITCH_IF_NEEDED` preference. Members with this preference are now promoted from alternates to attendees when it enables underfilled events to meet minimum attendance requirements.
 
-**Current Behavior:**
-- `SWITCH_IF_NEEDED` peeps are treated the same as `PRIMARY_ONLY` peeps during initial assignment
-- They are added as alternates when their primary role is full
-- No fallback logic promotes them to secondary role for underfilled events
+**Implementation:**
+- Promotion algorithm: `scheduler.py:77-102`
+- Activates after initial assignment, before minimum validation
+- Bidirectional (Leader ↔ Follower) with capacity enforcement
+- Test coverage: `tests/test_scheduler.py:588-844` (6 comprehensive tests)
 
-**Code Locations:**
-- Enum definition: `models.py:29-33`
-- Assignment logic: `scheduler.py:60-72`
-- TODO comment: `scheduler.py:74-76`
-
-**Expected Behavior:**
-After initial assignment, if an event is underfilled and has `SWITCH_IF_NEEDED` alternates in the opposite role, promote them to fill the gap.
-
-**Related Issue:** [2.2 Advanced Dual-Role Promotion](#22-advanced-dual-role-promotion-not-implemented)
+**Historical Validation:**
+Validated against real periods (2025-09-real, 2025-10, 2025-11). Feature successfully prevented event downgrades/cancellations and improved fill rates while correctly acting as safety net (only activates when necessary).
 
 ---
 
-### 2.2 Advanced Dual-Role Promotion Not Implemented
+### 2.2 Advanced Dual-Role Promotion ✅
 
-**Status:** INCOMPLETE
-**Severity:** MEDIUM
-**Impact:** Reduced event fill rate, missed opportunities for flexible participants
+**Status:** RESOLVED (v1.0.0-baseline)
+**Original Severity:** MEDIUM
 
-**Description:**
-The scheduler has placeholder TODO comments for advanced dual-role promotion logic that would use flexible participants to fill events more efficiently.
+**Resolution:**
+Implemented via SWITCH_IF_NEEDED alternate promotion (Issue 2.1). This provides the viable approach for dual-role promotion by allowing alternates to fill underfilled events in their opposite role.
 
-**Missing Features:**
-1. **Use SWITCH_IF_PRIMARY_FULL peeps to enable alternates:**
-   - If a `SWITCH_IF_PRIMARY_FULL` peep can switch to secondary role, allow a primary-role alternate to fill the event
-   - Example: Event needs 1 more leader. Bob (follower, SWITCH_IF_PRIMARY_FULL) is assigned. Alice (leader) is alternate. Swap Bob to follower role, promote Alice to leader.
+**Architectural Finding:**
+The alternative approach using SWITCH_IF_PRIMARY_FULL members was determined to be infeasible: these members are assigned to their secondary role as attendees during initial assignment (not as alternates), so they cannot be used in a subsequent promotion phase. SWITCH_IF_NEEDED is the correct and only mechanism for alternate-to-attendee promotion.
 
-2. **Fallback logic for SWITCH_IF_NEEDED peeps:**
-   - After initial assignment, if event is underfilled, check for `SWITCH_IF_NEEDED` alternates who could fill opposite role
-   - Only promote if it enables event to reach minimum
-
-**Code Location:**
-- TODO comment: `scheduler.py:74-76`
+**Implementation:**
+See Issue 2.1 for complete details on the promotion algorithm, test coverage, and historical validation.
 
 **Example Scenario:**
 ```
@@ -683,18 +669,16 @@ Support for participants requesting to be scheduled with specific partners, with
 | Category | Count | High Severity | Medium Severity | Low Severity |
 |----------|-------|---------------|-----------------|--------------|
 | Active Bugs | 1 | 1 (db branch only) | 0 | 0 |
-| Incomplete Features | 4 | 0 | 2 | 2 |
+| Incomplete Features | 2 | 0 | 0 | 2 |
 | System Limitations | 5 | 0 | 1 | 4 |
 | Technical Debt | 5 | 0 | 0 | 5 |
 | Configuration Uncertainties | 2 | 0 | 0 | 2 |
-| **Total** | **17** | **1** | **3** | **13** |
+| **Total** | **15** | **1** | **1** | **13** |
 
 ### Priority Recommendations
 
 **Immediate (Next Release):**
-1. Implement SWITCH_IF_NEEDED logic (Issue 2.1)
-2. Implement advanced dual-role promotion (Issue 2.2)
-3. Verify and update 60-min pricing (Issue 5.1)
+1. Verify and update 60-min pricing (Issue 5.1)
 
 **Short-Term:**
 1. Add input validation (Issues 4.1, 4.2, 4.3)

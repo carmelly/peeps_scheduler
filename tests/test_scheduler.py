@@ -585,6 +585,260 @@ class TestSchedulerDualRoleAssignment:
         # Original role should be unchanged
         assert switch_if_needed_leader.role == Role.LEADER
 
+    def test_promote_switch_if_needed_alternate_to_fill_underfilled_role(self, event_factory, peep_factory):
+        """Test that SWITCH_IF_NEEDED alternates are promoted when it enables event to meet minimum."""
+        scheduler = create_scheduler()
+        scheduler.target_max = 4  # Limit to 4 per role to ensure switch_follower becomes alternate
+
+        event = event_factory(id=1, duration_minutes=90)  # min_role=4, max_role=5
+
+        # Create 3 leaders (underfilled - need 4)
+        leaders = [
+            peep_factory(id=i+1, role=Role.LEADER, switch_pref=SwitchPreference.PRIMARY_ONLY,
+                        availability=[1], event_limit=1, priority=i)
+            for i in range(3)
+        ]
+
+        # Create 4 PRIMARY_ONLY followers (will fill follower slots)
+        followers = [
+            peep_factory(id=i+10, role=Role.FOLLOWER, switch_pref=SwitchPreference.PRIMARY_ONLY,
+                        availability=[1], event_limit=1, priority=i)
+            for i in range(4)
+        ]
+
+        # This follower has SWITCH_IF_NEEDED preference and will be added as alternate (5th follower, exceeds target_max)
+        switch_follower = peep_factory(id=20, role=Role.FOLLOWER,
+                                      switch_pref=SwitchPreference.SWITCH_IF_NEEDED,
+                                      availability=[1], event_limit=1, priority=0)
+
+        peeps = leaders + followers + [switch_follower]
+        sequence = EventSequence([event], peeps)
+
+        scheduler.evaluate_sequence(sequence)
+
+        # Event should be valid
+        assert len(sequence.valid_events) == 1
+        valid_event = sequence.valid_events[0]
+
+        # After promotion and balancing, should have 4 per role
+        assert len(valid_event.leaders) == 4
+        assert len(valid_event.followers) == 4
+
+        # The SWITCH_IF_NEEDED follower should have been promoted to leader
+        assert switch_follower in valid_event.leaders
+        assert switch_follower not in valid_event.followers
+        assert switch_follower not in valid_event.alt_followers
+
+    def test_no_promotion_when_event_already_meets_minimum(self, event_factory, peep_factory):
+        """Test that SWITCH_IF_NEEDED promotion doesn't happen when event already meets minimums."""
+        scheduler = create_scheduler()
+        scheduler.target_max = 5  # Allow enough capacity
+
+        event = event_factory(id=1, duration_minutes=90)  # min_role=4, max_role=5
+
+        # Create 4 leaders (meets minimum)
+        leaders = [
+            peep_factory(id=i+1, role=Role.LEADER, switch_pref=SwitchPreference.PRIMARY_ONLY,
+                        availability=[1], event_limit=1)
+            for i in range(4)
+        ]
+
+        # Create 4 followers (meets minimum)
+        followers = [
+            peep_factory(id=i+10, role=Role.FOLLOWER, switch_pref=SwitchPreference.PRIMARY_ONLY,
+                        availability=[1], event_limit=1)
+            for i in range(4)
+        ]
+
+        # This follower has SWITCH_IF_NEEDED and will be alternate (no promotion needed)
+        switch_follower = peep_factory(id=20, role=Role.FOLLOWER,
+                                      switch_pref=SwitchPreference.SWITCH_IF_NEEDED,
+                                      availability=[1], event_limit=1)
+
+        peeps = leaders + followers + [switch_follower]
+        sequence = EventSequence([event], peeps)
+
+        scheduler.evaluate_sequence(sequence)
+
+        # Event should be valid
+        assert len(sequence.valid_events) == 1
+        valid_event = sequence.valid_events[0]
+
+        # Should have exactly 4 per role (no overfill)
+        assert len(valid_event.leaders) == 4
+        assert len(valid_event.followers) == 4
+
+        # The SWITCH_IF_NEEDED follower should remain as alternate (not promoted)
+        assert switch_follower in valid_event.alt_followers
+        assert switch_follower not in valid_event.leaders
+        assert switch_follower not in valid_event.followers
+
+    def test_promote_multiple_switch_if_needed_alternates_if_needed(self, event_factory, peep_factory):
+        """Test that multiple SWITCH_IF_NEEDED alternates can be promoted to fill a role."""
+        scheduler = create_scheduler()
+        scheduler.target_max = 4  # Limit to 4 per role to ensure switch followers become alternates
+
+        event = event_factory(id=1, duration_minutes=90)  # min_role=4, max_role=5
+
+        # Create 2 leaders (very underfilled - need 4)
+        leaders = [
+            peep_factory(id=i+1, role=Role.LEADER, switch_pref=SwitchPreference.PRIMARY_ONLY,
+                        availability=[1], event_limit=1, priority=i)
+            for i in range(2)
+        ]
+
+        # Create 4 PRIMARY_ONLY followers (will fill follower slots)
+        followers_primary = [
+            peep_factory(id=i+10, role=Role.FOLLOWER, switch_pref=SwitchPreference.PRIMARY_ONLY,
+                        availability=[1], event_limit=1, priority=i)
+            for i in range(4)
+        ]
+
+        # These followers have SWITCH_IF_NEEDED preference and will become alternates (exceed target_max=4)
+        switch_follower1 = peep_factory(id=20, role=Role.FOLLOWER,
+                                       switch_pref=SwitchPreference.SWITCH_IF_NEEDED,
+                                       availability=[1], event_limit=1, priority=0)
+        switch_follower2 = peep_factory(id=21, role=Role.FOLLOWER,
+                                       switch_pref=SwitchPreference.SWITCH_IF_NEEDED,
+                                       availability=[1], event_limit=1, priority=0)
+
+        peeps = leaders + followers_primary + [switch_follower1, switch_follower2]
+        sequence = EventSequence([event], peeps)
+
+        scheduler.evaluate_sequence(sequence)
+
+        # Event should be valid
+        assert len(sequence.valid_events) == 1
+        valid_event = sequence.valid_events[0]
+
+        # After promotion and balancing, should have 4 per role
+        assert len(valid_event.leaders) == 4
+        assert len(valid_event.followers) == 4
+
+        # Both SWITCH_IF_NEEDED followers should have been promoted to leaders
+        assert switch_follower1 in valid_event.leaders
+        assert switch_follower2 in valid_event.leaders
+
+    def test_no_promotion_when_opposite_role_has_no_switch_if_needed(self, event_factory, peep_factory):
+        """Test that no promotion happens when opposite role has no SWITCH_IF_NEEDED alternates."""
+        scheduler = create_scheduler()
+        scheduler.target_max = 4  # Limit to 4 per role
+
+        event = event_factory(id=1, duration_minutes=90)  # min_role=4, max_role=5
+
+        # Create 3 leaders (underfilled - need 4)
+        leaders = [
+            peep_factory(id=i+1, role=Role.LEADER, switch_pref=SwitchPreference.PRIMARY_ONLY,
+                        availability=[1], event_limit=1, priority=i)
+            for i in range(3)
+        ]
+
+        # Create 4 PRIMARY_ONLY followers (will fill follower slots)
+        followers = [
+            peep_factory(id=i+10, role=Role.FOLLOWER, switch_pref=SwitchPreference.PRIMARY_ONLY,
+                        availability=[1], event_limit=1, priority=i)
+            for i in range(4)
+        ]
+
+        # Additional follower alternate (also PRIMARY_ONLY, no SWITCH_IF_NEEDED available)
+        follower_alternate = peep_factory(id=20, role=Role.FOLLOWER,
+                                         switch_pref=SwitchPreference.PRIMARY_ONLY,
+                                         availability=[1], event_limit=1, priority=0)
+
+        peeps = leaders + followers + [follower_alternate]
+        sequence = EventSequence([event], peeps)
+
+        scheduler.evaluate_sequence(sequence)
+
+        # Event cannot meet minimum (3 leaders < 4 needed) and has no SWITCH_IF_NEEDED alternates to promote
+        # So it should be invalid (no valid events)
+        assert len(sequence.valid_events) == 0
+
+    def test_switch_if_needed_respects_effective_max_role(self, event_factory, peep_factory):
+        """Test that SWITCH_IF_NEEDED promotion respects effective_max_role capacity limits."""
+        scheduler = create_scheduler()
+        scheduler.target_max = 4  # Limit capacity to 4 per role (less than event max_role=5)
+
+        event = event_factory(id=1, duration_minutes=90)  # min_role=4, max_role=5
+
+        # Create 3 leaders (underfilled - need 4)
+        leaders = [
+            peep_factory(id=i+1, role=Role.LEADER, switch_pref=SwitchPreference.PRIMARY_ONLY,
+                        availability=[1], event_limit=1)
+            for i in range(3)
+        ]
+
+        # Create 4 followers (at effective_max_role capacity)
+        followers = [
+            peep_factory(id=i+10, role=Role.FOLLOWER, switch_pref=SwitchPreference.PRIMARY_ONLY,
+                        availability=[1], event_limit=1)
+            for i in range(4)
+        ]
+
+        # This follower has SWITCH_IF_NEEDED and will be alternate
+        switch_follower = peep_factory(id=20, role=Role.FOLLOWER,
+                                      switch_pref=SwitchPreference.SWITCH_IF_NEEDED,
+                                      availability=[1], event_limit=1)
+
+        peeps = leaders + followers + [switch_follower]
+        sequence = EventSequence([event], peeps)
+
+        scheduler.evaluate_sequence(sequence)
+
+        # Event should be valid
+        assert len(sequence.valid_events) == 1
+        valid_event = sequence.valid_events[0]
+
+        # After promotion and balancing, should have 4 per role
+        assert len(valid_event.leaders) == 4
+        assert len(valid_event.followers) == 4
+
+        # The SWITCH_IF_NEEDED follower should have been promoted to fill leaders
+        assert switch_follower in valid_event.leaders
+
+    def test_switch_if_needed_leader_alternate_fills_follower_underfill(self, event_factory, peep_factory):
+        """Test that SWITCH_IF_NEEDED leader alternates can be promoted to fill underfilled follower role."""
+        scheduler = create_scheduler()
+        scheduler.target_max = 4  # Limit to 4 per role to ensure switch_leader becomes alternate
+
+        event = event_factory(id=1, duration_minutes=90)  # min_role=4, max_role=5
+
+        # Create 4 PRIMARY_ONLY leaders (will fill leader slots)
+        leaders_primary = [
+            peep_factory(id=i+1, role=Role.LEADER, switch_pref=SwitchPreference.PRIMARY_ONLY,
+                        availability=[1], event_limit=1, priority=i)
+            for i in range(4)
+        ]
+
+        # This leader has SWITCH_IF_NEEDED and will become alternate (5th leader, exceeds target_max)
+        switch_leader = peep_factory(id=10, role=Role.LEADER,
+                                    switch_pref=SwitchPreference.SWITCH_IF_NEEDED,
+                                    availability=[1], event_limit=1, priority=0)
+
+        # Create 3 followers (underfilled - need 4)
+        followers = [
+            peep_factory(id=i+20, role=Role.FOLLOWER, switch_pref=SwitchPreference.PRIMARY_ONLY,
+                        availability=[1], event_limit=1, priority=i)
+            for i in range(3)
+        ]
+
+        peeps = leaders_primary + [switch_leader] + followers
+        sequence = EventSequence([event], peeps)
+
+        scheduler.evaluate_sequence(sequence)
+
+        # Event should be valid
+        assert len(sequence.valid_events) == 1
+        valid_event = sequence.valid_events[0]
+
+        # After promotion and balancing, should have 4 per role
+        assert len(valid_event.leaders) == 4
+        assert len(valid_event.followers) == 4
+
+        # The SWITCH_IF_NEEDED leader should have been promoted to follower
+        assert switch_leader in valid_event.followers
+        assert switch_leader not in valid_event.leaders
+
 
 class TestSchedulerIntegration:
     """Test Scheduler integration scenarios with realistic data."""

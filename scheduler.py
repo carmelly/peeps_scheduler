@@ -73,7 +73,33 @@ class Scheduler:
 
 			# TODO: Implement advanced dual-role promotion:
 			# 		- Use SWITCH_IF_PRIMARY_FULL peeps to allow a primary-role alternate into the event
-			# 		- Implement fallback logic for SWITCH_IF_NEEDED peeps to fill underfilled events
+
+			# Promote SWITCH_IF_NEEDED alternates if it enables the session to fill
+			for role in [Role.LEADER, Role.FOLLOWER]:
+				opposite_role = role.opposite()
+
+				# Check if this role is underfilled
+				if event.num_attendees(role) < event.min_role:
+					# Find SWITCH_IF_NEEDED alternates in opposite role who could help fill this role
+					eligible_alternates = [
+						peep for peep in event.get_alternates(opposite_role)
+						if peep.switch_pref == SwitchPreference.SWITCH_IF_NEEDED
+					]
+
+					# Promote them to the underfilled role until it meets min_role or we run out
+					for peep in eligible_alternates:
+						if event.num_attendees(role) >= event.min_role:
+							break  # Already filled, stop promoting
+
+						if event.num_attendees(role) < effective_max_role:
+							# Remove from alternate list in their primary role
+							event.remove_alternate(peep, opposite_role)
+							# Add as attendee in the underfilled role
+							event.add_attendee(peep, role)
+							logging.debug(
+								f"{peep.name} promoted from {opposite_role.name} alternate to {role.name} attendee "
+								f"(SWITCH_IF_NEEDED enables session fill) for Event {event.id} on {event.formatted_date()}"
+							)
 
 			# Only consider events that meet the absolute minimums
 			if event.meets_absolute_min():

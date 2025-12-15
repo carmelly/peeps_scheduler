@@ -33,7 +33,7 @@ The system aims to maximize overall attendance, ensure fair distribution across 
 **Version:** v1.0.0-baseline (December 2024)
 
 This is the **production-ready baseline release** of the file/CLI-based scheduler:
-- ✅ All 177 unit tests passing
+- ✅ All 183 unit tests passing
 - ✅ Complete CSV-to-JSON workflow
 - ✅ Comprehensive architecture documentation in `docs/architecture/`
 - ✅ Known issues catalogued in `docs/known-issues-baseline.md`

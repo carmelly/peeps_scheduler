@@ -6,8 +6,6 @@ This project uses semantic versioning. For planned future changes, see the "Plan
 ## [Unreleased]
 
 ### Planned for next release
-- Complete SWITCH_IF_NEEDED implementation for flexible role assignment
-- Advanced dual-role promotion to improve event fill rates
 - Partnership request support with scoring heuristic
 
 ### Deferred (db-migration branch)
@@ -29,6 +27,7 @@ This project uses semantic versioning. For planned future changes, see the "Plan
 - Tiebreaker heuristics to rank sequences by unique attendance and priority
 - Improved scheduler output with display names and availability reporting
 - SWITCH_IF_PRIMARY_FULL role flexibility (switch when primary role full)
+- SWITCH_IF_NEEDED alternate promotion (promotes alternates to fill underfilled events)
 - Alternate tracking with priority-preserved ordering
 
 ### Changed
@@ -45,14 +44,13 @@ This project uses semantic versioning. For planned future changes, see the "Plan
 ### Known Limitations
 - CSV-only workflow (no web interface)
 - Single-user operation (no multi-user support)
-- SWITCH_IF_NEEDED not implemented (treated as PRIMARY_ONLY)
 - Advanced dual-role promotion not implemented
 - 60-minute class pricing uncertain
 
 See `docs/known-issues-baseline.md` for complete issue list with severity ratings.
 
 ### Notes
-- All 177 tests passing
+- All 183 tests passing
 - Database integration in progress on `db-migration` branch
 - No breaking changes to CSV workflow planned
 
