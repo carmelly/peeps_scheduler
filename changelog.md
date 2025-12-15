@@ -5,30 +5,58 @@ This project uses semantic versioning. For planned future changes, see the "Plan
 
 ## [Unreleased]
 
+### Planned for next release
+- Complete SWITCH_IF_NEEDED implementation for flexible role assignment
+- Advanced dual-role promotion to improve event fill rates
+- Partnership request support with scoring heuristic
+
+### Deferred (db-migration branch)
+- Database-backed persistence with normalized schema
+- Web UI for scheduling input and results browsing
+- Historical data snapshots and verification tools
+
+---
+
+## [v1.0.0-baseline] – 2024-12-14
+
+**Baseline Release:** First documented stable release of CSV/file-based scheduler.
+
 ### Added
-- Support for different event durations
+- Comprehensive architecture documentation (`docs/architecture/baseline-v1-overview.md`)
+- Known issues catalog (`docs/known-issues-baseline.md`)
+- Support for different event durations (60, 90, 120 minutes) with automatic downgrade
 - Optional display of top tied event sequences with manual selection
-- Tiebreaker heuristics to rank top event sequences
-- Improved scheduler output: includes display names, peeps with no availability, and sorted display of events and attendees
+- Tiebreaker heuristics to rank sequences by unique attendance and priority
+- Improved scheduler output with display names and availability reporting
+- SWITCH_IF_PRIMARY_FULL role flexibility (switch when primary role full)
+- Alternate tracking with priority-preserved ordering
 
 ### Changed
-- Only increases priority for peeps who responded during this period
+- Priority increases only for peeps who responded during this period
 - Uses `display_name` consistently throughout reports and updated members.csv
-- `Role` enum now accepts both `"Lead"` and `"Leader"` for compatibility
-- Warns on duplicate email addresses during input
+- `Role` enum accepts both `"Lead"` and `"Leader"` for compatibility
 - Refactored role balancing to fix alternate ordering and improve event validation
+- Index-based peep ordering preserves priority from previous periods
 
 ### Fixed
 - Bug in `Event.is_valid` when validating role counts
 - Bug in sorting of alternates after role balancing
 
-### Planned for next release
-- Dual-role support via `can_switch_roles`
-- Partnership score heuristic to evaluate event sequences
+### Known Limitations
+- CSV-only workflow (no web interface)
+- Single-user operation (no multi-user support)
+- SWITCH_IF_NEEDED not implemented (treated as PRIMARY_ONLY)
+- Advanced dual-role promotion not implemented
+- 60-minute class pricing uncertain
 
-### Deferred (SQLite refactor branch)
-- Apply manually edited `results.json` (event + attendees only) to generate final attendance snapshot
-- Web UI for scheduling input and results browsing
+See `docs/known-issues-baseline.md` for complete issue list with severity ratings.
+
+### Notes
+- All 177 tests passing
+- Database integration in progress on `db-migration` branch
+- No breaking changes to CSV workflow planned
+
+---
 
 ## [v0.3.0](https://github.com/carmelly/peeps_scheduler/tree/v0.3.0) – 2025-05-13
 
