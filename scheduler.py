@@ -15,6 +15,10 @@ class Scheduler:
 		self.sequence_choice = sequence_choice  # Which tied sequence to auto-select in non-interactive mode
 		self.data_manager = get_data_manager()
 
+		# Set up logging for scheduler
+		from logging_config import get_logger
+		self.logger = get_logger('scheduler', 'scheduler', console_output=True)
+
 		# Ensure period directory exists
 		self.period_path = self.data_manager.ensure_period_exists(data_folder)
 		self.output_json = (self.period_path / 'output.json').as_posix()
@@ -62,7 +66,7 @@ class Scheduler:
 					event.num_attendees(secondary_role) < effective_max_role
 				):
 					event.add_attendee(peep, secondary_role)
-					logging.debug(
+					self.logger.debug(
 						f"{peep.name} assigned in secondary role {secondary_role.name} "
 						f"(primary was full) for Event {event.id} on {event.formatted_date()}"
 					)
@@ -96,7 +100,7 @@ class Scheduler:
 							event.remove_alternate(peep, opposite_role)
 							# Add as attendee in the underfilled role
 							event.add_attendee(peep, role)
-							logging.debug(
+							self.logger.debug(
 								f"{peep.name} promoted from {opposite_role.name} alternate to {role.name} attendee "
 								f"(SWITCH_IF_NEEDED enables session fill) for Event {event.id} on {event.formatted_date()}"
 							)
@@ -140,7 +144,7 @@ class Scheduler:
 				sequences.append(sequence)
 		end_time = time.perf_counter()
 
-		logging.debug(f"Evaluation complete. Elapsed time: {end_time - start_time:.2f}s")
+		self.logger.debug(f"Evaluation complete. Elapsed time: {end_time - start_time:.2f}s")
 		return sequences
 	
 	def remove_high_overlap_events(self, events, peeps, max_events):
@@ -159,7 +163,7 @@ class Scheduler:
 			"""
 			overlap_scores = {event.id: 0 for event in events}
 
-			logging.debug("Computing event overlap...")
+			self.logger.debug("Computing event overlap...")
 
 			# Create a lookup for peep availability
 			peep_event_map = {peep.id: set(peep.availability) for peep in peeps}
@@ -177,7 +181,7 @@ class Scheduler:
 					overlap_scores[event_a.id] += shared_peeps
 					overlap_scores[event_b.id] += shared_peeps
 
-			logging.debug(f"Overlap scores: {overlap_scores}")
+			self.logger.debug(f"Overlap scores: {overlap_scores}")
 			return overlap_scores
 
 		def find_event_to_remove(events, peeps):
@@ -188,7 +192,7 @@ class Scheduler:
 			max_overlap = max(overlap_scores.values())
 			candidates = [event for event in events if overlap_scores[event.id] == max_overlap]
 
-			logging.debug(f"Events with max overlap ({max_overlap}): {[event.id for event in candidates]}")
+			self.logger.debug(f"Events with max overlap ({max_overlap}): {[event.id for event in candidates]}")
 
 			if len(candidates) == 1:
 				return candidates[0]
@@ -197,20 +201,20 @@ class Scheduler:
 			event_weights = {event: sum(peep.priority for peep in peeps if event.id in peep.availability) for event in candidates}
 			event_to_remove = min(event_weights, key=event_weights.get)
 
-			logging.debug(f"Tie on overlap. Removing event based on lowest weight")
+			self.logger.debug(f"Tie on overlap. Removing event based on lowest weight")
 			return event_to_remove
 
-		logging.debug(f"Initial event count: {len(events)}. Target event count: {max_events}.")
+		self.logger.debug(f"Initial event count: {len(events)}. Target event count: {max_events}.")
 		while len(events) > max_events:
 			event_to_remove = find_event_to_remove(events, peeps)
-			logging.debug(f"Removing event: Event({event_to_remove.id}) Date: {event_to_remove.date}. Remaining events: {len(events) - 1}.")
+			self.logger.debug(f"Removing event: Event({event_to_remove.id}) Date: {event_to_remove.date}. Remaining events: {len(events) - 1}.")
 			events = [event for event in events if event.id != event_to_remove.id]
 
-		logging.debug(f"Final event count: {len(events)}.")
+		self.logger.debug(f"Final event count: {len(events)}.")
 		return events
 	
 	def get_top_sequences(self, sequences):
-		logging.debug(f"Evaluating {len(sequences)} total sequences")
+		self.logger.debug(f"Evaluating {len(sequences)} total sequences")
 
 		unique = EventSequence.get_unique_sequences(sequences)
 		if not unique:
@@ -240,12 +244,12 @@ class Scheduler:
 
 	def run(self, generate_test_data=False, load_from_csv=False):
 		if generate_test_data:
-			logging.info(f"Generating test data and saving to {self.output_json}")
+			self.logger.info(f"Generating test data and saving to {self.output_json}")
 			utils.generate_test_data(5, 30, self.output_json)
 		elif load_from_csv:
 			responses_csv = (self.period_path / 'responses.csv').as_posix()
 			peeps_csv = (self.period_path / 'members.csv').as_posix()
-			logging.info(f"Loading data from {peeps_csv} and {responses_csv}")
+			self.logger.info(f"Loading data from {peeps_csv} and {responses_csv}")
 
 			# Extract year from data_folder (e.g., "2026-01" -> 2026)
 			# Handle both absolute paths and folder names
@@ -258,7 +262,7 @@ class Scheduler:
 
 			file_io.convert_to_json(str(responses_csv), str(peeps_csv), str(self.output_json), year=year)
 
-		logging.info(f"Loading data from {self.output_json}")
+		self.logger.info(f"Loading data from {self.output_json}")
 		
 		peeps, events = file_io.load_data_from_json(str(self.output_json))
 		responders = [p for p in peeps if p.responded]
@@ -273,12 +277,12 @@ class Scheduler:
 			print("  ❌  Did not respond:", ", ".join(sorted(non_responders)) if non_responders else "None")
 			print()
 		
-		logging.debug("Initial Peeps")
-		logging.debug(Peep.peeps_str(peeps))
+		self.logger.debug("Initial Peeps")
+		self.logger.debug(Peep.peeps_str(peeps))
 
 		# Get all events that can be filled to the minimum 
 		sanitized_events = self.sanitize_events(events, peeps)
-		logging.debug(f"Sanitized Events: {len(sanitized_events)}/{len(events)}")
+		self.logger.debug(f"Sanitized Events: {len(sanitized_events)}/{len(events)}")
 
 		# If too many events, remove some 
 		if len(sanitized_events) > self.max_events:
@@ -294,15 +298,15 @@ class Scheduler:
 
 		best = self.get_top_sequences(all_sequences)
 		if not best:
-			logging.info("No sequence could fill any events.")
+			self.logger.info("No sequence could fill any events.")
 			return
 
 		if len(best) == 1:
 			best_sequence = best[0]
-			logging.info(f"Auto-selected best sequence: {best_sequence}")
+			self.logger.info(f"Auto-selected best sequence: {best_sequence}")
 			file_io.save_event_sequence(best_sequence, str(self.result_json))
-			logging.debug("Final Peeps:")
-			logging.debug(Peep.peeps_str(best_sequence.peeps))
+			self.logger.debug("Final Peeps:")
+			self.logger.debug(Peep.peeps_str(best_sequence.peeps))
 			return best_sequence
 		else:
 			if self.interactive:
@@ -315,10 +319,10 @@ class Scheduler:
 				try:
 					chosen_index = int(choice)
 					best_sequence = best[chosen_index]
-					logging.info(f"Selected {best_sequence}")
+					self.logger.info(f"Selected {best_sequence}")
 					file_io.save_event_sequence(best_sequence, str(self.result_json))
-					logging.debug("Final Peeps:")
-					logging.debug(Peep.peeps_str(best_sequence.peeps))
+					self.logger.debug("Final Peeps:")
+					self.logger.debug(Peep.peeps_str(best_sequence.peeps))
 					return best_sequence
 				except (ValueError, IndexError):
 					logging.error("Invalid choice. No sequence was saved.")
@@ -327,12 +331,12 @@ class Scheduler:
 				# In non-interactive mode, auto-select the specified sequence
 				if self.sequence_choice < len(best):
 					best_sequence = best[self.sequence_choice]
-					logging.info(f"Auto-selected tied sequence {self.sequence_choice}: {best_sequence}")
+					self.logger.info(f"Auto-selected tied sequence {self.sequence_choice}: {best_sequence}")
 				else:
 					logging.warning(f"Sequence choice {self.sequence_choice} out of range, selecting first")
 					best_sequence = best[0]
-					logging.info(f"Auto-selected first tied sequence: {best_sequence}")
+					self.logger.info(f"Auto-selected first tied sequence: {best_sequence}")
 				file_io.save_event_sequence(best_sequence, str(self.result_json))
-				logging.debug("Final Peeps:")
-				logging.debug(Peep.peeps_str(best_sequence.peeps))
+				self.logger.debug("Final Peeps:")
+				self.logger.debug(Peep.peeps_str(best_sequence.peeps))
 				return best_sequence

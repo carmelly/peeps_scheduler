@@ -7,6 +7,9 @@ from constants import DATE_FORMAT, DATESTR_FORMAT
 from file_io import load_csv, save_json, normalize_email
 from models import EventSequence, Peep, Event, Role, SwitchPreference
 
+# Module-level logger for utils
+logger = logging.getLogger('utils')
+
 def generate_event_permutations(events):
 	"""Generates all possible permutations of event sequences as a list of event ids."""
 
@@ -15,25 +18,22 @@ def generate_event_permutations(events):
 	event_ids = [event.id for event in events]
 	index_sequences = list(itertools.permutations(event_ids, len(event_ids)))
 
-	logging.debug(f"Total permutations: {len(index_sequences)}")
+	logger.debug(f"Total permutations: {len(index_sequences)}")
 	return index_sequences
 
 def setup_logging(verbose=False):
-	stream_log_level = logging.DEBUG if verbose else logging.INFO
-	
-	# stream level is set by the verbose arg 
-	stream_handler = logging.StreamHandler()
-	stream_handler.setLevel(stream_log_level)
+	"""
+	Configure logging for CLI commands.
 
-	# file level is alway DEBUG
-	file_handler = logging.FileHandler('debug.log')
-	file_handler.setLevel(logging.DEBUG)
+	Args:
+		verbose: If True, set log level to DEBUG, otherwise INFO
 
-	logging.basicConfig(
-		level=logging.DEBUG,
-		format='%(asctime)s - %(levelname)s - %(message)s',
-		handlers=[stream_handler, file_handler]
-		)
+	Returns:
+		Configured logger instance for CLI operations
+	"""
+	from logging_config import get_logger
+	level = 'DEBUG' if verbose else 'INFO'
+	return get_logger('cli', 'cli', level=level, console_output=True)
 
 def apply_event_results( result_json, members_csv, responses_csv):
 	from models import Peep, Event

@@ -1,5 +1,9 @@
-# Log files
+# Log files (old debug.log deprecated)
 debug.log
+
+# Logs directory (new logging infrastructure - created automatically)
+/logs/
+*.log
 
 # Python cache and compiled files
 __pycache__/
