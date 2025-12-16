@@ -12,7 +12,7 @@ Logs are organized into subdirectories under `/logs`:
 
 ```
 /logs/
-├── import/          # Import script logs (db/import_from_csv.py)
+├── import/          # Import script logs (db/import_period_data.py)
 │   └── import_YYYY-MM-DD.log
 ├── scheduler/       # Scheduler execution logs (scheduler.py, main.py scheduler commands)
 │   └── scheduler_YYYY-MM-DD.log
@@ -130,7 +130,7 @@ Most CLI commands support a `--verbose` flag to enable DEBUG-level logging:
 
 ```bash
 # Import with verbose logging
-python db/import_from_csv.py --period 2025-02 --verbose
+python db/import_period_data.py --period 2025-02 --verbose
 
 # Run scheduler with verbose logging
 python main.py run --data-folder data/2025-02 --verbose
@@ -222,7 +222,7 @@ logger = get_logger('my_module', 'app')
 ### Files Updated
 
 The following files have been updated to use the new logging system:
-- `db/import_from_csv.py` - Uses `/logs/import/`
+- `db/import_period_data.py` - Uses `/logs/import/`
 - `scheduler.py` - Uses `/logs/scheduler/`
 - `main.py` - Uses `/logs/cli/`
 - `utils.py` - Uses `/logs/cli/`
@@ -238,7 +238,7 @@ The old `debug.log` file is **deprecated** and will no longer be created by new 
 1. **Check log directory exists**: The `/logs` directory and subdirectories are created automatically, but verify they exist.
 2. **Check log level**: If you're not seeing DEBUG messages, ensure the log level is set to DEBUG:
    ```bash
-   python db/import_from_csv.py --period 2025-02 --verbose
+   python db/import_period_data.py --period 2025-02 --verbose
    ```
 3. **Check permissions**: Ensure the application has write permissions to the `/logs` directory.
 

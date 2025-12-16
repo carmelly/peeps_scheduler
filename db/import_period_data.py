@@ -23,10 +23,10 @@ Architecture:
             - Calculate snapshots from attendance data
 
 Usage:
-    python db/import_from_csv.py --all                    # Import all periods
-    python db/import_from_csv.py --period 2025-02         # Import single period
-    python db/import_from_csv.py --period 2025-02 --dry-run  # Test without commit
-    python db/import_from_csv.py --validate-only          # Validate without import
+    python db/import_period_data.py --all                    # Import all periods
+    python db/import_period_data.py --period 2025-02         # Import single period
+    python db/import_period_data.py --period 2025-02 --dry-run  # Test without commit
+    python db/import_period_data.py --validate-only          # Validate without import
 """
 
 import argparse
@@ -56,8 +56,7 @@ import constants
 from data_manager import get_data_manager
 
 # Import snapshot generator
-sys.path.insert(0, str(Path(__file__).parent))
-from snapshot_generator import SnapshotGenerator, MemberSnapshot, EventAttendance
+from db.snapshot_generator import SnapshotGenerator, MemberSnapshot, EventAttendance
 
 # Database path
 DB_PATH = constants.DEFAULT_DB_PATH
@@ -131,18 +130,27 @@ class MemberCollector:
             )
 
             if not os.path.exists(members_csv_path):
-                self.logger.warning(f"No members.csv found for {period_name}, skipping")
-                continue
+                raise FileNotFoundError(
+                    f"Required file not found: {members_csv_path}\n"
+                    f"Each period directory must contain members.csv"
+                )
 
             self._scan_period_members(period_name, members_csv_path)
 
         self.logger.info(f"Found {len(self.members)} unique members across {len(periods)} periods")
 
-        # Log members without email (data quality issue)
+        # Strict validation: Require email for all members
         no_email = [csv_id for csv_id, data in self.members.items() if not data['email']]
         if no_email:
-            self.logger.warning(
-                f"{len(no_email)} members have no email: {no_email}"
+            member_details = [
+                f"ID {csv_id}: {self.members[csv_id]['full_name']}"
+                for csv_id in no_email
+            ]
+            raise ValueError(
+                f"{len(no_email)} members are missing required email addresses:\n" +
+                "\n".join(member_details) + "\n\n" +
+                "Please add email addresses to members.csv, or use placeholder format:\n" +
+                "  unknown{id}@invalid  (e.g., unknown42@invalid for member ID 42)"
             )
 
         return len(self.members)
@@ -158,8 +166,10 @@ class MemberCollector:
         for row in rows:
             csv_id = row.get('id', '').strip()
             if not csv_id:
-                self.logger.warning(f"Skipping row with no ID in {period_name}")
-                continue
+                raise ValueError(
+                    f"Invalid member data in {period_name}/members.csv: "
+                    f"Row missing required 'id' field: {row}"
+                )
 
             # Extract identity fields
             full_name = row.get('Name', '').strip()
@@ -189,8 +199,10 @@ class MemberCollector:
                 year, month = map(int, period_name.split('-'))
                 period_date = date(year, month, 1)
             except ValueError:
-                self.logger.warning(f"Invalid period format: {period_name}")
-                continue
+                raise ValueError(
+                    f"Invalid period directory name: '{period_name}'\n"
+                    f"Period directories must follow YYYY-MM format (e.g., '2025-02')"
+                )
 
             # Track first appearance
             if csv_id not in self.first_appearances:
@@ -246,18 +258,9 @@ class MemberCollector:
 
             email = member_data['email']
 
-            # Handle missing email (inactive members may have no email)
-            if not email:
-                # Generate placeholder email for inactive members without email
-                # Use unknown{id}@invalid format to match existing data
-                email = f"unknown{csv_id}@invalid"
-                self.logger.warning(
-                    f"Member {csv_id} ({member_data['full_name']}) has no email, "
-                    f"using placeholder: {email}"
-                )
-            else:
-                # Normalize email before inserting (removes periods from Gmail, lowercase)
-                email = normalize_email(email)
+            # Email is guaranteed to exist (validated in scan_all_periods)
+            # Normalize email before inserting (removes periods from Gmail, lowercase)
+            email = normalize_email(email)
 
             try:
                 # Insert with explicit ID to preserve CSV ID
@@ -285,21 +288,13 @@ class MemberCollector:
                     f"(first seen: {period_name}, joined: {date_joined})"
                 )
 
-            except sqlite3.IntegrityError as e:
+            except sqlite3.IntegrityError as e:  # pragma: no cover
                 self.logger.error(
                     f"Failed to insert member {csv_id} ({member_data['full_name']}): {e}"
                 )
                 continue
 
         self.logger.info(f"Successfully inserted {inserted} members into peeps table")
-
-        # Validate mapping completeness
-        if len(self.peep_id_mapping) != len(self.members):
-            missing = len(self.members) - len(self.peep_id_mapping)
-            self.logger.error(
-                f"MAPPING INCOMPLETE: {missing} members not in peep_id_mapping!"
-            )
-            raise ValueError("Incomplete peep_id_mapping - this is the bug we're fixing!")
 
         self.logger.info(
             f"✓ Mapping complete: {len(self.peep_id_mapping)} members tracked"
@@ -386,8 +381,13 @@ class PeriodImporter:
         num_attendance = self.import_attendance()
         self.logger.info(f"Created {num_attendance} attendance records")
 
-        num_changes = self.derive_assignment_changes()
-        self.logger.info(f"Derived {num_changes} assignment changes")
+        # Only derive changes if there's attendance data (skip for future periods)
+        if num_attendance > 0:
+            num_changes = self.derive_assignment_changes()
+            self.logger.info(f"Derived {num_changes} assignment changes")
+        else:
+            num_changes = 0
+            self.logger.info(f"Skipped change derivation (no attendance data for future/incomplete period)")
 
         # Step 6: Calculate and save snapshots
         if not self.skip_snapshots:
@@ -445,12 +445,7 @@ class PeriodImporter:
             self.logger.warning(f"No responses.csv found for {self.period_name}")
             return {}
 
-        try:
-            rows = load_responses(responses_csv_path)
-        except Exception as e:
-            self.logger.error(f"Failed to load responses.csv: {e}")
-            raise
-
+        rows = load_responses(responses_csv_path)
         inserted = 0
         response_mapping = {}  # peep_id -> (response_id, availability_string)
 
@@ -458,9 +453,17 @@ class PeriodImporter:
             email = row.get('Email Address', '').strip()
             name = row.get('Name', '').strip()
 
-            # Skip rows without email or name
-            if not email or not name:
+            # Skip legacy "Event:" rows (backward compatibility - events are now auto-derived or explicitly defined)
+            if name.startswith("Event:"):
                 continue
+
+            # Validate required fields
+            if not email or not name:
+                raise ValueError(
+                    f"Invalid response in period {self.period_name}: "
+                    f"Missing required field(s) - Name: '{name}', Email: '{email}'. "
+                    f"All response rows must have both Name and Email Address fields populated."
+                )
 
             # Look up peep by email
             normalized_email = normalize_email(email)
@@ -500,7 +503,7 @@ class PeriodImporter:
 
             # Map Secondary Role to switch_preference enum
             secondary_role = row.get('Secondary Role', '').strip()
-            if not secondary_role or secondary_role == 'PRIMARY_ONLY':
+            if not secondary_role:
                 # Default for missing value (early periods didn't collect this)
                 switch_preference = SwitchPreference.PRIMARY_ONLY.value
             else:
@@ -587,10 +590,12 @@ class PeriodImporter:
                     event_id, duration, display_name = parse_event_date(date_str, year=year)
                     unique_event_dates.add((event_id, duration, display_name))
                 except Exception as e:
-                    self.logger.warning(
-                        f"Could not parse event date '{date_str}': {e}"
+                    raise ValueError(
+                        f"Invalid event date format in availability data: '{date_str}'\n"
+                        f"Error: {e}\n"
+                        f"Expected format: 'DayOfWeek Month Day - StartTime to EndTime'\n"
+                        f"Example: 'Friday February 7th - 5pm to 7pm'"
                     )
-                    continue
 
         # Create events
         inserted = 0
@@ -661,19 +666,22 @@ class PeriodImporter:
                 try:
                     event_id_str, _, _ = parse_event_date(date_str, year=year)
                 except Exception as e:
-                    self.logger.warning(
-                        f"Could not parse event date '{date_str}' for response {response_id}: {e}"
+                    raise ValueError(
+                        f"Invalid event date in response {response_id}: '{date_str}'\n"
+                        f"Error: {e}\n"
+                        f"Expected format: 'DayOfWeek Month Day - StartTime to EndTime'\n"
+                        f"Example: 'Friday February 7th - 5pm to 7pm'"
                     )
-                    continue
 
                 # Look up event_db_id from mapping
                 event_db_id = self.event_id_mapping.get(event_id_str)
 
                 if not event_db_id:
-                    self.logger.warning(
-                        f"No event found for date '{event_id_str}' (response {response_id})"
+                    raise ValueError(
+                        f"Data integrity error in response {response_id}:\n"
+                        f"Response references event '{event_id_str}' which does not exist in the database.\n"
+                        f"This indicates a mismatch between responses.csv and the derived events."
                     )
-                    continue
 
                 # Insert event_availability using response_id (not peep_id)
                 try:
@@ -714,6 +722,39 @@ class PeriodImporter:
         valid_events = results_data.get('valid_events', [])
         inserted = 0
 
+        # Create events from results.json if they don't already exist (e.g., when no responses)
+        for event_data in valid_events:
+            event_date_str = event_data.get('date')  # e.g., "2025-02-15 13:00"
+
+            # Check if event already exists in mapping
+            if event_date_str not in self.event_id_mapping:
+                # Create event from results.json
+                duration = event_data.get('duration_minutes', 120)
+                legacy_id = event_data.get('id')
+
+                try:
+                    self.cursor.execute("""
+                        INSERT INTO events (period_id, legacy_period_event_id, event_datetime, duration_minutes, status)
+                        VALUES (?, ?, ?, ?, ?)
+                    """, (self.period_id, legacy_id, event_date_str, duration, 'completed'))
+
+                    event_db_id = self.cursor.lastrowid
+                    self.event_id_mapping[event_date_str] = event_db_id
+                    self.logger.info(f"Created event from results.json: {event_date_str}")
+                except sqlite3.IntegrityError as e:
+                    # Event might already exist from another source
+                    self.logger.warning(f"Event {event_date_str} already exists: {e}")
+                    # Try to fetch it
+                    self.cursor.execute("""
+                        SELECT id FROM events WHERE event_datetime = ? AND period_id = ?
+                    """, (event_date_str, self.period_id))
+                    result = self.cursor.fetchone()
+                    if result:
+                        event_db_id = result[0]
+                        self.event_id_mapping[event_date_str] = event_db_id
+                    else:
+                        raise
+
         for event_data in valid_events:
             event_date_str = event_data.get('date')  # e.g., "2025-02-15 13:00"
 
@@ -721,8 +762,11 @@ class PeriodImporter:
             event_db_id = self.event_id_mapping.get(event_date_str)
 
             if not event_db_id:
-                self.logger.warning(f"No event found for date '{event_date_str}' in results.json")
-                continue
+                raise ValueError(
+                    f"Data integrity error in results.json:\n"
+                    f"Assignment references event '{event_date_str}' which does not exist in the database.\n"
+                    f"Available events: {list(self.event_id_mapping.keys())}"
+                )
 
             # Import attendees
             attendees = event_data.get('attendees', [])
@@ -731,8 +775,11 @@ class PeriodImporter:
                 peep_id = self.peep_id_mapping.get(csv_id)
 
                 if not peep_id:
-                    self.logger.warning(f"No peep found for CSV ID {csv_id} ({attendee.get('name')})")
-                    continue
+                    raise ValueError(
+                        f"Data integrity error in results.json:\n"
+                        f"Assignment references unknown member CSV ID '{csv_id}' ({attendee.get('name')}).\n"
+                        f"This member was not found in any members.csv file."
+                    )
 
                 role = attendee.get('role', '').lower()
 
@@ -754,8 +801,11 @@ class PeriodImporter:
                 peep_id = self.peep_id_mapping.get(csv_id)
 
                 if not peep_id:
-                    self.logger.warning(f"No peep found for CSV ID {csv_id} ({alternate.get('name')})")
-                    continue
+                    raise ValueError(
+                        f"Data integrity error in results.json:\n"
+                        f"Alternate assignment references unknown member CSV ID '{csv_id}' ({alternate.get('name')}).\n"
+                        f"This member was not found in any members.csv file."
+                    )
 
                 role = alternate.get('role', '').lower()
 
@@ -801,8 +851,11 @@ class PeriodImporter:
             event_db_id = self.event_id_mapping.get(event_date_str)
 
             if not event_db_id:
-                self.logger.warning(f"No event found for date '{event_date_str}' in actual_attendance.json")
-                continue
+                raise ValueError(
+                    f"Data integrity error in actual_attendance.json:\n"
+                    f"Attendance references event '{event_date_str}' which does not exist in the database.\n"
+                    f"Available events: {list(self.event_id_mapping.keys())}"
+                )
 
             # Import actual attendees
             attendees = event_data.get('attendees', [])
@@ -812,8 +865,11 @@ class PeriodImporter:
                 peep_id = self.peep_id_mapping.get(csv_id)
 
                 if not peep_id:
-                    self.logger.warning(f"No peep found for CSV ID {csv_id} ({attendee.get('name')})")
-                    continue
+                    raise ValueError(
+                        f"Data integrity error in actual_attendance.json:\n"
+                        f"Attendance references unknown member CSV ID '{csv_id}' ({attendee.get('name')}).\n"
+                        f"This member was not found in any members.csv file."
+                    )
 
                 actual_role = attendee.get('role', '').lower()
 
@@ -903,19 +959,23 @@ class PeriodImporter:
             attendance = self.cursor.fetchone()
 
             if not attendance:
-                # Assigned but didn't attend - cancellation or no-show
-                change_type = 'cancel'
-                change_reason = 'did_not_attend'
+                # Assigned but didn't attend
+                # Only treat as cancellation if they were an ATTENDEE (not alternate)
+                # Alternates not attending is normal/expected - they're backups
+                if assignment_type == 'attendee':
+                    change_type = 'cancel'
+                    change_reason = 'did_not_attend'
 
-                try:
-                    self.cursor.execute("""
-                        INSERT INTO event_assignment_changes (
-                            event_id, peep_id, change_type, change_source, change_reason
-                        ) VALUES (?, ?, ?, ?, ?)
-                    """, (event_id, peep_id, change_type, 'system', change_reason))
-                    inserted += 1
-                except sqlite3.IntegrityError:
-                    continue
+                    try:
+                        self.cursor.execute("""
+                            INSERT INTO event_assignment_changes (
+                                event_id, peep_id, change_type, change_source, change_reason
+                            ) VALUES (?, ?, ?, ?, ?)
+                        """, (event_id, peep_id, change_type, 'system', change_reason))
+                        inserted += 1
+                    except sqlite3.IntegrityError:
+                        continue
+                # else: alternate didn't attend - this is normal, no change record needed
 
             elif assignment_type == 'alternate' and attendance[1] == 'alternate_promoted':
                 # Alternate was promoted
@@ -1246,36 +1306,36 @@ def main():
         epilog="""
 Examples:
   # Import all periods sequentially (recommended first run)
-  python db/import_from_csv.py --all
+  python db/import_period_data.py --all
 
   # Import single period (requires prior periods already imported)
-  python db/import_from_csv.py --period 2025-03
+  python db/import_period_data.py --period 2025-03
 
   # Dry run to test import without database changes
-  python db/import_from_csv.py --all --dry-run --verbose
+  python db/import_period_data.py --all --dry-run --verbose
 
   # Validate schema before import
-  python db/import_from_csv.py --validate-schema
+  python db/import_period_data.py --validate-schema
 
   # Force re-run Phase 1 member collection
-  python db/import_from_csv.py --all --force-phase1
+  python db/import_period_data.py --all --force-phase1
 
   # Test import without snapshot calculation
-  python db/import_from_csv.py --period 2025-02 --skip-snapshots
+  python db/import_period_data.py --period 2025-02 --skip-snapshots
 
 Common Workflows:
   1. First Time Setup:
      - Ensure migrations applied: python db/migrate.py
-     - Validate schema: python db/import_from_csv.py --validate-schema
-     - Import all: python db/import_from_csv.py --all
+     - Validate schema: python db/import_period_data.py --validate-schema
+     - Import all: python db/import_period_data.py --all
 
   2. Single Period Re-import:
      - Delete period: DELETE FROM schedule_periods WHERE period_name='2025-03';
-     - Re-import: python db/import_from_csv.py --period 2025-03
+     - Re-import: python db/import_period_data.py --period 2025-03
 
   3. Troubleshooting:
-     - Test with dry-run: python db/import_from_csv.py --period 2025-02 --dry-run --verbose
-     - Skip snapshots: python db/import_from_csv.py --period 2025-02 --skip-snapshots
+     - Test with dry-run: python db/import_period_data.py --period 2025-02 --dry-run --verbose
+     - Skip snapshots: python db/import_period_data.py --period 2025-02 --skip-snapshots
 
 Notes:
   - Periods must be imported in chronological order for accurate snapshots
@@ -1434,7 +1494,7 @@ Notes:
 
             # Import each period
             for idx, period_name in enumerate(periods_to_import, 1):
-                logger.info(f"\n{'=' * 60}")
+                logger.info(f"{'=' * 60}")
                 logger.info(f"Processing period {idx}/{len(periods_to_import)}: {period_name}")
                 logger.info(f"{'=' * 60}")
 
@@ -1516,7 +1576,7 @@ Notes:
                     raise
 
             # Print summary statistics
-            logger.info(f"\n{'=' * 60}")
+            logger.info(f"{'=' * 60}")
             logger.info("PHASE 2 IMPORT SUMMARY")
             logger.info(f"{'=' * 60}")
             logger.info(f"Periods imported: {import_stats['periods_imported']}")

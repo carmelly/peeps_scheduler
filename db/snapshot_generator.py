@@ -89,15 +89,7 @@ class SnapshotGenerator:
         """Configure logging for snapshot operations."""
         logger = logging.getLogger('snapshot_generator')
         logger.setLevel(logging.DEBUG if self.verbose else logging.INFO)
-
-        if not logger.handlers:
-            handler = logging.StreamHandler()
-            formatter = logging.Formatter(
-                '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-            )
-            handler.setFormatter(formatter)
-            logger.addHandler(handler)
-
+        # Don't add handlers - use root logger's handler to avoid duplicates
         return logger
 
     def generate_snapshot_from_attendance(

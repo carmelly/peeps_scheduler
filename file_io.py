@@ -38,8 +38,15 @@ def normalize_email(email):
 
 # -- CSV-related --
 
-def load_csv(filename, required_columns=[]):
-	"""Load CSV file and validate required columns, trimming whitespace from headers and values."""
+def load_csv(filename, required_columns=[], optional_columns_defaults=None):
+	"""
+	Load CSV file and validate required columns, trimming whitespace from headers and values.
+
+	Args:
+		filename: Path to CSV file
+		required_columns: List of columns that must be present
+		optional_columns_defaults: Dict of {column_name: default_value} for optional columns
+	"""
 	with open(filename, newline='', encoding='utf-8') as csvfile:
 		# Read the first line (fieldnames), trim whitespace
 		reader = csv.reader(csvfile)
@@ -70,6 +77,13 @@ def load_csv(filename, required_columns=[]):
 		# Strip whitespace, normalize quotes and whitespace for every value
 		for row in dict_reader:
 			cleaned = {k: _normalize_text(v.strip()) if v else "" for k, v in row.items()}
+
+			# Add optional columns with defaults if missing
+			if optional_columns_defaults:
+				for col_name, default_value in optional_columns_defaults.items():
+					if col_name not in cleaned or not cleaned[col_name]:
+						cleaned[col_name] = default_value
+
 			rows.append(cleaned)
 
 		return rows
@@ -97,7 +111,14 @@ def load_peeps(peeps_csv_path):
 
 def load_responses(response_csv_path):
 	"""Load and parse response rows from responses.csv."""
-	return load_csv(response_csv_path, RESPONSES_CSV_FIELDS)
+	# Secondary Role was not collected in early periods - default to empty string
+	# Callers must handle empty string appropriately for their context
+	optional_defaults = {
+		'Secondary Role': ''
+	}
+	# Make only the core fields required, Secondary Role is optional
+	required_fields = ['Name', 'Email Address', 'Primary Role', 'Max Sessions', 'Availability']
+	return load_csv(response_csv_path, required_columns=required_fields, optional_columns_defaults=optional_defaults)
 
 def save_peeps_csv(peeps: list[Peep], filename):
 	"""Save updated peeps to a new CSV called members_updated.csv in the same folder as the original."""
@@ -301,7 +322,14 @@ def process_responses(rows, peeps, event_map, year=None):
 		peep.role = Role.from_string(row["Primary Role"])
 		peep.event_limit = int(row["Max Sessions"])
 		peep.min_interval_days = int(row["Min Interval Days"])
-		peep.switch_pref = SwitchPreference.from_string(row["Secondary Role"])
+
+		# Handle Secondary Role - default to PRIMARY_ONLY if not specified (early periods)
+		secondary_role = row.get("Secondary Role", "").strip()
+		if not secondary_role:
+			peep.switch_pref = SwitchPreference.PRIMARY_ONLY
+		else:
+			peep.switch_pref = SwitchPreference.from_string(secondary_role)
+
 		peep.responded = True
 
 		available_strs = [s.strip() for s in row.get("Availability", "").split(",") if s.strip()]
