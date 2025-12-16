@@ -1416,9 +1416,7 @@ Notes:
                 f"Phase 1 skipped: {existing_peeps} peeps already exist in database"
             )
             logger.info("Use --force-phase1 to re-run member collection")
-
-            # TODO: Rebuild peep_id_mapping from existing peeps
-            # For now, we'll implement this in Phase 2
+            # Mapping will be rebuilt from existing peeps before Phase 2
         else:
             # Phase 1: Member Collection
             logger.info("=" * 60)
