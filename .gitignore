@@ -13,11 +13,11 @@ __pycache__/
 .private-config
 
 # Claude Code configuration
-.claude/
+.claude
 CLAUDE.md*
 
 # Agentic Project Management memory
-.apm/
+.apm
 
 # Obsidian vault configuration
 .obsidian/
