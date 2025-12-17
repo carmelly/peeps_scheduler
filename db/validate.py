@@ -266,7 +266,7 @@ def validate_period(db_path: str, period_name: str, data_dir: str = None) -> int
         cursor.execute("SELECT COUNT(*) as count FROM events WHERE period_id = ?", (period_id,))
         num_events = cursor.fetchone()['count']
         print(f"Validating events ({num_events} in DB)...")
-        event_issues = validate_events(cursor, period_id, period_name, responses_csv)
+        event_issues = validate_events(cursor, period_id, period_name, responses_csv, period_path)
         all_issues.extend(event_issues)
         print(f"  {'PASSED' if not event_issues else f'FAILED - {len(event_issues)} issues'}\n")
 
@@ -478,11 +478,27 @@ def validate_period_snapshots(cursor, period_id: int, members_csv: List[Dict]) -
     Validate snapshots integrity.
 
     Checks:
-    - All active members have snapshots
+    - All active members have snapshots (only if period has attendance)
     - total_attended matches actual attendance records
     - priority/index are in reasonable ranges (not comparing to CSV as CSV might be wrong)
+
+    Note: Snapshots are only created for periods with attendance data. Periods with
+    no attendance (e.g., future periods) should not have snapshots.
     """
     issues = []
+
+    # Check if period has any attendance records
+    cursor.execute("""
+        SELECT COUNT(*) as count
+        FROM event_attendance ea
+        JOIN events e ON ea.event_id = e.id
+        WHERE e.period_id = ?
+    """, (period_id,))
+    attendance_count = cursor.fetchone()['count']
+
+    # Skip snapshot validation if period has no attendance
+    if attendance_count == 0:
+        return issues
 
     # Get all active members from DB
     cursor.execute("SELECT id, full_name, email FROM peeps WHERE active = 1")
@@ -530,18 +546,24 @@ def validate_period_snapshots(cursor, period_id: int, members_csv: List[Dict]) -
     return issues
 
 
-def validate_events(cursor, period_id: int, period_name: str, responses_csv: List[Dict]) -> List[str]:
+def validate_events(cursor, period_id: int, period_name: str, responses_csv: List[Dict], period_path: Path = None) -> List[str]:
     """
     Validate events table against responses.csv availability data.
 
     This checks ALL events (proposed, scheduled, cancelled, completed) against
     the events derived from responses.csv Availability column.
 
+    Duration validation uses status-appropriate source files:
+    - proposed events: check against responses.csv
+    - scheduled events: check against results.json
+    - completed events: check against actual_attendance.json
+
     Args:
         cursor: Database cursor
         period_id: Period ID
         period_name: Period name (for year extraction)
         responses_csv: List of response dictionaries from responses.csv
+        period_path: Path to period data directory (for results.json/actual_attendance.json)
 
     Returns:
         List of issue strings (empty if validation passes)
@@ -554,6 +576,35 @@ def validate_events(cursor, period_id: int, period_name: str, responses_csv: Lis
     # Extract expected events from responses.csv
     expected_event_map = extract_events(responses_csv, year=year)
     expected_event_ids = set(expected_event_map.keys())
+
+    # Load duration maps from results.json and actual_attendance.json (if available)
+    scheduled_durations = {}
+    completed_durations = {}
+
+    if period_path:
+        # Load results.json for scheduled event durations
+        results_json = read_results_json(period_path)
+        if results_json:
+            all_events = results_json.get('valid_events', []) + results_json.get('downgraded_events', [])
+            for event_data in all_events:
+                event_date = event_data.get('date', '')
+                # Convert to event_id format (YYYY-MM-DD HH:MM)
+                event_id = event_date.replace(' ', ' ').strip()[:16]  # "2025-02-07 17:00"
+                duration = event_data.get('duration_minutes')
+                if duration is not None:
+                    scheduled_durations[event_id] = duration
+
+        # Load actual_attendance.json for completed event durations
+        attendance_json = read_attendance_json(period_path)
+        if attendance_json:
+            events = attendance_json if isinstance(attendance_json, list) else attendance_json.get('valid_events', [])
+            for event_data in events:
+                event_date = event_data.get('date', '')
+                # Convert to event_id format (YYYY-MM-DD HH:MM)
+                event_id = event_date.replace(' ', ' ').strip()[:16]  # "2025-02-07 17:00"
+                duration = event_data.get('duration_minutes')
+                if duration is not None:
+                    completed_durations[event_id] = duration
 
     # Get all events from database for this period
     cursor.execute("""
@@ -592,10 +643,24 @@ def validate_events(cursor, period_id: int, period_name: str, responses_csv: Lis
         expected_event = expected_event_map[event_id]
         db_details = db_event_details[event_id]
 
-        # Check duration
-        expected_duration = expected_event.duration_minutes
+        # Check duration against status-appropriate source
+        event_status = db_details['status']
+
+        if event_status == 'completed' and event_id in completed_durations:
+            # Completed events: check against actual_attendance.json
+            expected_duration = completed_durations[event_id]
+            source = "actual_attendance.json"
+        elif event_status == 'scheduled' and event_id in scheduled_durations:
+            # Scheduled events: check against results.json
+            expected_duration = scheduled_durations[event_id]
+            source = "results.json"
+        else:
+            # Proposed/cancelled events or fallback: check against responses.csv
+            expected_duration = expected_event.duration_minutes
+            source = "responses.csv"
+
         if db_details['duration'] != expected_duration:
-            issues.append(f"Event duration mismatch for {event_id}: DB={db_details['duration']} vs CSV={expected_duration}")
+            issues.append(f"Event duration mismatch for {event_id}: DB={db_details['duration']} vs {source}={expected_duration}")
 
     return issues
 

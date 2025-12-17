@@ -624,37 +624,6 @@ class TestEventCreation:
         with pytest.raises(ValueError, match="time data.*Invalid Date Format.*does not match format"):
             importer.import_period()
 
-    def test_invalid_event_id_format_during_creation(self, test_db, test_period_data):
-        """Test that invalid event_id format is handled during event creation."""
-        period_data = next(test_period_data(period_name='2025-02', num_members=5))
-
-        cursor = test_db.cursor()
-
-        collector = MemberCollector(processed_data_path=Path(period_data['temp_dir']), verbose=False)
-        collector.scan_all_periods()
-        collector.insert_members_to_db(cursor)
-
-        importer = PeriodImporter(
-            period_name='2025-02',
-            processed_data_path=Path(period_data['temp_dir']),
-            peep_id_mapping=collector.peep_id_mapping,
-            cursor=cursor,
-            verbose=False,
-            skip_snapshots=True
-        )
-
-        importer.create_schedule_period()
-
-        # Manually inject malformed event_id into unique_event_dates
-        # This simulates corrupted data that passed initial validation
-        importer.unique_event_dates = {
-            ('invalid-date-format', 120, 'Bad Event')  # Invalid format
-        }
-
-        # Should handle gracefully (logs error, continues with 0 events created)
-        created_count = importer.create_events({})
-        assert created_count == 0, "Should create 0 events due to invalid format"
-
     def test_old_format_event_dates_default_to_120_minutes(self, test_db, test_period_data):
         """Test backward compatibility: old format event dates (without time ranges) default to 120 minutes."""
         period_data = next(test_period_data(period_name='2025-02', num_members=5))
@@ -702,6 +671,89 @@ class TestEventCreation:
         result = cursor.fetchone()
         assert result is not None, "Event should exist in database"
         assert result[0] == 120, "Old format events should default to 120 minutes duration"
+
+    def test_event_row_duration_takes_precedence_over_availability_default(self, test_db, test_period_data):
+        """Test that Event: row duration takes precedence over availability string defaults.
+
+        Bug: When Event: row specifies 90 minutes and availability uses old format (no time range),
+        the database event should use Event: row value (90 minutes), not the old format default (120 minutes).
+        """
+        period_data = next(test_period_data(period_name='2025-02', num_members=5))
+
+        cursor = test_db.cursor()
+
+        collector = MemberCollector(processed_data_path=Path(period_data['temp_dir']), verbose=False)
+        collector.scan_all_periods()
+        collector.insert_members_to_db(cursor)
+
+        importer = PeriodImporter(
+            period_name='2025-02',
+            processed_data_path=Path(period_data['temp_dir']),
+            peep_id_mapping=collector.peep_id_mapping,
+            cursor=cursor,
+            verbose=False,
+            skip_snapshots=True
+        )
+
+        importer.create_schedule_period()
+
+        # Create responses.csv with:
+        # 1. Event: row specifying 90 minutes duration
+        # 2. Regular response with old format availability (no time range)
+        responses_path = Path(period_data['period_dir']) / 'responses.csv'
+        with open(responses_path, 'w', newline='') as f:
+            import csv
+            writer = csv.DictWriter(f, fieldnames=[
+                'Timestamp', 'Email Address', 'Name', 'Primary Role', 'Max Sessions',
+                'Min Interval Days', 'Secondary Role', 'Availability', 'Event Duration'
+            ])
+            writer.writeheader()
+            # Event: row with 90 minute duration
+            writer.writerow({
+                'Timestamp': '',
+                'Email Address': '',
+                'Name': 'Event: Friday February 7 - 5pm',  # Old format, no time range
+                'Primary Role': '',
+                'Max Sessions': '',
+                'Min Interval Days': '',
+                'Secondary Role': '',
+                'Availability': '',
+                'Event Duration': '90'  # Specified duration should take precedence
+            })
+            # Regular response referencing the same event
+            writer.writerow({
+                'Timestamp': '2025-02-01 10:00:00',
+                'Email Address': 'member1@test.com',
+                'Name': 'Test Member 1',
+                'Primary Role': 'Leader',
+                'Max Sessions': '2',
+                'Min Interval Days': '7',
+                'Secondary Role': 'I only want to be scheduled in my primary role',
+                'Availability': 'Friday February 7 - 5pm',  # Old format, no time range
+                'Event Duration': ''
+            })
+
+        response_mapping = importer.import_responses()
+        created_count = importer.create_events(response_mapping)
+
+        # Verify event was created with 90 minutes (from Event: row), not 120 (old format default)
+        assert created_count == 1, "Should create one event"
+        cursor.execute("""
+            SELECT duration_minutes, event_datetime
+            FROM events
+            WHERE period_id = ?
+        """, (importer.period_id,))
+        result = cursor.fetchone()
+        assert result is not None, "Event should exist in database"
+
+        duration = result[0]
+        event_datetime = result[1]
+
+        # Event: row duration correctly takes precedence over availability string defaults (Bug #9 fixed)
+        assert duration == 90, (
+            f"Event: row duration (90 min) should take precedence over old format default (120 min), "
+            f"but got {duration} minutes for event {event_datetime}"
+        )
 
 
 class TestAssignmentImport:

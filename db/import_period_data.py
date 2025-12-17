@@ -596,20 +596,18 @@ class PeriodImporter:
         Returns:
             Number of events created
         """
-        # Build responses-like data structure for extract_events()
-        # extract_events() expects rows with "Availability" field
-        response_rows = []
-        for peep_id, (response_id, availability_str) in response_mapping.items():
-            if availability_str:
-                response_rows.append({
-                    "Name": f"Peep_{peep_id}",  # Name only used for logging
-                    "Availability": availability_str
-                })
+        # Read full responses.csv to include Event: rows for duration specifications
+        # Event: rows take precedence over availability string defaults
+        responses_csv_path = os.path.join(self.period_path, 'responses.csv')
+        if not os.path.exists(responses_csv_path):
+            return 0  # No responses.csv = no events to create
+
+        response_rows = load_responses(responses_csv_path)
 
         # Parse period year from period_name
         year = int(self.period_name.split('-')[0])
 
-        # Use extract_events() to parse all events
+        # Use extract_events() to parse all events (includes Event: rows for durations)
         event_map = extract_events(response_rows, year=year)
 
         # Insert events into database
