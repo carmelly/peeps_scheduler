@@ -265,27 +265,24 @@ def extract_events(rows, year=None):
 			date_strings = [s.strip() for s in availability_str.split(",") if s.strip()]
 
 			for date_str in date_strings:
-				try:
-					event_id, duration, display_name = parse_event_date(date_str, year=year)
+				event_id, duration, display_name = parse_event_date(date_str, year=year)
 
-					if duration is None:
-						raise ValueError(f"Cannot auto-derive event duration from '{date_str}' - time range required")
+				# Default to 120 minutes for old format (no time range)
+				if duration is None:
+					duration = 120
+					logging.debug(f"No duration in event string '{date_str}', defaulting to {duration} minutes")
 
-					if duration not in constants.CLASS_CONFIG:
-						raise ValueError(f"Duration {duration} minutes not in CLASS_CONFIG (valid: {list(constants.CLASS_CONFIG.keys())})")
+				if duration not in constants.CLASS_CONFIG:
+					raise ValueError(f"Duration {duration} minutes not in CLASS_CONFIG (valid: {list(constants.CLASS_CONFIG.keys())})")
 
-					# Track unique events
-					if event_id not in unique_events:
-						unique_events[event_id] = (duration, display_name)
-					else:
-						# Verify consistency if same event appears multiple times
-						existing_duration, _ = unique_events[event_id]
-						if existing_duration != duration:
-							raise ValueError(f"Inconsistent duration for event {event_id}: {existing_duration} vs {duration}")
-
-				except ValueError as e:
-					logging.warning(f"Skipping invalid availability string '{date_str}' for {name}: {e}")
-					continue
+				# Track unique events
+				if event_id not in unique_events:
+					unique_events[event_id] = (duration, display_name)
+				else:
+					# Verify consistency if same event appears multiple times
+					existing_duration, _ = unique_events[event_id]
+					if existing_duration != duration:
+						raise ValueError(f"Inconsistent duration for event {event_id}: {existing_duration} vs {duration}")
 
 		# Create Event objects from unique events
 		for event_id, (duration, display_name) in sorted(unique_events.items()):

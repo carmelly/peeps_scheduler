@@ -49,7 +49,8 @@ from file_io import (
     load_json,
     normalize_email,
     parse_event_date,
-    load_responses
+    load_responses,
+    extract_events
 )
 from models import Role, SwitchPreference
 import constants
@@ -587,7 +588,7 @@ class PeriodImporter:
         Create events from availability strings in responses.
 
         Events are created with status='proposed' (per migration 009).
-        Uses parse_event_date() to extract event info from date strings.
+        Uses extract_events() from file_io to parse event data.
 
         Args:
             response_mapping: Dict of peep_id -> (response_id, availability_string)
@@ -595,49 +596,31 @@ class PeriodImporter:
         Returns:
             Number of events created
         """
-        # Extract unique availability strings from response_mapping
-        availability_strings = [avail_str for _, avail_str in response_mapping.values() if avail_str]
-
-        # Extract unique event date strings
-        unique_event_dates = set()
+        # Build responses-like data structure for extract_events()
+        # extract_events() expects rows with "Availability" field
+        response_rows = []
+        for peep_id, (response_id, availability_str) in response_mapping.items():
+            if availability_str:
+                response_rows.append({
+                    "Name": f"Peep_{peep_id}",  # Name only used for logging
+                    "Availability": availability_str
+                })
 
         # Parse period year from period_name
         year = int(self.period_name.split('-')[0])
 
-        for availability_str in availability_strings:
-            # Split by comma to get individual date strings
-            date_strings = [s.strip() for s in availability_str.split(',') if s.strip()]
+        # Use extract_events() to parse all events
+        event_map = extract_events(response_rows, year=year)
 
-            for date_str in date_strings:
-                try:
-                    event_id, duration, display_name = parse_event_date(date_str, year=year)
-                    unique_event_dates.add((event_id, duration, display_name))
-                except Exception as e:
-                    raise ValueError(
-                        f"Invalid event date format in availability data: '{date_str}'\n"
-                        f"Error: {e}\n"
-                        f"Expected format: 'DayOfWeek Month Day - StartTime to EndTime'\n"
-                        f"Example: 'Friday February 7th - 5pm to 7pm'"
-                    )
-
-        # Create events
+        # Insert events into database
         inserted = 0
-
-        for event_date_str, duration_minutes, display_name in sorted(unique_event_dates):
-            # Parse event_date_str to get datetime
+        for event_id, event in sorted(event_map.items()):
+            # Parse event_id to get datetime
             try:
-                event_datetime = datetime.strptime(event_date_str, "%Y-%m-%d %H:%M")
+                event_datetime = datetime.strptime(event_id, "%Y-%m-%d %H:%M")
             except ValueError as e:
-                self.logger.error(f"Invalid event_id format '{event_date_str}': {e}")
+                self.logger.error(f"Invalid event_id format '{event_id}': {e}")
                 continue
-
-            # Determine duration if not specified
-            if duration_minutes is None:
-                # Default to 120 minutes for old format
-                duration_minutes = 120
-                self.logger.debug(
-                    f"No duration in event string, defaulting to {duration_minutes} minutes"
-                )
 
             # Insert event with status='proposed'
             self.cursor.execute("""
@@ -647,16 +630,16 @@ class PeriodImporter:
             """, (
                 self.period_id,
                 event_datetime.isoformat(),
-                duration_minutes,
+                event.duration_minutes,
                 'proposed'
             ))
 
             event_db_id = self.cursor.lastrowid
-            self.event_id_mapping[event_date_str] = event_db_id
+            self.event_id_mapping[event_id] = event_db_id
 
             inserted += 1
             self.logger.debug(
-                f"Created event {event_db_id}: {event_date_str} ({duration_minutes} min)"
+                f"Created event {event_db_id}: {event_id} ({event.duration_minutes} min)"
             )
 
         return inserted

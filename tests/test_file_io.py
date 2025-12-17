@@ -414,7 +414,7 @@ class TestEventExtraction:
 		assert durations == [90, 90, 120]
 
 	def test_extract_events_auto_derive_validates_consistency(self):
-		"""Test that inconsistent durations for same event logs warning and skips."""
+		"""Test that inconsistent durations for same event raises error."""
 		rows = [
 			{
 				"Name": "Alice",
@@ -426,25 +426,54 @@ class TestEventExtraction:
 			}
 		]
 
-		# Should log warning for inconsistency and skip Bob's event
-		events = extract_events(rows)
+		# Should raise ValueError for inconsistent durations
+		with pytest.raises(ValueError, match="Inconsistent duration for event"):
+			extract_events(rows)
 
-		# Only one event should be created (Alice's), Bob's is skipped due to inconsistency
-		assert len(events) == 1
-		assert list(events.values())[0].duration_minutes == 90
-
-	def test_extract_events_auto_derive_requires_time_range(self):
-		"""Test that auto-derive mode requires time ranges in availability."""
+	def test_extract_events_auto_derive_old_format_defaults_to_120(self):
+		"""Test that old format (no time range) defaults to 120 minutes."""
 		rows = [
 			{
 				"Name": "Alice",
-				"Availability": "Friday January 9th - 5pm"  # No time range!
+				"Availability": "Friday January 9th - 5pm"  # No time range - old format
 			}
 		]
 
-		# Should log warning and skip, resulting in empty event map
+		# Should create event with 120-minute default (old format support)
 		events = extract_events(rows)
-		assert len(events) == 0
+		assert len(events) == 1
+		event = list(events.values())[0]
+		assert event.duration_minutes == 120
+
+	def test_extract_events_auto_derive_defaults_to_120_for_old_format(self):
+		"""Test that old format availability strings (no time range) default to 120 minutes."""
+		rows = [
+			{
+				"Name": "Alice",
+				"Email Address": "alice@test.com",
+				"Availability": "Saturday March 1 - 1pm"  # Old format: no time range
+			},
+			{
+				"Name": "Bob",
+				"Email Address": "bob@test.com",
+				"Availability": "Saturday March 1 - 1pm, Sunday March 2 - 2pm"  # Two old format events
+			}
+		]
+
+		# Should create events with 120-minute default duration (like importer does)
+		events = extract_events(rows, year=2025)
+
+		# Should have 2 unique events (March 1 and March 2)
+		assert len(events) == 2
+
+		# Both events should have 120-minute duration (default for old format)
+		durations = sorted([e.duration_minutes for e in events.values()])
+		assert durations == [120, 120]
+
+		# Verify event IDs are correct
+		event_ids = sorted(events.keys())
+		assert "2025-03-01 13:00" in event_ids
+		assert "2025-03-02 14:00" in event_ids
 
 	def test_extract_events_auto_derive_validates_duration_in_config(self):
 		"""Test that auto-derived durations must be in CLASS_CONFIG."""
@@ -455,9 +484,9 @@ class TestEventExtraction:
 			}
 		]
 
-		# Should log warning and skip invalid duration
-		events = extract_events(rows)
-		assert len(events) == 0
+		# Should raise ValueError for invalid duration
+		with pytest.raises(ValueError, match="Duration.*not in CLASS_CONFIG"):
+			extract_events(rows)
 
 	def test_extract_events_missing_name_ignored(self):
 		"""Blank or missing 'Name' fields in rows should be ignored silently."""

@@ -583,7 +583,7 @@ class TestEventCreation:
         assert event_count == 1, f"Should deduplicate to 1 event, got {event_count}"
 
     def test_invalid_event_date_format(self, test_db, test_period_data):
-        """Test that invalid event date format in availability string is handled."""
+        """Test that invalid event date format in availability string raises error."""
         period_data = next(test_period_data(period_name='2025-02', num_members=10))
 
         # Modify responses.csv with invalid date format
@@ -621,7 +621,7 @@ class TestEventCreation:
         )
 
         # Should raise ValueError for invalid event date format
-        with pytest.raises(ValueError, match="Invalid event date format.*Invalid Date Format"):
+        with pytest.raises(ValueError, match="time data.*Invalid Date Format.*does not match format"):
             importer.import_period()
 
     def test_invalid_event_id_format_during_creation(self, test_db, test_period_data):
