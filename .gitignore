@@ -5,8 +5,8 @@ debug.log
 __pycache__/
 *.pyc
 
-# VS Code editor settings
-.vscode/
+# Private config files (tracked in separate repo)
+.private-config
 
 # Claude Code configuration
 .claude
