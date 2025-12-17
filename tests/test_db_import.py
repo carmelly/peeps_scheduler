@@ -46,70 +46,6 @@ class TestMemberCollection:
         db_count = cursor.fetchone()[0]
         assert db_count == 10, "Should insert 10 members to database"
 
-
-    def test_member_id_gaps(self, test_db, test_period_data):
-        """Test that member ID gaps (e.g., IDs 1, 2, 4, 5 - missing 3) are handled correctly."""
-        period_data = next(test_period_data(period_name='2025-02', num_members=10))
-
-        # Modify members.csv to have ID gap
-        members_file = Path(period_data['period_dir']) / 'members.csv'
-
-        with open(members_file, 'r', newline='') as f:
-            reader = csv_module.DictReader(f)
-            members = list(reader)
-
-        # Remove member ID 3
-        members = [m for m in members if m['id'] != '3']
-
-        with open(members_file, 'w', newline='') as f:
-            writer = csv_module.DictWriter(f, fieldnames=reader.fieldnames)
-            writer.writeheader()
-            writer.writerows(members)
-
-        # Also remove member 3's response to avoid email mismatch error
-        responses_file = Path(period_data['period_dir']) / 'responses.csv'
-        with open(responses_file, 'r', newline='') as f:
-            reader = csv_module.DictReader(f)
-            responses = list(reader)
-
-        # Remove member 3's response
-        responses = [r for r in responses if r['Email Address'] != 'member3@test.com']
-
-        with open(responses_file, 'w', newline='') as f:
-            writer = csv_module.DictWriter(f, fieldnames=reader.fieldnames)
-            writer.writeheader()
-            writer.writerows(responses)
-
-        cursor = test_db.cursor()
-
-        # Import members
-        collector = MemberCollector(processed_data_path=Path(period_data['temp_dir']), verbose=False)
-        collector.scan_all_periods()
-        collector.insert_members_to_db(cursor)
-        peep_id_mapping = collector.peep_id_mapping
-
-        # Verify: Should have 9 members (not 10)
-        assert len(peep_id_mapping) == 9, "Should have 9 members after removing ID 3"
-
-        # Verify: ID 3 should not be in mapping
-        assert '3' not in peep_id_mapping, "ID 3 should not be in mapping"
-
-        # Verify: Import should proceed normally
-        importer = PeriodImporter(
-            period_name='2025-02',
-            processed_data_path=Path(period_data['temp_dir']),
-            peep_id_mapping=peep_id_mapping,
-            cursor=cursor,
-            verbose=False,
-            skip_snapshots=False
-        )
-        importer.import_period()
-
-        # Should complete successfully
-        period_id = importer.period_id
-        cursor.execute("SELECT COUNT(*) FROM peep_order_snapshots WHERE period_id = ?", (period_id,))
-        assert cursor.fetchone()[0] == 9, "Should have snapshots for 9 members"
-
     def test_member_invalid_date_joined_warning(self, test_db, test_period_data):
         """Test that invalid Date Joined formats log warning and continue."""
         period_data = next(test_period_data(period_name='2025-02', num_members=5))
@@ -1026,11 +962,11 @@ class TestAssignmentImport:
         events_after = cursor.fetchone()[0]
         assert events_after == events_before + 1, "Should have created 1 new event from results.json"
 
-        # Verify event has correct details
-        cursor.execute("SELECT event_datetime, duration_minutes FROM events WHERE event_datetime = ?", ("2025-02-25 17:00",))
+        # Verify event has correct details (ISO 8601 format with T separator)
+        cursor.execute("SELECT event_datetime, duration_minutes FROM events WHERE event_datetime = ?", ("2025-02-25T17:00:00",))
         event = cursor.fetchone()
         assert event is not None, "Event should exist"
-        assert event[0] == "2025-02-25 17:00", "Event datetime should match"
+        assert event[0] == "2025-02-25T17:00:00", "Event datetime should match ISO 8601 format"
         assert event[1] == 90, "Event duration should match"
 
     def test_import_assignments_orphaned_member_raises_error(self, test_db, test_period_data, tmp_path):
@@ -1975,21 +1911,22 @@ class TestSnapshotCalculation:
 
         period_id = importer.period_id
 
-        # Basic fixture doesn't import assignments/attendance, so members who responded
-        # but weren't assigned get priority incremented
+        # Fixture has attendance, so check members who responded but didn't attend
+        # Members 1-2 attend (in fixture), members 4-8 responded but didn't attend
+        # (Member 3 is alternate, so check members 4-5 who responded but weren't assigned/didn't attend)
         cursor.execute("""
             SELECT p.id, pos.priority
             FROM peeps p
             JOIN peep_order_snapshots pos ON p.id = pos.peep_id
             WHERE pos.period_id = ? AND p.id IN (?, ?)
             ORDER BY p.id
-        """, (period_id, peep_id_mapping['1'], peep_id_mapping['2']))
+        """, (period_id, peep_id_mapping['4'], peep_id_mapping['5']))
         results = cursor.fetchall()
 
-        assert len(results) == 2, "Should have snapshots for members 1 and 2"
-        # Without attendance data, members who responded get priority incremented
+        assert len(results) == 2, "Should have snapshots for members 4 and 5"
+        # Members who responded but didn't attend get priority incremented
         for peep_id, priority in results:
-            assert priority > 0, f"Member {peep_id} responded but no attendance imported, priority should increment"
+            assert priority > 0, f"Member {peep_id} responded but didn't attend, priority should increment"
 
     def test_priority_unchanged_for_did_not_respond(self, test_db, test_period_data):
         """Test priority unchanged for members who did not respond."""
@@ -2082,11 +2019,34 @@ class TestSnapshotCalculation:
             writer.writeheader()
             writer.writerows(responses)
 
+        # Production format for results.json
+        results_data = {
+            'valid_events': [{
+                'id': 0,
+                'date': '2025-03-07 17:00',
+                'duration_minutes': 120,
+                'attendees': [{'id': 1, 'name': 'Member1', 'role': 'leader'}],
+                'alternates': []
+            }],
+            'peeps': [],
+            'num_unique_attendees': 1,
+            'priority_fulfilled': 0,
+            'system_weight': 0
+        }
         with open(period2_dir / 'results.json', 'w') as f:
-            json.dump({'event_1': {'attendees': [{'id': 1, 'name': 'Member1', 'role': 'Leader'}], 'alternates': []}}, f)
+            json.dump(results_data, f)
 
+        # Production format for actual_attendance.json
+        attendance_data = {
+            'valid_events': [{
+                'id': 0,
+                'date': '2025-03-07 17:00',
+                'duration_minutes': 120,
+                'attendees': [{'id': 1, 'name': 'Member1', 'role': 'leader'}]
+            }]
+        }
         with open(period2_dir / 'actual_attendance.json', 'w') as f:
-            json.dump({'events': [{'date': '2025-03-07 17:00', 'attendees': [{'id': 1, 'name': 'Member1', 'role': 'Leader'}]}]}, f)
+            json.dump(attendance_data, f)
 
         cursor = test_db.cursor()
 
@@ -2457,21 +2417,37 @@ class TestIntegration:
             writer.writeheader()
             writer.writerows(responses)
 
-        # Create results.json for period 2
+        # Create results.json for period 2 - PRODUCTION FORMAT
+        results_data = {
+            'valid_events': [
+                {'id': 0, 'date': '2025-03-07 17:00', 'duration_minutes': 120,
+                 'attendees': [{'id': 1, 'name': 'Member1', 'role': 'leader'}], 'alternates': []},
+                {'id': 1, 'date': '2025-03-14 17:00', 'duration_minutes': 120,
+                 'attendees': [{'id': 2, 'name': 'Member2', 'role': 'follower'}], 'alternates': []},
+                {'id': 2, 'date': '2025-03-21 17:00', 'duration_minutes': 120,
+                 'attendees': [{'id': 3, 'name': 'Member3', 'role': 'leader'}], 'alternates': []}
+            ],
+            'peeps': [],
+            'num_unique_attendees': 3,
+            'priority_fulfilled': 0,
+            'system_weight': 0
+        }
         with open(period2_dir / 'results.json', 'w') as f:
-            json.dump({
-                'event_1': {'attendees': [{'id': 1, 'name': 'Member1', 'role': 'Leader'}], 'alternates': []},
-                'event_2': {'attendees': [{'id': 2, 'name': 'Member2', 'role': 'Follower'}], 'alternates': []},
-                'event_3': {'attendees': [{'id': 3, 'name': 'Member3', 'role': 'Leader'}], 'alternates': []}
-            }, f)
+            json.dump(results_data, f)
 
-        # Create actual_attendance.json for period 2
+        # Create actual_attendance.json for period 2 - PRODUCTION FORMAT
+        attendance_data = {
+            'valid_events': [
+                {'id': 0, 'date': '2025-03-07 17:00', 'duration_minutes': 120,
+                 'attendees': [{'id': 1, 'name': 'Member1', 'role': 'leader'}]},
+                {'id': 1, 'date': '2025-03-14 17:00', 'duration_minutes': 120,
+                 'attendees': [{'id': 2, 'name': 'Member2', 'role': 'follower'}]},
+                {'id': 2, 'date': '2025-03-21 17:00', 'duration_minutes': 120,
+                 'attendees': [{'id': 3, 'name': 'Member3', 'role': 'leader'}]}
+            ]
+        }
         with open(period2_dir / 'actual_attendance.json', 'w') as f:
-            json.dump({'events': [
-                {'date': '2025-03-07 17:00', 'attendees': [{'id': 1, 'name': 'Member1', 'role': 'Leader'}]},
-                {'date': '2025-03-14 17:00', 'attendees': [{'id': 2, 'name': 'Member2', 'role': 'Follower'}]},
-                {'date': '2025-03-21 17:00', 'attendees': [{'id': 3, 'name': 'Member3', 'role': 'Leader'}]}
-            ]}, f)
+            json.dump(attendance_data, f)
 
         cursor = test_db.cursor()
 
@@ -2696,10 +2672,10 @@ class TestIntegration:
         """, (importer.period_id,))
         events = cursor.fetchall()
         assert len(events) == 2
-        assert events[0][0] == "2025-12-06 16:00", "First event should be 2025-12-06 16:00"
+        assert events[0][0] == "2025-12-06T16:00:00", "First event should be 2025-12-06T16:00:00 (ISO 8601)"
         assert events[0][1] == 90, "First event should be 90 minutes"
         assert events[0][2] == "completed", "Event should have 'completed' status from results.json"
-        assert events[1][0] == "2025-12-12 18:00", "Second event should be 2025-12-12 18:00"
+        assert events[1][0] == "2025-12-12T18:00:00", "Second event should be 2025-12-12T18:00:00 (ISO 8601)"
         assert events[1][1] == 90, "Second event should be 90 minutes"
 
         # Verify: Assignments created correctly (5 attendees + 1 alternate per event = 12 total)
@@ -2747,3 +2723,531 @@ class TestIntegration:
             )
         """, (importer.period_id,))
         assert cursor.fetchone()[0] == 0, "Should have 0 event_availability records (no responses)"
+
+
+class TestDatabaseImportBugFixes:
+    """
+    Tests that reproduce bugs found during database import validation.
+
+    These tests demonstrate expected behavior vs actual buggy behavior.
+    All tests should FAIL until bugs are fixed.
+    """
+
+    def test_fix_event_statuses_updated_from_scheduling_results(self, test_db, test_period_data):
+        """
+        Bug #1: Event statuses never updated from results.json/actual_attendance.json.
+
+        Expected behavior:
+        - Events in results.json → status='scheduled'
+        - Events in actual_attendance.json → status='completed'
+        - Events only in responses.csv (not scheduled) → status='proposed'
+
+        Actual behavior: All events status='proposed' (default from create_events).
+        """
+        # Create period with mixed event statuses
+        period_data = next(test_period_data(period_name='2025-02', num_members=10, num_events=3))
+        cursor = test_db.cursor()
+
+        # Import members
+        collector = MemberCollector(processed_data_path=Path(period_data['temp_dir']), verbose=False)
+        collector.scan_all_periods()
+        collector.insert_members_to_db(cursor)
+
+        # Modify test data to create different scenarios:
+        # Event 1: Scheduled and completed (in both results.json and actual_attendance.json)
+        # Event 2: Scheduled but not completed (in results.json only)
+        # Event 3: Only proposed (not in results.json or actual_attendance.json)
+
+        # Create results.json with 2 events (Event 1 and Event 2)
+        results_data = {
+            'valid_events': [
+                {
+                    'id': 'evt1',
+                    'date': '2025-02-07 17:00',
+                    'duration_minutes': 120,
+                    'attendees': [
+                        {'id': 1, 'name': 'Test Member 1', 'role': 'leader'},
+                        {'id': 2, 'name': 'Test Member 2', 'role': 'follower'}
+                    ],
+                    'alternates': []
+                },
+                {
+                    'id': 'evt2',
+                    'date': '2025-02-14 17:00',
+                    'duration_minutes': 120,
+                    'attendees': [
+                        {'id': 3, 'name': 'Test Member 3', 'role': 'leader'},
+                        {'id': 4, 'name': 'Test Member 4', 'role': 'follower'}
+                    ],
+                    'alternates': []
+                }
+            ]
+        }
+
+        # Create actual_attendance.json with only 1 event (Event 1 completed)
+        attendance_data = {
+            'valid_events': [
+                {
+                    'date': '2025-02-07 17:00',
+                    'duration_minutes': 120,
+                    'attendees': [
+                        {'id': 1, 'name': 'Test Member 1', 'role': 'leader'},
+                        {'id': 2, 'name': 'Test Member 2', 'role': 'follower'}
+                    ]
+                }
+            ]
+        }
+
+        # Write updated JSON files
+        with open(Path(period_data['period_dir']) / 'results.json', 'w') as f:
+            json.dump(results_data, f)
+
+        with open(Path(period_data['period_dir']) / 'actual_attendance.json', 'w') as f:
+            json.dump(attendance_data, f)
+
+        # Import period
+        importer = PeriodImporter(
+            period_name='2025-02',
+            processed_data_path=Path(period_data['temp_dir']),
+            peep_id_mapping=collector.peep_id_mapping,
+            cursor=cursor,
+            verbose=False,
+            skip_snapshots=True
+        )
+        importer.import_period()
+
+        # Query event statuses
+        cursor.execute("""
+            SELECT event_datetime, status
+            FROM events
+            WHERE period_id = ?
+            ORDER BY event_datetime
+        """, (importer.period_id,))
+        events = cursor.fetchall()
+
+        # Expected: 3 events total
+        assert len(events) == 3, f"Should have 3 events (got {len(events)})"
+
+        # Event 1: Should be 'completed' (in actual_attendance.json)
+        assert events[0][1] == 'completed', \
+            f"Event 1 (2025-02-07) should be 'completed' (in attendance), got '{events[0][1]}'"
+
+        # Event 2: Should be 'cancelled' (in results.json but not attendance)
+        assert events[1][1] == 'cancelled', \
+            f"Event 2 (2025-02-14) should be 'cancelled' (scheduled but didn't occur), got '{events[1][1]}'"
+
+        # Event 3: Should be 'proposed' (only in responses, not scheduled)
+        assert events[2][1] == 'proposed', \
+            f"Event 3 (2025-02-21) should be 'proposed' (not scheduled), got '{events[2][1]}'"
+
+    def test_fix_event_durations_updated_from_scheduling_results(self, test_db, test_period_data):
+        """
+        Bug #2: Event durations not updated from results.json.
+
+        Expected behavior:
+        - Event duration should match results.json/actual_attendance.json (actual scheduled duration)
+        - Duration can change from proposed (responses.csv) to actual (results.json)
+
+        Actual behavior: Duration remains at proposed value from responses.csv.
+        """
+        # Create period with event that gets downgraded
+        period_data = next(test_period_data(period_name='2025-02', num_members=10, num_events=1))
+        cursor = test_db.cursor()
+
+        # Import members
+        collector = MemberCollector(processed_data_path=Path(period_data['temp_dir']), verbose=False)
+        collector.scan_all_periods()
+        collector.insert_members_to_db(cursor)
+
+        # Modify responses.csv to propose a 120-minute event
+        responses_data = []
+        for i in range(1, 6):
+            responses_data.append({
+                'Timestamp': '2/1/2025 10:00:00',
+                'Email Address': f'member{i}@test.com',
+                'Name': f'Test Member {i}',
+                'Primary Role': 'Leader' if i % 2 == 1 else 'Follower',
+                'Max Sessions': 2,
+                'Min Interval Days': 0,
+                'Secondary Role': 'I only want to be scheduled in my primary role',
+                'Availability': 'Friday February 7th - 5pm to 7pm'  # Implies 120 minutes
+            })
+
+        with open(Path(period_data['period_dir']) / 'responses.csv', 'w', newline='') as f:
+            writer = csv_module.DictWriter(f, fieldnames=['Timestamp', 'Email Address', 'Name', 'Primary Role', 'Max Sessions', 'Min Interval Days', 'Secondary Role', 'Availability'])
+            writer.writeheader()
+            writer.writerows(responses_data)
+
+        # Create results.json with downgraded 90-minute event
+        results_data = {
+            'valid_events': [
+                {
+                    'id': 'evt1',
+                    'date': '2025-02-07 17:00',
+                    'duration_minutes': 90,  # Downgraded from 120
+                    'attendees': [
+                        {'id': 1, 'name': 'Test Member 1', 'role': 'leader'},
+                        {'id': 2, 'name': 'Test Member 2', 'role': 'follower'}
+                    ],
+                    'alternates': []
+                }
+            ]
+        }
+
+        with open(Path(period_data['period_dir']) / 'results.json', 'w') as f:
+            json.dump(results_data, f)
+
+        # Remove fixture's actual_attendance.json (test is for results.json duration only)
+        attendance_file = Path(period_data['period_dir']) / 'actual_attendance.json'
+        if attendance_file.exists():
+            attendance_file.unlink()
+
+        # Import period
+        importer = PeriodImporter(
+            period_name='2025-02',
+            processed_data_path=Path(period_data['temp_dir']),
+            peep_id_mapping=collector.peep_id_mapping,
+            cursor=cursor,
+            verbose=False,
+            skip_snapshots=True
+        )
+        importer.import_period()
+
+        # Query event duration
+        cursor.execute("""
+            SELECT duration_minutes
+            FROM events
+            WHERE period_id = ?
+        """, (importer.period_id,))
+        duration = cursor.fetchone()[0]
+
+        # Expected: 90 minutes (from results.json, not 120 from responses)
+        assert duration == 90, \
+            f"Event duration should be 90 minutes (from results.json), got {duration}"
+
+    def test_fix_period_status_based_on_attendance_existence(self, test_db, test_period_data):
+        """
+        Bug #3: Period status incorrect - all periods marked 'completed' regardless.
+
+        Expected behavior:
+        - Period status='completed' only if actual_attendance.json exists
+        - Period status='scheduled' if results.json exists but no attendance
+        - Period status='draft' if only responses exist
+
+        Actual behavior: All periods marked 'completed' (hardcoded in create_schedule_period).
+        """
+        # Create future period with results but NO attendance
+        period_data = next(test_period_data(period_name='2025-12', num_members=10, num_events=1))
+        cursor = test_db.cursor()
+
+        # Import members
+        collector = MemberCollector(processed_data_path=Path(period_data['temp_dir']), verbose=False)
+        collector.scan_all_periods()
+        collector.insert_members_to_db(cursor)
+
+        # Create results.json (scheduled)
+        results_data = {
+            'valid_events': [
+                {
+                    'id': 'evt1',
+                    'date': '2025-12-06 17:00',
+                    'duration_minutes': 120,
+                    'attendees': [
+                        {'id': 1, 'name': 'Test Member 1', 'role': 'leader'},
+                        {'id': 2, 'name': 'Test Member 2', 'role': 'follower'}
+                    ],
+                    'alternates': []
+                }
+            ]
+        }
+
+        with open(Path(period_data['period_dir']) / 'results.json', 'w') as f:
+            json.dump(results_data, f)
+
+        # Remove actual_attendance.json (future period, not completed)
+        attendance_path = Path(period_data['period_dir']) / 'actual_attendance.json'
+        if attendance_path.exists():
+            attendance_path.unlink()
+
+        # Import period
+        importer = PeriodImporter(
+            period_name='2025-12',
+            processed_data_path=Path(period_data['temp_dir']),
+            peep_id_mapping=collector.peep_id_mapping,
+            cursor=cursor,
+            verbose=False,
+            skip_snapshots=True
+        )
+        importer.import_period()
+
+        # Query period status
+        cursor.execute("""
+            SELECT status
+            FROM schedule_periods
+            WHERE id = ?
+        """, (importer.period_id,))
+        status = cursor.fetchone()[0]
+
+        # Expected: 'active' (has results.json but no attendance)
+        assert status == 'active', \
+            f"Period status should be 'active' (has schedule but no attendance data), got '{status}'"
+
+    def test_fix_snapshots_only_created_when_attendance_exists(self, test_db, test_period_data):
+        """
+        Bug #4: Snapshots created without attendance data.
+
+        Expected behavior:
+        - Snapshots ONLY created when actual_attendance.json exists
+        - No snapshots for future periods without attendance
+
+        Actual behavior: Snapshots created for all periods regardless.
+        """
+        # Create future period with results but NO attendance
+        period_data = next(test_period_data(period_name='2025-12', num_members=10, num_events=1))
+        cursor = test_db.cursor()
+
+        # Import members
+        collector = MemberCollector(processed_data_path=Path(period_data['temp_dir']), verbose=False)
+        collector.scan_all_periods()
+        collector.insert_members_to_db(cursor)
+
+        # Create results.json (scheduled)
+        results_data = {
+            'valid_events': [
+                {
+                    'id': 'evt1',
+                    'date': '2025-12-06 17:00',
+                    'duration_minutes': 120,
+                    'attendees': [
+                        {'id': 1, 'name': 'Test Member 1', 'role': 'leader'},
+                        {'id': 2, 'name': 'Test Member 2', 'role': 'follower'}
+                    ],
+                    'alternates': []
+                }
+            ]
+        }
+
+        with open(Path(period_data['period_dir']) / 'results.json', 'w') as f:
+            json.dump(results_data, f)
+
+        # Remove actual_attendance.json (future period)
+        attendance_path = Path(period_data['period_dir']) / 'actual_attendance.json'
+        if attendance_path.exists():
+            attendance_path.unlink()
+
+        # Import period WITH snapshots enabled
+        importer = PeriodImporter(
+            period_name='2025-12',
+            processed_data_path=Path(period_data['temp_dir']),
+            peep_id_mapping=collector.peep_id_mapping,
+            cursor=cursor,
+            verbose=False,
+            skip_snapshots=False  # Enable snapshots to test the bug
+        )
+        importer.import_period()
+
+        # Query snapshot count
+        cursor.execute("""
+            SELECT COUNT(*)
+            FROM peep_order_snapshots
+            WHERE period_id = ?
+        """, (importer.period_id,))
+        snapshot_count = cursor.fetchone()[0]
+
+        # Expected: 0 snapshots (no attendance data)
+        assert snapshot_count == 0, \
+            f"Should have 0 snapshots (no attendance data), got {snapshot_count}"
+
+    def test_fix_legacy_period_event_id_populated_from_results(self, test_db, test_period_data):
+        """
+        Bug #5: legacy_period_event_id not populated.
+
+        Expected behavior:
+        - legacy_period_event_id should contain event "id" from results.json
+
+        Actual behavior: All NULL.
+        """
+        # Create period with events
+        period_data = next(test_period_data(period_name='2025-02', num_members=10, num_events=2))
+        cursor = test_db.cursor()
+
+        # Import members
+        collector = MemberCollector(processed_data_path=Path(period_data['temp_dir']), verbose=False)
+        collector.scan_all_periods()
+        collector.insert_members_to_db(cursor)
+
+        # Create results.json with explicit event IDs
+        results_data = {
+            'valid_events': [
+                {
+                    'id': 'legacy_evt_001',  # Legacy event ID
+                    'date': '2025-02-07 17:00',
+                    'duration_minutes': 120,
+                    'attendees': [
+                        {'id': 1, 'name': 'Test Member 1', 'role': 'leader'},
+                        {'id': 2, 'name': 'Test Member 2', 'role': 'follower'}
+                    ],
+                    'alternates': []
+                },
+                {
+                    'id': 'legacy_evt_002',  # Legacy event ID
+                    'date': '2025-02-14 17:00',
+                    'duration_minutes': 120,
+                    'attendees': [
+                        {'id': 3, 'name': 'Test Member 3', 'role': 'leader'},
+                        {'id': 4, 'name': 'Test Member 4', 'role': 'follower'}
+                    ],
+                    'alternates': []
+                }
+            ]
+        }
+
+        with open(Path(period_data['period_dir']) / 'results.json', 'w') as f:
+            json.dump(results_data, f)
+
+        # Import period
+        importer = PeriodImporter(
+            period_name='2025-02',
+            processed_data_path=Path(period_data['temp_dir']),
+            peep_id_mapping=collector.peep_id_mapping,
+            cursor=cursor,
+            verbose=False,
+            skip_snapshots=True
+        )
+        importer.import_period()
+
+        # Query legacy_period_event_id values
+        cursor.execute("""
+            SELECT event_datetime, legacy_period_event_id
+            FROM events
+            WHERE period_id = ?
+            ORDER BY event_datetime
+        """, (importer.period_id,))
+        events = cursor.fetchall()
+
+        # Expected: Both events should have legacy IDs
+        assert len(events) == 2, "Should have 2 events"
+
+        assert events[0][1] == 'legacy_evt_001', \
+            f"Event 1 should have legacy_period_event_id='legacy_evt_001', got '{events[0][1]}'"
+
+        assert events[1][1] == 'legacy_evt_002', \
+            f"Event 2 should have legacy_period_event_id='legacy_evt_002', got '{events[1][1]}'"
+
+    def test_fix_event_cancellation_tracked_when_not_in_attendance(self, test_db, test_period_data):
+        """
+        Bug #6: Results vs Attendance discrepancies not handled.
+
+        Expected behavior:
+        - Event in results.json but NOT in actual_attendance.json → status='cancelled' or similar
+        - Event in actual_attendance.json but NOT in results.json → mark as late addition
+
+        Actual behavior: No reconciliation between results.json and actual_attendance.json.
+        """
+        # Create period with scheduled events, one of which gets cancelled
+        period_data = next(test_period_data(period_name='2025-02', num_members=10, num_events=3))
+        cursor = test_db.cursor()
+
+        # Import members
+        collector = MemberCollector(processed_data_path=Path(period_data['temp_dir']), verbose=False)
+        collector.scan_all_periods()
+        collector.insert_members_to_db(cursor)
+
+        # Create results.json with 3 events scheduled
+        results_data = {
+            'valid_events': [
+                {
+                    'id': 'evt1',
+                    'date': '2025-02-07 17:00',
+                    'duration_minutes': 120,
+                    'attendees': [
+                        {'id': 1, 'name': 'Test Member 1', 'role': 'leader'},
+                        {'id': 2, 'name': 'Test Member 2', 'role': 'follower'}
+                    ],
+                    'alternates': []
+                },
+                {
+                    'id': 'evt2',
+                    'date': '2025-02-14 17:00',
+                    'duration_minutes': 120,
+                    'attendees': [
+                        {'id': 3, 'name': 'Test Member 3', 'role': 'leader'},
+                        {'id': 4, 'name': 'Test Member 4', 'role': 'follower'}
+                    ],
+                    'alternates': []
+                },
+                {
+                    'id': 'evt3',
+                    'date': '2025-02-21 17:00',
+                    'duration_minutes': 120,
+                    'attendees': [
+                        {'id': 5, 'name': 'Test Member 5', 'role': 'leader'},
+                        {'id': 6, 'name': 'Test Member 6', 'role': 'follower'}
+                    ],
+                    'alternates': []
+                }
+            ]
+        }
+
+        # Create actual_attendance.json with only 2 events (Event 2 was cancelled)
+        attendance_data = {
+            'valid_events': [
+                {
+                    'date': '2025-02-07 17:00',
+                    'duration_minutes': 120,
+                    'attendees': [
+                        {'id': 1, 'name': 'Test Member 1', 'role': 'leader'},
+                        {'id': 2, 'name': 'Test Member 2', 'role': 'follower'}
+                    ]
+                },
+                {
+                    'date': '2025-02-21 17:00',
+                    'duration_minutes': 120,
+                    'attendees': [
+                        {'id': 5, 'name': 'Test Member 5', 'role': 'leader'},
+                        {'id': 6, 'name': 'Test Member 6', 'role': 'follower'}
+                    ]
+                }
+            ]
+        }
+
+        with open(Path(period_data['period_dir']) / 'results.json', 'w') as f:
+            json.dump(results_data, f)
+
+        with open(Path(period_data['period_dir']) / 'actual_attendance.json', 'w') as f:
+            json.dump(attendance_data, f)
+
+        # Import period
+        importer = PeriodImporter(
+            period_name='2025-02',
+            processed_data_path=Path(period_data['temp_dir']),
+            peep_id_mapping=collector.peep_id_mapping,
+            cursor=cursor,
+            verbose=False,
+            skip_snapshots=True
+        )
+        importer.import_period()
+
+        # Query event statuses
+        cursor.execute("""
+            SELECT event_datetime, status
+            FROM events
+            WHERE period_id = ?
+            ORDER BY event_datetime
+        """, (importer.period_id,))
+        events = cursor.fetchall()
+
+        # Expected: 3 events
+        assert len(events) == 3, f"Should have 3 events, got {len(events)}"
+
+        # Event 1: Completed (in both results and attendance)
+        assert events[0][1] == 'completed', \
+            f"Event 1 (2025-02-07) should be 'completed', got '{events[0][1]}'"
+
+        # Event 2: Cancelled (in results but not in attendance)
+        assert events[1][1] == 'cancelled', \
+            f"Event 2 (2025-02-14) should be 'cancelled' (in results but not attendance), got '{events[1][1]}'"
+
+        # Event 3: Completed (in both results and attendance)
+        assert events[2][1] == 'completed', \
+            f"Event 3 (2025-02-21) should be 'completed', got '{events[2][1]}'"

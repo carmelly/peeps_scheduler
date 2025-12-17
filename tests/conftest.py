@@ -209,42 +209,70 @@ def test_period_data():
 
         # Note: Events will be auto-derived from availability strings by extract_events()
 
-        # Generate test assignments (results.json)
-        assignments = {}
-        for event_idx in range(num_events):
-            event_key = f'event_{event_idx + 1}'
-            assignments[event_key] = {
-                'attendees': [
-                    {'id': 1, 'name': 'Member1', 'role': 'Leader'},
-                    {'id': 2, 'name': 'Member2', 'role': 'Follower'}
-                ],
-                'alternates': [
-                    {'id': 3, 'name': 'Member3', 'role': 'Leader'}
-                ]
-            }
-
-        # Write results.json
-        with open(period_dir / 'results.json', 'w') as f:
-            json.dump(assignments, f, indent=2)
-
-        # Generate test attendance (actual_attendance.json)
-        attendance = {
-            'events': []
+        # Generate test assignments (results.json) - PRODUCTION FORMAT
+        results_data = {
+            'valid_events': [],
+            'peeps': [],
+            'num_unique_attendees': min(num_members, 8),
+            'priority_fulfilled': 0,
+            'system_weight': 0
         }
+
         base_date = datetime.datetime(2025, 2, 7, 17, 0)  # Feb 7, 5pm
         for event_idx in range(num_events):
             event_date = base_date + datetime.timedelta(days=7 * event_idx)
-            attendance['events'].append({
+            results_data['valid_events'].append({
+                'id': event_idx,
                 'date': event_date.strftime('%Y-%m-%d %H:%M'),
+                'duration_minutes': 120,
                 'attendees': [
-                    {'id': 1, 'name': 'Member1', 'role': 'Leader'},
-                    {'id': 2, 'name': 'Member2', 'role': 'Follower'}
-                ]
+                    {'id': 1, 'name': 'Member1', 'role': 'leader'},
+                    {'id': 2, 'name': 'Member2', 'role': 'follower'}
+                ],
+                'alternates': [
+                    {'id': 3, 'name': 'Member3', 'role': 'leader'}
+                ],
+                'leaders_string': 'Leaders(2): Member1, Member3',
+                'followers_string': 'Followers(1): Member2'
+            })
+
+        # Write results.json
+        with open(period_dir / 'results.json', 'w') as f:
+            json.dump(results_data, f, indent=2)
+
+        # Write output.json (scheduler's snapshot of input data)
+        # This should mirror the results structure but represents the scheduler's input state
+        output_data = {
+            'events': results_data['valid_events'],  # Same events as results
+            'peeps': results_data['peeps'],
+            'members': members  # Include member data snapshot
+        }
+        with open(period_dir / 'output.json', 'w') as f:
+            json.dump(output_data, f, indent=2)
+
+        # Generate test attendance (actual_attendance.json) - PRODUCTION FORMAT
+        attendance_data = {
+            'valid_events': []
+        }
+
+        for event_idx in range(num_events):
+            event_date = base_date + datetime.timedelta(days=7 * event_idx)
+            attendance_data['valid_events'].append({
+                'id': event_idx,
+                'date': event_date.strftime('%Y-%m-%d %H:%M'),
+                'duration_minutes': 120,
+                'attendees': [
+                    {'id': 1, 'name': 'Member1', 'role': 'leader'},
+                    {'id': 2, 'name': 'Member2', 'role': 'follower'}
+                ],
+                'alternates': [],
+                'leaders_string': 'Leaders(1): Member1',
+                'followers_string': 'Followers(1): Member2'
             })
 
         # Write actual_attendance.json
         with open(period_dir / 'actual_attendance.json', 'w') as f:
-            json.dump(attendance, f, indent=2)
+            json.dump(attendance_data, f, indent=2)
 
         # Write empty notes.json
         with open(period_dir / 'notes.json', 'w') as f:

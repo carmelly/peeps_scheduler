@@ -378,8 +378,28 @@ class PeriodImporter:
         num_assignments = self.import_assignments()
         self.logger.info(f"Created {num_assignments} assignments")
 
+        # Update events from results.json (status='scheduled', duration, legacy_id)
+        num_updated_results = self.update_events_from_results()
+        if num_updated_results > 0:
+            self.logger.info(f"Updated {num_updated_results} events from results.json")
+
         num_attendance = self.import_attendance()
         self.logger.info(f"Created {num_attendance} attendance records")
+
+        # Update events from actual_attendance.json (status='completed', duration)
+        num_updated_attendance = self.update_events_from_attendance()
+        if num_updated_attendance > 0:
+            self.logger.info(f"Updated {num_updated_attendance} events from actual_attendance.json")
+
+        # Update period status based on attendance existence
+        self.update_period_status(num_attendance, num_assignments)
+
+        # Mark events that were scheduled but didn't occur as cancelled
+        # IMPORTANT: Must run AFTER update_events_from_attendance() to avoid marking
+        # events as cancelled when they're actually in attendance data
+        num_cancelled = self.mark_cancelled_events()
+        if num_cancelled > 0:
+            self.logger.info(f"Marked {num_cancelled} events as cancelled")
 
         # Only derive changes if there's attendance data (skip for future periods)
         if num_attendance > 0:
@@ -389,10 +409,12 @@ class PeriodImporter:
             num_changes = 0
             self.logger.info(f"Skipped change derivation (no attendance data for future/incomplete period)")
 
-        # Step 6: Calculate and save snapshots
-        if not self.skip_snapshots:
+        # Step 6: Calculate and save snapshots (ONLY if attendance exists)
+        if not self.skip_snapshots and num_attendance > 0:
             num_snapshots = self.calculate_snapshots()
             self.logger.info(f"Created {num_snapshots} period snapshots")
+        elif num_attendance == 0:
+            self.logger.info("Snapshot calculation skipped (no attendance data - future/incomplete period)")
         else:
             self.logger.info("Snapshot calculation skipped (--skip-snapshots flag)")
 
@@ -414,7 +436,8 @@ class PeriodImporter:
             next_month = date(year, month + 1, 1)
         period_end = next_month - timedelta(days=1)
 
-        # Insert schedule_period
+        # Insert schedule_period with initial status='draft'
+        # Status will be updated later based on attendance existence
         self.cursor.execute("""
             INSERT INTO schedule_periods (
                 period_name, start_date, end_date, status
@@ -423,7 +446,7 @@ class PeriodImporter:
             self.period_name,
             period_date.isoformat(),
             period_end.isoformat(),
-            'completed'  # Historical periods are completed
+            'draft'  # Initial status, will update based on attendance
         ))
 
         self.period_id = self.cursor.lastrowid
@@ -732,11 +755,17 @@ class PeriodImporter:
                 duration = event_data.get('duration_minutes', 120)
                 legacy_id = event_data.get('id')
 
+                # Normalize datetime format to ISO 8601 (space → 'T', add seconds if missing)
+                # JSON uses "2025-12-06 16:00" but DB expects "2025-12-06T16:00:00"
+                event_datetime_iso = event_date_str.replace(' ', 'T')
+                if event_datetime_iso.count(':') == 1:
+                    event_datetime_iso += ':00'
+
                 try:
                     self.cursor.execute("""
                         INSERT INTO events (period_id, legacy_period_event_id, event_datetime, duration_minutes, status)
                         VALUES (?, ?, ?, ?, ?)
-                    """, (self.period_id, legacy_id, event_date_str, duration, 'completed'))
+                    """, (self.period_id, legacy_id, event_datetime_iso, duration, 'completed'))
 
                     event_db_id = self.cursor.lastrowid
                     self.event_id_mapping[event_date_str] = event_db_id
@@ -744,10 +773,10 @@ class PeriodImporter:
                 except sqlite3.IntegrityError as e:
                     # Event might already exist from another source
                     self.logger.warning(f"Event {event_date_str} already exists: {e}")
-                    # Try to fetch it
+                    # Try to fetch it with normalized format
                     self.cursor.execute("""
                         SELECT id FROM events WHERE event_datetime = ? AND period_id = ?
-                    """, (event_date_str, self.period_id))
+                    """, (event_datetime_iso, self.period_id))
                     result = self.cursor.fetchone()
                     if result:
                         event_db_id = result[0]
@@ -821,6 +850,58 @@ class PeriodImporter:
                     continue
 
         return inserted
+
+    def update_events_from_results(self) -> int:
+        """
+        Update event metadata from results.json.
+
+        Updates:
+        - status: 'proposed' → 'scheduled' for events in results.json
+        - duration_minutes: from results.json (may differ from proposed)
+        - legacy_period_event_id: from results.json 'id' field
+
+        Returns:
+            Number of events updated
+        """
+        results_json_path = os.path.join(self.period_path, 'results.json')
+
+        if not os.path.exists(results_json_path):
+            return 0
+
+        try:
+            results_data = load_json(results_json_path)
+        except Exception as e:
+            self.logger.error(f"Failed to load results.json: {e}")
+            raise
+
+        valid_events = results_data.get('valid_events', [])
+        updated = 0
+
+        for event_data in valid_events:
+            event_date_str = event_data.get('date')
+            duration = event_data.get('duration_minutes')
+            legacy_id = event_data.get('id')
+
+            # Look up event_id from mapping
+            event_db_id = self.event_id_mapping.get(event_date_str)
+
+            if not event_db_id:
+                self.logger.warning(f"Event {event_date_str} in results.json not found in database")
+                continue
+
+            # Update event with actual scheduled data
+            self.cursor.execute("""
+                UPDATE events
+                SET status = 'scheduled',
+                    duration_minutes = ?,
+                    legacy_period_event_id = ?
+                WHERE id = ?
+            """, (duration, legacy_id, event_db_id))
+
+            updated += 1
+
+        self.logger.debug(f"Updated {updated} events from results.json")
+        return updated
 
     def import_attendance(self) -> int:
         """
@@ -922,6 +1003,108 @@ class PeriodImporter:
                     continue
 
         return inserted
+
+    def update_events_from_attendance(self) -> int:
+        """
+        Update event metadata from actual_attendance.json.
+
+        Updates:
+        - status: 'scheduled' → 'completed' for events in actual_attendance.json
+        - duration_minutes: from actual_attendance.json (final actual duration)
+
+        Returns:
+            Number of events updated
+        """
+        attendance_json_path = os.path.join(self.period_path, 'actual_attendance.json')
+
+        if not os.path.exists(attendance_json_path):
+            return 0
+
+        try:
+            attendance_data = load_json(attendance_json_path)
+        except Exception as e:
+            self.logger.error(f"Failed to load actual_attendance.json: {e}")
+            raise
+
+        valid_events = attendance_data.get('valid_events', [])
+        updated = 0
+
+        for event_data in valid_events:
+            event_date_str = event_data.get('date')
+            duration = event_data.get('duration_minutes')
+
+            # Look up event_id from mapping
+            event_db_id = self.event_id_mapping.get(event_date_str)
+
+            if not event_db_id:
+                self.logger.warning(f"Event {event_date_str} in actual_attendance.json not found in database")
+                continue
+
+            # Update event with actual completion data
+            self.cursor.execute("""
+                UPDATE events
+                SET status = 'completed',
+                    duration_minutes = ?
+                WHERE id = ?
+            """, (duration, event_db_id))
+
+            updated += 1
+
+        self.logger.debug(f"Updated {updated} events from actual_attendance.json")
+        return updated
+
+    def mark_cancelled_events(self) -> int:
+        """
+        Mark events that were scheduled (in results.json) but didn't occur (not in actual_attendance.json).
+
+        Events with status='scheduled' and zero attendance are marked as 'cancelled'.
+
+        Returns:
+            Number of events marked as cancelled
+        """
+        # Find events with status='scheduled' that have no attendance records
+        self.cursor.execute("""
+            UPDATE events
+            SET status = 'cancelled'
+            WHERE period_id = ?
+              AND status = 'scheduled'
+              AND id NOT IN (
+                  SELECT DISTINCT event_id FROM event_attendance WHERE event_id IS NOT NULL
+              )
+        """, (self.period_id,))
+
+        cancelled_count = self.cursor.rowcount
+        if cancelled_count > 0:
+            self.logger.debug(f"Marked {cancelled_count} events as cancelled")
+        return cancelled_count
+
+    def update_period_status(self, num_attendance: int, num_assignments: int):
+        """
+        Update period status based on data completeness.
+
+        Status logic:
+        - 'completed': Has actual attendance data
+        - 'scheduled': Has assignments but no attendance (future period with schedule)
+        - 'draft': Has neither assignments nor attendance
+
+        Args:
+            num_attendance: Number of attendance records for this period
+            num_assignments: Number of assignments for this period
+        """
+        if num_attendance > 0:
+            new_status = 'completed'
+        elif num_assignments > 0:
+            new_status = 'active'  # Has schedule but not yet occurred
+        else:
+            new_status = 'draft'
+
+        self.cursor.execute("""
+            UPDATE schedule_periods
+            SET status = ?
+            WHERE id = ?
+        """, (new_status, self.period_id))
+
+        self.logger.debug(f"Updated period {self.period_name} status to '{new_status}'")
 
     def derive_assignment_changes(self) -> int:
         """
