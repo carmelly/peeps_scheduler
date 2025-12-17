@@ -9,11 +9,11 @@ __pycache__/
 .vscode/
 
 # Claude Code configuration
-.claude/
+.claude
 CLAUDE.md*
 
 # Agentic Project Management memory
-.apm/**
+.apm
 
 # Obsidian vault configuration
 .obsidian/
