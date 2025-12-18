@@ -239,6 +239,15 @@ class Scheduler:
 		]
 
 	def run(self, generate_test_data=False, load_from_csv=False):
+		# Extract year from data_folder for cancelled events parsing
+		# (e.g., "2026-01" -> 2026) - handle both absolute paths and folder names
+		from pathlib import Path
+		folder_name = Path(self.data_folder).name
+		try:
+			year = int(folder_name[:4]) if folder_name and len(folder_name) >= 4 and folder_name[:4].isdigit() else None
+		except (ValueError, TypeError):
+			year = None
+
 		if generate_test_data:
 			logging.info(f"Generating test data and saving to {self.output_json}")
 			utils.generate_test_data(5, 30, self.output_json)
@@ -246,21 +255,28 @@ class Scheduler:
 			responses_csv = (self.period_path / 'responses.csv').as_posix()
 			peeps_csv = (self.period_path / 'members.csv').as_posix()
 			logging.info(f"Loading data from {peeps_csv} and {responses_csv}")
-
-			# Extract year from data_folder (e.g., "2026-01" -> 2026)
-			# Handle both absolute paths and folder names
-			from pathlib import Path
-			folder_name = Path(self.data_folder).name
-			try:
-				year = int(folder_name[:4]) if folder_name and len(folder_name) >= 4 and folder_name[:4].isdigit() else None
-			except (ValueError, TypeError):
-				year = None
-
 			file_io.convert_to_json(str(responses_csv), str(peeps_csv), str(self.output_json), year=year)
 
 		logging.info(f"Loading data from {self.output_json}")
-		
+
 		peeps, events = file_io.load_data_from_json(str(self.output_json))
+
+		# Filter cancelled events after loading from output.json
+		cancelled_event_ids = file_io.load_cancelled_events(str(self.period_path), year=year)
+		if cancelled_event_ids:
+			# Validate that all cancelled events exist in loaded events
+			loaded_event_ids = {e.date.strftime("%Y-%m-%d %H:%M") for e in events}
+			unknown_cancelled = cancelled_event_ids - loaded_event_ids
+			if unknown_cancelled:
+				event_word = "event" if len(unknown_cancelled) == 1 else "events"
+				raise ValueError(f"cancelled {event_word} not found in loaded events: {sorted(unknown_cancelled)}")
+
+			# Filter out cancelled events
+			original_count = len(events)
+			events = [e for e in events if e.date.strftime("%Y-%m-%d %H:%M") not in cancelled_event_ids]
+			excluded_count = original_count - len(events)
+			if excluded_count > 0:
+				logging.info(f"Excluding {excluded_count} cancelled event(s) from scheduling")
 		responders = [p for p in peeps if p.responded]
 		no_availability = [p.name for p in responders if not p.availability]
 		non_responders = [p.name for p in peeps if not p.responded and p.active]

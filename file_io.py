@@ -133,6 +133,53 @@ def save_json(data, filename):
 	with open(filename, "w") as f:
 		json.dump(data, f, indent=4, default=custom_serializer)
 
+def load_cancelled_events(data_folder, year=None):
+	"""
+	Load cancelled events from cancelled_events.json in the data folder.
+
+	Parses event date strings immediately and returns parsed event_ids.
+
+	Args:
+		data_folder: Path to the data folder containing cancelled_events.json
+		year: Year to use for parsing event dates (required for correct parsing)
+
+	Returns:
+		set: Set of parsed event_id strings in format "YYYY-MM-DD HH:MM".
+		     Returns empty set if file doesn't exist (backward compatible).
+
+	Raises:
+		Exception: If cancelled_events.json exists but contains invalid JSON
+		ValueError: If any event string cannot be parsed
+	"""
+	cancelled_file = os.path.join(data_folder, "cancelled_events.json")
+
+	# Return empty set if file doesn't exist (backward compatible)
+	if not os.path.exists(cancelled_file):
+		return set()
+
+	# File exists - parse it and raise errors if malformed
+	try:
+		with open(cancelled_file, "r") as f:
+			data = json.load(f)
+	except json.JSONDecodeError as e:
+		raise Exception(f"invalid cancelled_events.json: {e}") from e
+
+	# Handle missing or null 'cancelled_events' key
+	cancelled_event_strings = data.get("cancelled_events")
+	if cancelled_event_strings is None:
+		return set()
+
+	# Parse event strings immediately and return event_ids
+	parsed_event_ids = set()
+	for event_str in cancelled_event_strings:
+		try:
+			event_id, _, _ = parse_event_date(event_str, year=year)
+			parsed_event_ids.add(event_id)
+		except Exception as e:
+			raise ValueError(f"Cannot parse event string in cancelled_events.json: '{event_str}' - {e}") from e
+
+	return parsed_event_ids
+
 def load_data_from_json(filename):
 	"""Load peeps and events from an existing output JSON file."""
 	json_data = load_json(filename)
