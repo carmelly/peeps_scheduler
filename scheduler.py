@@ -220,8 +220,7 @@ class Scheduler:
 		sorted_unique = sorted(unique, key=lambda s: (
 			-s.num_unique_attendees,      # Maximize how many got in
 			-s.priority_fulfilled,        # Favor overdue people
-			-s.normalized_utilization	  # Capacity usage per-person
-			-s.total_attendees            # Overall capacity usage
+			-s.normalized_utilization     # Capacity usage per-person
 		))
 
 		best_unique = sorted_unique[0].num_unique_attendees

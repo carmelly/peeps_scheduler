@@ -664,6 +664,9 @@ class EventSequence:
 	
 	def finalize(self):
 		"""Finalizes a sequence by increasing priority for unsuccessful peeps and tracking metrics."""
+		utilization_sum = 0
+		eligible_count = 0
+
 		for peep in self.peeps:
 			# Update peep stats 
 			if peep.num_events == 0: 
@@ -676,9 +679,18 @@ class EventSequence:
 			# Track sequence efficiency metrics 
 			self.num_unique_attendees += 1 if peep.num_events > 0 else 0 
 			self.priority_fulfilled += peep.original_priority if peep.num_events > 0 else 0
-			self.normalized_utilization += peep.num_events / peep.event_limit if peep.event_limit > 0 else 0
 			self.total_attendees += peep.num_events 
 			self.system_weight += peep.priority  
+
+			if peep.responded and peep.availability and peep.event_limit > 0:
+				availability_count = len(set(peep.availability))
+				if availability_count > 0:
+					eligible_count += 1
+					effective_limit = min(peep.event_limit, availability_count)
+					utilization_sum += peep.num_events / effective_limit
+
+		if eligible_count > 0:
+			self.normalized_utilization = (utilization_sum / eligible_count) * 100
 
 		# Sort peeps by priority descending
 		self.peeps.sort(key=lambda p: p.priority, reverse=True)
@@ -738,7 +750,7 @@ class EventSequence:
 			f"valid events: {{ {', '.join(str(event.id) for event in sorted_events)} }}, "
 			f"unique attendees {self.num_unique_attendees}/{len(self.peeps)}, " 
 			f"priority fulfilled {self.priority_fulfilled}, "
-			f"normalized utilization {self.normalized_utilization:.2f}, "
+			f"normalized utilization {self.normalized_utilization:.2f}%, "
 			f"total attendees {self.total_attendees}, "
 			f"system_weight {self.system_weight}"
 		)

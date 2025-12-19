@@ -334,27 +334,27 @@ class TestEventSequenceFinalizationMetrics:
         assert sequence.priority_fulfilled == 8  # 3 + 5
     
     def test_finalize_calculates_normalized_utilization_correctly(self, event_factory, peep_factory):
-        """Test that normalized_utilization correctly averages utilization rates."""
+        """Test that normalized_utilization averages utilization rates as a percent with clamping."""
         event = event_factory(id=1)
-        peep1 = peep_factory(id=1, event_limit=2)  # attends 1/2 = 0.5
-        peep2 = peep_factory(id=2, event_limit=1)  # attends 1/1 = 1.0
-        peep3 = peep_factory(id=3, event_limit=3)  # attends 0/3 = 0.0
+        peep1 = peep_factory(id=1, event_limit=4, availability=[1, 2])  # clamp 4 -> 2
+        peep2 = peep_factory(id=2, event_limit=1, availability=[1])
+        peep3 = peep_factory(id=3, event_limit=3, availability=[1, 2, 3])
         peeps = [peep1, peep2, peep3]
-        
+
         event.add_attendee(peep1, Role.LEADER)
         event.add_attendee(peep2, Role.FOLLOWER)
-        
+
         peep1.num_events = 1
         peep2.num_events = 1
         peep3.num_events = 0
-        
+
         sequence = EventSequence([event], peeps)
         sequence.valid_events = [event]
-        
+
         sequence.finalize()
-        
-        # Should be sum of individual utilization rates: 0.5 + 1.0 + 0.0 = 1.5
-        assert sequence.normalized_utilization == 1.5
+
+        # (1/2 + 1/1 + 0/3) / 3 * 100 = 50%
+        assert sequence.normalized_utilization == 50.0
     
     def test_finalize_calculates_total_attendees_correctly(self, event_factory, peep_factory):
         """Test that total_attendees sums all num_events across peeps."""
