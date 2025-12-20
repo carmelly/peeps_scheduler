@@ -1,97 +1,45 @@
 {
 
 	"version": "0.2.0",
+	"inputs": [
+        {
+            "id": "dataDir",
+            "type": "promptString",
+            "description": "Enter data-dir:"
+        }
+    ],
 	"configurations": [
-		{"name":"Python Debugger: Current File","type":"debugpy","request":"launch","program":"${file}","console":"integratedTerminal"},
 		{
-			"name":"Transform Dry Run",
-			"type":"debugpy",
-			"request":"launch",
-			"program":"${workspaceFolder}/db/transform_raw_to_normalized.py",
-			"console":"integratedTerminal",
-			"args":"--dry-run"},
-		{
-			"name": "Uvicorn: webapp",
-			"type": "debugpy",
-			"request": "launch",
-			"module": "uvicorn",
-			"args": ["webapp.main:app", "--reload"],
-			"console": "integratedTerminal",
-			"justMyCode": true
+			"name":"Python Debugger: Current File",
+			"type":"debugpy","request":"launch",
+			"program":"${file}",
+			"console":"integratedTerminal"
 		},
 		{
 			"name": "Run",
 			"type": "debugpy",
 			"request": "launch",
 			"program": "${workspaceFolder}/main.py",
-			"args": ["run"],
+			"args": ["run","--data-folder", "${input:dataDir}"],
 			"console": "integratedTerminal",
-		},
-		{
-			"name": "Run w/Test Data",
-			"type": "debugpy",
-			"request": "launch",
-			"program": "${workspaceFolder}/main.py",
-			"args": ["run", "--generate-tests"],
-			"console": "integratedTerminal", 
-			"env": {
-				"DATA_FOLDER": "test_data"
-			}
 		},
 		{
 			"name": "Run w/CSV Import",
 			"type": "debugpy",
 			"request": "launch",
 			"program": "${workspaceFolder}/main.py",
-			"args": ["run", "--load-from-csv"],
+			"args": ["run", "--load-from-csv", "--data-folder", "${input:dataDir}"],
 			"console": "integratedTerminal", 
-			"env": {
-				"DATA_FOLDER": "2026-01"
-			}
+			// "env": {
+			// 	"DATA_FOLDER": "2026-01"
+			// }
 		},
 		{
 			"name": "Apply Results",
 			"type": "debugpy",
 			"request": "launch",
 			"program": "${workspaceFolder}/main.py",
-			"args": [
-				"apply-results",
-				"--period-folder",
-				"peeps_data/original/2025-09-real/"
-			],
-			"console": "integratedTerminal"
-		},
-		{
-			"name": "Import Period (dry run)",
-			"type": "debugpy",
-			"request": "launch",
-			"program": "${workspaceFolder}/main.py",
-			"args": [
-				"import-period",
-				"--slug",
-				"2025-05", 
-				"--dry-run"
-			],
-			"console": "integratedTerminal"
-		},
-		{
-			"name": "Import Period COMMIT",
-			"type": "debugpy",
-			"request": "launch",
-			"program": "${workspaceFolder}/main.py",
-			"args": [
-				"import-period",
-				"--slug",
-				"2025-05", 
-			],
-			"console": "integratedTerminal"
-		},
-		{
-			"name": "Reports",
-			"type": "debugpy",
-			"request": "launch",
-			"program": "${workspaceFolder}/reports.py",
-			"args": "${command:pickArgs}",
+			"args": ["run", "--data-folder", "2026-01"],
 			"console": "integratedTerminal"
 		}
 	]
