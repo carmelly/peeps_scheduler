@@ -4,7 +4,7 @@
     "python.testing.pytestArgs": [ "tests" ],
     "python.analysis.typeCheckingMode": "off",
     "[markdown]": {},
-    "markdownlint.config": { "MD022": false, "MD032": false, "MD033": false, "MD041": false },
+    "markdownlint.config": { "MD013": false,"MD024": false,"MD033": false },
     "[json]": {
         "breadcrumbs.showArrays": true,
         "editor.quickSuggestions": { "strings": true },
@@ -14,6 +14,17 @@
         "editor.formatOnSaveMode": "file"
     },
     "[jsonc]": { "editor.defaultFormatter": "GamemodeOne.json-compact-prettier" },
-    "json-compact-prettier.maxLineLength": 140,
-    "json-compact-prettier.alwaysOpenKeys": [ "alternates", "attendees", "permissions", "allow", "deny", "ask" ]
+    "json-compact-prettier.maxLineLength": 120,
+	"json-compact-prettier.alwaysOpenKeys": [
+		"alternates",
+		"attendees",
+		"permissions",
+		"allow",
+		"deny",
+		"ask",
+		"scripts"
+	],
+	"bookmarks.useWorkaroundForFormatters": true,
+	"markdown.preview.breaks": false,
+	"markdown-preview-github-styles.colorTheme": "auto"
 }
