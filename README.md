@@ -33,6 +33,7 @@ The system aims to maximize overall attendance, ensure fair distribution across 
 **Version:** v1.0.0-baseline (December 2024)
 
 This is the **production-ready baseline release** of the file/CLI-based scheduler:
+
 - ✅ All 183 unit tests passing
 - ✅ Complete CSV-to-JSON workflow
 - ✅ Comprehensive architecture documentation in `docs/architecture/`
@@ -45,19 +46,25 @@ The `main` branch provides a stable, single-user CLI workflow using CSV and JSON
 The scheduler provides three main commands:
 
 ### 1. Run Scheduler
+
 Generate an optimal event schedule from availability data:
+
 ```bash
 python main.py run --load-from-csv --data-folder peeps_data/2025-01 --max-events 7
 ```
 
 ### 2. Apply Results
+
 Update member priorities after events conclude:
+
 ```bash
 python main.py apply-results --period-folder peeps_data/2025-01
 ```
 
 ### 3. Generate Availability Report
+
 Create a summary of member availability:
+
 ```bash
 python main.py availability-report --data-folder peeps_data/2025-01
 ```
@@ -67,9 +74,11 @@ For detailed workflow documentation, see `docs/architecture/baseline-v1-overview
 ## Roadmap
 
 ### Phase 1: Database Integration
+
 Database infrastructure is complete on the `db-migration` branch. Remaining work includes application layer integration and snapshot generation refinements.
 
 ### Phase 2+: Web UI and Multi-User Support
+
 Future phases will add web-based interfaces, real-time collaboration, and multi-user workflows.
 
 For detailed implementation plans, see `.apm/Implementation_Plan.md`.
