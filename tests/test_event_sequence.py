@@ -27,6 +27,10 @@ class TestEventSequenceInitialization:
         assert sequence.num_unique_attendees == 0
         assert sequence.total_attendees == 0
         assert sequence.priority_fulfilled == 0
+        assert sequence.partnerships_fulfilled == 0
+        assert sequence.mutual_unique_fulfilled == 0
+        assert sequence.mutual_repeat_fulfilled == 0
+        assert sequence.one_sided_fulfilled == 0
     
     def test_initialization_with_events_and_peeps(self, event_factory, peep_factory):
         """Test that EventSequence stores provided events and peeps."""
@@ -51,6 +55,10 @@ class TestEventSequenceInitialization:
         assert sequence.total_attendees == 0
         assert sequence.system_weight == 0
         assert sequence.priority_fulfilled == 0
+        assert sequence.partnerships_fulfilled == 0
+        assert sequence.mutual_unique_fulfilled == 0
+        assert sequence.mutual_repeat_fulfilled == 0
+        assert sequence.one_sided_fulfilled == 0
         assert sequence.normalized_utilization == 0
 
 
@@ -448,6 +456,10 @@ class TestEventSequenceDataConversion:
         sequence = EventSequence(events, peeps)
         sequence.num_unique_attendees = 2
         sequence.system_weight = 10
+        sequence.partnerships_fulfilled = 3
+        sequence.mutual_unique_fulfilled = 2
+        sequence.mutual_repeat_fulfilled = 1
+        sequence.one_sided_fulfilled = 1
         
         data = sequence.to_dict()
         
@@ -456,9 +468,17 @@ class TestEventSequenceDataConversion:
         assert 'peeps' in data
         assert 'num_unique_attendees' in data
         assert 'system_weight' in data
+        assert 'partnerships_fulfilled' in data
+        assert 'mutual_unique_fulfilled' in data
+        assert 'mutual_repeat_fulfilled' in data
+        assert 'one_sided_fulfilled' in data
         
         assert data['num_unique_attendees'] == 2
         assert data['system_weight'] == 10
+        assert data['partnerships_fulfilled'] == 3
+        assert data['mutual_unique_fulfilled'] == 2
+        assert data['mutual_repeat_fulfilled'] == 1
+        assert data['one_sided_fulfilled'] == 1
     
     def test_to_dict_serializes_valid_events_with_attendees(self, event_factory, peep_factory):
         """Test that to_dict properly serializes valid events with attendee info."""
@@ -491,6 +511,43 @@ class TestEventSequenceDataConversion:
         assert data['peeps'] == []
         assert data['num_unique_attendees'] == 0
         assert data['system_weight'] == 0
+        assert data['partnerships_fulfilled'] == 0
+        assert data['mutual_unique_fulfilled'] == 0
+        assert data['mutual_repeat_fulfilled'] == 0
+        assert data['one_sided_fulfilled'] == 0
 
 
+class TestEventSequencePartnerships:
+    """Test partnership fulfillment scoring for EventSequence."""
 
+    def test_calculate_partnerships_fulfilled_counts_mutuals_and_one_sided(self, event_factory, peep_factory):
+        peep1 = peep_factory(id=1, role=Role.LEADER)
+        peep2 = peep_factory(id=2, role=Role.FOLLOWER)
+        peep3 = peep_factory(id=3, role=Role.FOLLOWER)
+
+        event1 = event_factory(id=1)
+        event1.add_attendee(peep1, Role.LEADER)
+        event1.add_attendee(peep2, Role.FOLLOWER)
+
+        event2 = event_factory(id=2)
+        event2.add_attendee(peep1, Role.LEADER)
+        event2.add_attendee(peep2, Role.FOLLOWER)
+
+        event3 = event_factory(id=3)
+        event3.add_attendee(peep1, Role.LEADER)
+        event3.add_attendee(peep3, Role.FOLLOWER)
+
+        sequence = EventSequence([event1, event2, event3], [peep1, peep2, peep3])
+        sequence.valid_events = [event1, event2, event3]
+
+        partnership_requests = {
+            1: {2, 3},
+            2: {1}
+        }
+
+        sequence.calculate_partnerships_fulfilled(partnership_requests)
+
+        assert sequence.mutual_unique_fulfilled == 1
+        assert sequence.mutual_repeat_fulfilled == 1
+        assert sequence.one_sided_fulfilled == 1
+        assert sequence.partnerships_fulfilled == 2

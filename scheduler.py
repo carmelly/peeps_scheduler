@@ -8,13 +8,15 @@ import utils
 from data_manager import get_data_manager
 
 class Scheduler:
-	def __init__(self, data_folder, max_events, interactive=True, sequence_choice=0, cancellations_file='cancellations.json'):
+	def __init__(self, data_folder, max_events, interactive=True, sequence_choice=0, cancellations_file='cancellations.json', partnerships_file='partnerships.json'):
 		self.data_folder = data_folder
 		self.max_events = max_events
 		self.interactive = interactive
 		self.sequence_choice = sequence_choice  # Which tied sequence to auto-select in non-interactive mode
 		self.cancellations_file = cancellations_file
+		self.partnerships_file = partnerships_file
 		self.data_manager = get_data_manager()
+		self.partnership_requests = {}
 
 		# Ensure period directory exists
 		self.period_path = self.data_manager.ensure_period_exists(data_folder)
@@ -125,6 +127,7 @@ class Scheduler:
 
 		# Update peep stats and compute utilization metrics
 		sequence.finalize()
+		sequence.calculate_partnerships_fulfilled(self.partnership_requests)
 
 	def evaluate_all_event_sequences(self, og_peeps, og_events):
 		"""Generates and evaluates all possible event sequences based on peep availability and role limits."""
@@ -221,21 +224,28 @@ class Scheduler:
 		sorted_unique = sorted(unique, key=lambda s: (
 			-s.num_unique_attendees,      # Maximize how many got in
 			-s.priority_fulfilled,        # Favor overdue people
-			-s.normalized_utilization     # Capacity usage per-person
+			-s.mutual_unique_fulfilled,   # Mutual partnership requests (unique)
+			-s.normalized_utilization,    # Capacity usage per-person
+			-s.mutual_repeat_fulfilled,   # Mutual partnership repeats
+			-s.one_sided_fulfilled        # One-sided request bonus
 		))
 
 		best_unique = sorted_unique[0].num_unique_attendees
 		best_priority = sorted_unique[0].priority_fulfilled 
+		best_mutual_unique = sorted_unique[0].mutual_unique_fulfilled
 		best_util = sorted_unique[0].normalized_utilization
-		best_total = sorted_unique[0].total_attendees
+		best_mutual_repeat = sorted_unique[0].mutual_repeat_fulfilled
+		best_one_sided = sorted_unique[0].one_sided_fulfilled
 
 		# return all sequences tied by unique attendees
 		return [
 			s for s in sorted_unique 
 			if s.num_unique_attendees == best_unique 
 			and s.priority_fulfilled == best_priority 
+			and s.mutual_unique_fulfilled == best_mutual_unique
 			and s.normalized_utilization == best_util 
-			# and s.total_attendees == best_total 
+			and s.mutual_repeat_fulfilled == best_mutual_repeat
+			and s.one_sided_fulfilled == best_one_sided
 		]
 
 	def run(self, generate_test_data=False, load_from_csv=False):
@@ -260,6 +270,14 @@ class Scheduler:
 		logging.info(f"Loading data from {self.output_json}")
 
 		peeps, events = file_io.load_data_from_json(str(self.output_json))
+		self.partnership_requests = file_io.load_partnerships(
+			str(self.period_path),
+			partnerships_filename=self.partnerships_file,
+			valid_peep_ids={peep.id for peep in peeps}
+		)
+		if self.partnership_requests:
+			total_requests = sum(len(partners) for partners in self.partnership_requests.values())
+			logging.info(f"Loaded {total_requests} partnership request(s)")
 
 		event_date_to_id = {e.date.strftime("%Y-%m-%d %H:%M"): e.id for e in events}
 		event_id_to_date = {e.id: e.date.strftime("%Y-%m-%d %H:%M") for e in events}

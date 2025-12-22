@@ -1,4 +1,5 @@
 import datetime
+import itertools
 import random
 import logging
 from enum import Enum
@@ -624,8 +625,12 @@ class EventSequence:
 		self.total_attendees = 0
 		self.system_weight = 0
 		self.priority_fulfilled = 0 
-		self.normalized_utilization = 0 
-				
+		self.partnerships_fulfilled = 0
+		self.mutual_unique_fulfilled = 0
+		self.mutual_repeat_fulfilled = 0
+		self.one_sided_fulfilled = 0
+		self.normalized_utilization = 0
+
 	
 	def to_dict(self): 
 		return {
@@ -659,6 +664,10 @@ class EventSequence:
 			"peeps": [peep.to_dict() for peep in self.peeps],
 			"num_unique_attendees": self.num_unique_attendees,
 			"priority_fulfilled": self.priority_fulfilled,
+			"partnerships_fulfilled": self.partnerships_fulfilled,
+			"mutual_unique_fulfilled": self.mutual_unique_fulfilled,
+			"mutual_repeat_fulfilled": self.mutual_repeat_fulfilled,
+			"one_sided_fulfilled": self.one_sided_fulfilled,
 			"system_weight": self.system_weight
 		}
 	
@@ -698,6 +707,53 @@ class EventSequence:
 		# Reassign index based on sorted order
 		for i, peep in enumerate(self.peeps):
 			peep.index = i
+
+	def calculate_partnerships_fulfilled(self, partnership_requests):
+		"""Calculate partnership fulfillment metrics for this sequence."""
+		self.partnerships_fulfilled = 0
+		self.mutual_unique_fulfilled = 0
+		self.mutual_repeat_fulfilled = 0
+		self.one_sided_fulfilled = 0
+
+		if not partnership_requests:
+			return
+
+		mutual_pairs = set()
+		one_sided_requests = set()
+
+		for requester_id, partner_ids in partnership_requests.items():
+			for partner_id in partner_ids:
+				if partner_id in partnership_requests and requester_id in partnership_requests[partner_id]:
+					pair = tuple(sorted((requester_id, partner_id)))
+					mutual_pairs.add(pair)
+				else:
+					one_sided_requests.add((requester_id, partner_id))
+
+		mutual_occurrences = {}
+		one_sided_satisfied = set()
+
+		for event in self.valid_events:
+			attendee_ids = {peep.id for peep in event.attendees}
+			if not attendee_ids:
+				continue
+
+			if mutual_pairs:
+				for pair in itertools.combinations(attendee_ids, 2):
+					normalized_pair = tuple(sorted(pair))
+					if normalized_pair in mutual_pairs:
+						mutual_occurrences[normalized_pair] = mutual_occurrences.get(normalized_pair, 0) + 1
+
+			if one_sided_requests:
+				for requester_id, partner_id in one_sided_requests:
+					if requester_id in attendee_ids and partner_id in attendee_ids:
+						one_sided_satisfied.add((requester_id, partner_id))
+
+		self.mutual_unique_fulfilled = len(mutual_occurrences)
+		self.mutual_repeat_fulfilled = sum(
+			count - 1 for count in mutual_occurrences.values() if count > 1
+		)
+		self.one_sided_fulfilled = len(one_sided_satisfied)
+		self.partnerships_fulfilled = self.mutual_unique_fulfilled + self.one_sided_fulfilled
 
 	@staticmethod
 	def get_unique_sequences(sequences):

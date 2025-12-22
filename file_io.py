@@ -133,6 +133,131 @@ def save_json(data, filename):
 	with open(filename, "w") as f:
 		json.dump(data, f, indent=4, default=custom_serializer)
 
+def load_cancelled_events(data_folder, year=None):
+	"""
+	Load cancelled events from cancelled_events.json in the data folder.
+
+	Parses event date strings immediately and returns parsed event_ids.
+
+	Args:
+		data_folder: Path to the data folder containing cancelled_events.json
+		year: Year to use for parsing event dates (required for correct parsing)
+
+	Returns:
+		set: Set of parsed event_id strings in format "YYYY-MM-DD HH:MM".
+		     Returns empty set if file doesn't exist (backward compatible).
+
+	Raises:
+		Exception: If cancelled_events.json exists but contains invalid JSON
+		ValueError: If any event string cannot be parsed
+	"""
+	cancelled_file = os.path.join(data_folder, "cancelled_events.json")
+
+	# Return empty set if file doesn't exist (backward compatible)
+	if not os.path.exists(cancelled_file):
+		return set()
+
+	# File exists - parse it and raise errors if malformed
+	try:
+		with open(cancelled_file, "r") as f:
+			data = json.load(f)
+	except json.JSONDecodeError as e:
+		raise Exception(f"invalid cancelled_events.json: {e}") from e
+
+	# Handle missing or null 'cancelled_events' key
+	cancelled_event_strings = data.get("cancelled_events")
+	if cancelled_event_strings is None:
+		return set()
+
+	# Parse event strings immediately and return event_ids
+	parsed_event_ids = set()
+	for event_str in cancelled_event_strings:
+		try:
+			event_id, _, _ = parse_event_date(event_str, year=year)
+			parsed_event_ids.add(event_id)
+		except Exception as e:
+			raise ValueError(f"Cannot parse event string in cancelled_events.json: '{event_str}' - {e}") from e
+
+	return parsed_event_ids
+
+def load_partnerships(data_folder, partnerships_filename='partnerships.json', valid_peep_ids=None):
+	"""
+	Load partnership requests from a JSON file in the data folder with strict validation.
+
+	Expected formats:
+	1) {"partnerships": {"1": [2, 3], "4": [5]}}
+	2) {"1": [2, 3], "4": [5]}
+
+	All IDs must be integers, must reference valid peeps, and cannot be self-partnerships.
+
+	Args:
+		data_folder: Path to the data folder
+		partnerships_filename: Name of the partnerships JSON file (default: partnerships.json)
+		valid_peep_ids: Set of valid peep IDs to validate against
+
+	Returns:
+		dict: {requester_id: set(partner_ids)}
+
+	Raises:
+		Exception: If the partnerships file contains invalid JSON
+		ValueError: If structure is invalid or contains errors (strict validation)
+	"""
+	requests_file = os.path.join(data_folder, partnerships_filename)
+	if not os.path.exists(requests_file):
+		return {}
+
+	try:
+		with open(requests_file, "r") as f:
+			data = json.load(f)
+	except json.JSONDecodeError as e:
+		raise Exception(f"invalid {partnerships_filename}: {e}") from e
+
+	if data is None:
+		return {}
+
+	raw_requests = data.get("partnerships") if isinstance(data, dict) and "partnerships" in data else data
+	if raw_requests is None:
+		return {}
+	if not isinstance(raw_requests, dict):
+		raise ValueError(f"{partnerships_filename} must map requester ids to lists of partner ids")
+
+	def coerce_id(value, context=""):
+		try:
+			return int(value)
+		except (TypeError, ValueError):
+			raise ValueError(f"Invalid {context} id '{value}': must be an integer")
+
+	requests = {}
+	for requester_key, partners in raw_requests.items():
+		# Validate requester ID
+		requester_id = coerce_id(requester_key, "requester")
+
+		if valid_peep_ids is not None and requester_id not in valid_peep_ids:
+			raise ValueError(f"Partnership requester id {requester_id} not found in peeps")
+
+		# Validate partners list exists and is a list
+		if partners is None:
+			raise ValueError(f"Partner list for requester {requester_id} cannot be null or missing")
+		if not isinstance(partners, list):
+			raise ValueError(f"Partner list for requester {requester_id} must be a list, got {type(partners).__name__}")
+
+		# Validate each partner
+		partner_set = set()
+		for partner in partners:
+			partner_id = coerce_id(partner, "partner")
+
+			if partner_id == requester_id:
+				raise ValueError(f"Requester {requester_id} cannot partner with themselves")
+
+			if valid_peep_ids is not None and partner_id not in valid_peep_ids:
+				raise ValueError(f"Partnership partner id {partner_id} for requester {requester_id} not found in peeps")
+
+			partner_set.add(partner_id)
+
+		requests[requester_id] = partner_set
+
+	return requests
+
 def load_data_from_json(filename):
 	"""Load peeps and events from an existing output JSON file."""
 	json_data = load_json(filename)

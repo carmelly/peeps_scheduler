@@ -413,6 +413,37 @@ class TestSchedulerSequenceSelection:
         # Should prefer sequence with higher priority fulfilled
         assert len(top) == 1
         assert top[0] == seq1
+
+    def test_get_top_sequences_uses_mutual_partnerships_as_tiebreaker(self, peep_factory):
+        """Test that get_top_sequences uses mutual unique partnerships when unique attendees tie."""
+        scheduler = create_scheduler()
+
+        peeps = [peep_factory(id=i) for i in range(1, 4)]
+
+        seq1 = EventSequence([], peeps)
+        seq1.num_unique_attendees = 2
+        seq1.priority_fulfilled = 10
+        seq1.mutual_unique_fulfilled = 2  # Higher
+        seq1.mutual_repeat_fulfilled = 0
+        seq1.one_sided_fulfilled = 0
+        seq1.normalized_utilization = 1.0
+        seq1.total_attendees = 2
+
+        seq2 = EventSequence([], peeps)
+        seq2.num_unique_attendees = 2
+        seq2.priority_fulfilled = 10
+        seq2.mutual_unique_fulfilled = 1  # Lower
+        seq2.mutual_repeat_fulfilled = 0
+        seq2.one_sided_fulfilled = 0
+        seq2.normalized_utilization = 1.0
+        seq2.total_attendees = 2
+
+        sequences = [seq2, seq1]
+
+        top = scheduler.get_top_sequences(sequences)
+
+        assert len(top) == 1
+        assert top[0] == seq1
     
     def test_get_top_sequences_returns_empty_for_empty_input(self):
         """Test that get_top_sequences handles empty input gracefully."""
@@ -455,6 +486,89 @@ class TestSchedulerSequenceSelection:
         # Both should be returned since they're tied
         assert len(top) == 2
         assert seq1 in top and seq2 in top
+
+    def test_partnerships_change_sequence_selection_end_to_end(self, peep_factory, event_factory):
+        """
+        CRITICAL: End-to-end test proving partnerships actually change which sequence is selected.
+
+        Scenario:
+        - 4 peeps request partnerships (mutual: 1<->2, one-sided: 3->4)
+        - Two sequences have IDENTICAL metrics except partnerships
+        - Sequence A: fulfills partnerships (1,2 together + 3,4 together)
+        - Sequence B: doesn't fulfill any partnerships
+        - All other metrics tied (attendees, priority, utilization)
+        - Verify scheduler selects Sequence A
+        """
+        scheduler = create_scheduler()
+
+        # Create peeps with partnerships
+        peep1 = peep_factory(id=1, role=Role.LEADER)
+        peep2 = peep_factory(id=2, role=Role.FOLLOWER)
+        peep3 = peep_factory(id=3, role=Role.LEADER)
+        peep4 = peep_factory(id=4, role=Role.FOLLOWER)
+
+        peeps = [peep1, peep2, peep3, peep4]
+
+        # Create events
+        event1 = event_factory(id=1)
+        event2 = event_factory(id=2)
+
+        # SEQUENCE A: Fulfills partnerships
+        # Event1: peep1 + peep2 (mutual partnership fulfilled)
+        # Event2: peep3 + peep4 (one-sided fulfilled)
+        event1_a = event_factory(id=1)
+        event1_a.add_attendee(peep1, Role.LEADER)
+        event1_a.add_attendee(peep2, Role.FOLLOWER)
+
+        event2_a = event_factory(id=2)
+        event2_a.add_attendee(peep3, Role.LEADER)
+        event2_a.add_attendee(peep4, Role.FOLLOWER)
+
+        seq_a = EventSequence([event1_a, event2_a], peeps)
+        seq_a.valid_events = [event1_a, event2_a]
+        seq_a.num_unique_attendees = 4       # All peeps attended
+        seq_a.priority_fulfilled = 5
+        seq_a.mutual_unique_fulfilled = 1    # Partnership 1<->2
+        seq_a.mutual_repeat_fulfilled = 0
+        seq_a.one_sided_fulfilled = 1        # Partnership 3->4
+        seq_a.normalized_utilization = 0.8
+        seq_a.total_attendees = 4
+
+        # SEQUENCE B: Doesn't fulfill partnerships
+        # Event1: peep1 + peep3 (breaks 1<->2 partnership)
+        # Event2: peep2 + peep4 (breaks 3->4 partnership)
+        event1_b = event_factory(id=1)
+        event1_b.add_attendee(peep1, Role.LEADER)
+        event1_b.add_attendee(peep3, Role.FOLLOWER)
+
+        event2_b = event_factory(id=2)
+        event2_b.add_attendee(peep2, Role.LEADER)
+        event2_b.add_attendee(peep4, Role.FOLLOWER)
+
+        seq_b = EventSequence([event1_b, event2_b], peeps)
+        seq_b.valid_events = [event1_b, event2_b]
+        seq_b.num_unique_attendees = 4       # All peeps attended (SAME)
+        seq_b.priority_fulfilled = 5         # (SAME)
+        seq_b.mutual_unique_fulfilled = 0    # No partnerships fulfilled
+        seq_b.mutual_repeat_fulfilled = 0    # (SAME)
+        seq_b.one_sided_fulfilled = 0        # No partnerships fulfilled
+        seq_b.normalized_utilization = 0.8   # (SAME)
+        seq_b.total_attendees = 4            # (SAME)
+
+        sequences = [seq_b, seq_a]  # Put B first to test ordering
+
+        # Define partnership requests: 1<->2 mutual, 3->4 one-sided
+        scheduler.partnership_requests = {
+            1: {2},
+            2: {1},
+            3: {4}
+        }
+
+        top = scheduler.get_top_sequences(sequences)
+
+        # Should select Sequence A (which fulfills partnerships)
+        assert len(top) == 1, f"Expected 1 top sequence, got {len(top)}"
+        assert top[0] == seq_a, "Should select sequence with fulfilled partnerships"
 
 
 class TestSchedulerDualRoleAssignment:

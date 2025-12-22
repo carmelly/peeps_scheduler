@@ -31,3 +31,6 @@ ABS_MAX_ROLE = max(config["max_role"] for config in CLASS_CONFIG.values())
 
 # Private data submodule root - can be overridden by environment
 PRIVATE_DATA_ROOT = os.getenv("PEEPS_DATA_PATH", "peeps_data")
+
+# Optional data files
+PARTNERSHIPS_FILE = "partnerships.json"
