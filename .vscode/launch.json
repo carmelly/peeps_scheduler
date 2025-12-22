@@ -30,9 +30,14 @@
 			"program": "${workspaceFolder}/main.py",
 			"args": ["run", "--load-from-csv", "--data-folder", "${input:dataDir}"],
 			"console": "integratedTerminal", 
-			// "env": {
-			// 	"DATA_FOLDER": "2026-01"
-			// }
+		},
+			{
+			"name": "Availability Report",
+			"type": "debugpy",
+			"request": "launch",
+			"program": "${workspaceFolder}/main.py",
+			"args": ["availability-report", "--data-folder", "${input:dataDir}"],
+			"console": "integratedTerminal", 
 		},
 		{
 			"name": "Apply Results",

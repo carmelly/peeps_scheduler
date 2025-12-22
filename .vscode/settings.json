@@ -26,5 +26,9 @@
 	],
 	"bookmarks.useWorkaroundForFormatters": true,
 	"markdown.preview.breaks": false,
-	"markdown-preview-github-styles.colorTheme": "auto"
+	"markdown-preview-github-styles.colorTheme": "auto",
+	"prettier.printWidth": 100,
+	"editor.defaultFormatter": "esbenp.prettier-vscode",
+	"editor.formatOnSave": true,
+	"editor.formatOnSaveMode": "modifications"
 }
