@@ -50,6 +50,7 @@ def main():
 	run_parser.add_argument('--load-from-csv', action='store_true', help='Load data from CSV')
 	run_parser.add_argument('--data-folder', type=str, default=default_data_folder, required=(default_data_folder is None), help='Path to data folder')
 	run_parser.add_argument('--max-events', type=int, default=7, help='Maximum number of events to schedule')
+	run_parser.add_argument('--cancellations-file', type=str, default='cancellations.json', help='Filename of cancellations JSON (default: cancellations.json)')
 
 	# Apply results command
 	apply_parser = subparsers.add_parser('apply-results', help='Apply actual attendance to update members CSV')
@@ -59,19 +60,20 @@ def main():
 	# Availability report command
 	availability_parser = subparsers.add_parser('availability-report', help='Generate availability report from responses')
 	availability_parser.add_argument('--data-folder', type=str, default=default_data_folder, required=(default_data_folder is None), help='Path to data folder')
+	availability_parser.add_argument('--cancellations-file', type=str, default='cancellations.json', help='Filename of cancellations JSON (default: cancellations.json)')
 
 	args = parser.parse_args()
 	utils.setup_logging(verbose=args.verbose)
 
 	# Routing logic
 	if args.command == 'run':
-		scheduler = Scheduler(data_folder=args.data_folder, max_events=args.max_events)
+		scheduler = Scheduler(data_folder=args.data_folder, max_events=args.max_events, cancellations_file=args.cancellations_file)
 		scheduler.run(generate_test_data=args.generate_tests, load_from_csv=args.load_from_csv)
 	elif args.command == 'apply-results':
 		apply_results(args.period_folder, args.results_file)
 	elif args.command == 'availability-report':
 		from availability_report import run_availability_report
-		run_availability_report(args.data_folder)
+		run_availability_report(args.data_folder, cancellations_file=args.cancellations_file)
 	else:
 		parser.print_help()
 		

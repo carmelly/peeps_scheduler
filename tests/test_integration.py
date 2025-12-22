@@ -183,8 +183,8 @@ class TestEndToEndWorkflows:
             print("Golden master integration test passed: CSV -> JSON -> Scheduler pipeline produces identical results")
 
 
-class TestCancelledEventsWorkflow:
-    """Test cancelled events integration with the scheduler.
+class TestCancellationsWorkflow:
+    """Test cancellations.json integration with the scheduler.
 
     Cancelled events should be:
     - Preserved in output.json (to maintain peep availability data)
@@ -192,13 +192,13 @@ class TestCancelledEventsWorkflow:
     """
 
     def test_scheduler_raises_error_for_unknown_cancelled_event(self):
-        """Test that scheduler raises error when cancelled_events.json specifies non-existent event.
+        """Test that scheduler raises error when cancellations.json specifies non-existent event.
 
         Configuration error: user mistakenly specified an event that doesn't exist in responses.
 
         Scenario:
         - Create 2 events: "Saturday March 1 - 5pm" and "Sunday March 2 - 5pm"
-        - Create cancelled_events.json cancelling non-existent: "Friday March 7 - 5pm"
+        - Create cancellations.json cancelling non-existent: "Friday March 7 - 5pm"
         - Run scheduler
         - Assert: Raises ValueError about cancelled event not found
         """
@@ -236,14 +236,15 @@ class TestCancelledEventsWorkflow:
             responses_path = period_path / "responses.csv"
             responses_path.write_text(responses_csv_content)
 
-            # Create cancelled_events.json with a NON-EXISTENT event
+            # Create cancellations.json with a NON-EXISTENT event
             cancelled_events_content = {
                 "cancelled_events": [
                     "Friday March 7 - 5pm to 6pm"  # Doesn't exist in responses
                 ],
+                "cancelled_availability": [],
                 "notes": "User mistakenly cancelled non-existent event"
             }
-            cancelled_path = period_path / "cancelled_events.json"
+            cancelled_path = period_path / "cancellations.json"
             with open(cancelled_path, 'w') as f:
                 json.dump(cancelled_events_content, f)
 
@@ -258,7 +259,7 @@ class TestCancelledEventsWorkflow:
 
         Scenario:
         - Create 2 events (60-min each, require 2 leaders + 2 followers)
-        - Cancel 1 event via cancelled_events.json
+        - Cancel 1 event via cancellations.json
         - Run scheduler
         - Assert: output.json contains both events (preserved)
         - Assert: results.json contains only 1 event (cancelled filtered)
@@ -302,14 +303,15 @@ class TestCancelledEventsWorkflow:
             responses_path = period_path / "responses.csv"
             responses_path.write_text(responses_csv_content)
 
-            # Create cancelled_events.json with one event cancelled
+            # Create cancellations.json with one event cancelled
             cancelled_events_content = {
                 "cancelled_events": [
                     "Sunday March 2 - 5pm"
                 ],
+                "cancelled_availability": [],
                 "notes": "Instructor unavailable - notified members on 2025-02-15"
             }
-            cancelled_path = period_path / "cancelled_events.json"
+            cancelled_path = period_path / "cancellations.json"
             with open(cancelled_path, 'w') as f:
                 json.dump(cancelled_events_content, f)
 
@@ -345,12 +347,12 @@ class TestCancelledEventsWorkflow:
             assert len(results_events) == 1, f"results.json should have 1 event (cancelled filtered), got {len(results_events)}"
             assert len(results_events[0]["attendees"]) == 6, "Non-cancelled event should have 6 attendees"
 
-    def test_scheduler_works_without_cancelled_events_json(self):
-        """Test backward compatibility when cancelled_events.json doesn't exist.
+    def test_scheduler_works_without_cancellations_json(self):
+        """Test scheduling when cancellations.json doesn't exist.
 
         Scenario:
         - Create 2 events
-        - NO cancelled_events.json file
+        - NO cancellations.json file
         - Run scheduler
         - Assert: Scheduler succeeds (backward compatible)
         - Assert: Both events are scheduled normally
@@ -389,14 +391,14 @@ class TestCancelledEventsWorkflow:
             responses_path = period_path / "responses.csv"
             responses_path.write_text(responses_csv_content)
 
-            # DO NOT create cancelled_events.json (test backward compatibility)
+            # DO NOT create cancellations.json
 
             # Run scheduler
             scheduler = Scheduler(data_folder=str(period_path), max_events=10, interactive=False)
             result = scheduler.run(load_from_csv=True)
 
             # Verify scheduler succeeded
-            assert result is not None, "Scheduler should succeed without cancelled_events.json (backward compatible)"
+            assert result is not None, "Scheduler should succeed without cancellations.json"
 
             # Verify results.json exists and contains both events
             results_json = period_path / "results.json"
@@ -406,7 +408,110 @@ class TestCancelledEventsWorkflow:
                 results_data = json.load(f)
 
             results_events = results_data.get("valid_events", [])
-            assert len(results_events) == 2, f"Without cancelled_events.json, both events should be scheduled. Got {len(results_events)}"
+            assert len(results_events) == 2, f"Without cancellations.json, both events should be scheduled. Got {len(results_events)}"
 
-            # Just verify we have 2 events scheduled (no filtering without cancelled_events.json)
-            assert len(results_events) == 2, "Both events should be scheduled without cancelled_events.json"
+            # Just verify we have 2 events scheduled (no filtering without cancellations.json)
+            assert len(results_events) == 2, "Both events should be scheduled without cancellations.json"
+
+    def test_scheduler_skips_cancelled_availability(self):
+        """Test that cancelled availability prevents scheduling for that event."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            period_path = Path(temp_dir) / "test_period"
+            period_path.mkdir()
+
+            # Members.csv: 5 leaders + 4 followers (enough to pass ABS_MIN_ROLE after cancellation)
+            members_csv_content = """id,Name,Display Name,Email Address,Role,Index,Priority,Total Attended,Active,Date Joined
+1,Alex Leader,Alex,alex@test.com,Leader,0,10,0,TRUE,2025-01-01
+2,Bob Leader,Bob,bob@test.com,Leader,1,9,0,TRUE,2025-01-01
+3,Casey Leader,Casey,casey@test.com,Leader,2,8,0,TRUE,2025-01-01
+4,Drew Leader,Drew,drew@test.com,Leader,3,7,0,TRUE,2025-01-01
+5,Eli Leader,Eli,eli@test.com,Leader,4,6,0,TRUE,2025-01-01
+6,Dana Follower,Dana,dana@test.com,Follower,5,5,0,TRUE,2025-01-01
+7,Eve Follower,Eve,eve@test.com,Follower,6,4,0,TRUE,2025-01-01
+8,Fran Follower,Fran,fran@test.com,Follower,7,3,0,TRUE,2025-01-01
+9,Gia Follower,Gia,gia@test.com,Follower,8,2,0,TRUE,2025-01-01"""
+
+            members_path = period_path / "members.csv"
+            members_path.write_text(members_csv_content)
+
+            # Responses.csv: one event, all members available
+            responses_csv_content = """Timestamp,Email Address,Name,Primary Role,Secondary Role,Max Sessions,Availability,Event Duration,Min Interval Days,Preferred gap between sessions?,Partnership Preference,Questions or Comments for Organizers,Questions or Comments for Leilani
+,,Event: Saturday March 1 - 5pm,,,,,60,,,,,
+2025-02-01 10:00:00,alex@test.com,Alex,Leader,I only want to be scheduled in my primary role,1,"Saturday March 1 - 5pm",,0,,,
+2025-02-01 10:00:00,bob@test.com,Bob,Leader,I only want to be scheduled in my primary role,1,"Saturday March 1 - 5pm",,0,,,
+2025-02-01 10:00:00,casey@test.com,Casey,Leader,I only want to be scheduled in my primary role,1,"Saturday March 1 - 5pm",,0,,,
+2025-02-01 10:00:00,drew@test.com,Drew,Leader,I only want to be scheduled in my primary role,1,"Saturday March 1 - 5pm",,0,,,
+2025-02-01 10:00:00,eli@test.com,Eli,Leader,I only want to be scheduled in my primary role,1,"Saturday March 1 - 5pm",,0,,,
+2025-02-01 10:00:00,dana@test.com,Dana,Follower,I only want to be scheduled in my primary role,1,"Saturday March 1 - 5pm",,0,,,
+2025-02-01 10:00:00,eve@test.com,Eve,Follower,I only want to be scheduled in my primary role,1,"Saturday March 1 - 5pm",,0,,,
+2025-02-01 10:00:00,fran@test.com,Fran,Follower,I only want to be scheduled in my primary role,1,"Saturday March 1 - 5pm",,0,,,
+2025-02-01 10:00:00,gia@test.com,Gia,Follower,I only want to be scheduled in my primary role,1,"Saturday March 1 - 5pm",,0,,,"""
+
+            responses_path = period_path / "responses.csv"
+            responses_path.write_text(responses_csv_content)
+
+            cancellations_content = {
+                "cancelled_events": [],
+                "cancelled_availability": [
+                    {
+                        "email": "alex@test.com",
+                        "events": ["Saturday March 1 - 5pm"]
+                    }
+                ],
+                "notes": "Alex is no longer available"
+            }
+            cancelled_path = period_path / "cancellations.json"
+            with open(cancelled_path, 'w') as f:
+                json.dump(cancellations_content, f)
+
+            scheduler = Scheduler(data_folder=str(period_path), max_events=10, interactive=False)
+            result = scheduler.run(load_from_csv=True)
+
+            assert result is not None, "Scheduler should succeed with cancelled availability"
+
+            results_json = period_path / "results.json"
+            with open(results_json, 'r') as f:
+                results_data = json.load(f)
+
+            attendees = results_data["valid_events"][0]["attendees"]
+            alternates = results_data["valid_events"][0]["alternates"]
+            assigned_ids = {a["id"] for a in attendees + alternates}
+            assert 1 not in assigned_ids, "Cancelled leader should not be scheduled"
+
+    def test_scheduler_raises_error_for_cancelled_availability_unknown_email(self):
+        """Test that cancellations.json fails for unknown email in cancelled availability."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            period_path = Path(temp_dir) / "test_period"
+            period_path.mkdir()
+
+            members_csv_content = """id,Name,Display Name,Email Address,Role,Index,Priority,Total Attended,Active,Date Joined
+1,Alice Leader,Alice,alice@test.com,Leader,0,4,0,TRUE,2025-01-01
+2,Eve Follower,Eve,eve@test.com,Follower,1,4,0,TRUE,2025-01-01"""
+
+            members_path = period_path / "members.csv"
+            members_path.write_text(members_csv_content)
+
+            responses_csv_content = """Timestamp,Email Address,Name,Primary Role,Secondary Role,Max Sessions,Availability,Event Duration,Min Interval Days,Preferred gap between sessions?,Partnership Preference,Questions or Comments for Organizers,Questions or Comments for Leilani
+,,Event: Saturday March 1 - 5pm,,,,,60,,,,,
+2025-02-01 10:00:00,alice@test.com,Alice,Leader,I only want to be scheduled in my primary role,1,"Saturday March 1 - 5pm",,0,,,
+2025-02-01 10:00:00,eve@test.com,Eve,Follower,I only want to be scheduled in my primary role,1,"Saturday March 1 - 5pm",,0,,,"""
+
+            responses_path = period_path / "responses.csv"
+            responses_path.write_text(responses_csv_content)
+
+            cancellations_content = {
+                "cancelled_events": [],
+                "cancelled_availability": [
+                    {
+                        "email": "unknown@test.com",
+                        "events": ["Saturday March 1 - 5pm"]
+                    }
+                ]
+            }
+            cancelled_path = period_path / "cancellations.json"
+            with open(cancelled_path, 'w') as f:
+                json.dump(cancellations_content, f)
+
+            scheduler = Scheduler(data_folder=str(period_path), max_events=10, interactive=False)
+            with pytest.raises(ValueError, match="unknown email|cancelled availability"):
+                scheduler.run(load_from_csv=True)

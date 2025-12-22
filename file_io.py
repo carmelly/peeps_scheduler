@@ -133,53 +133,6 @@ def save_json(data, filename):
 	with open(filename, "w") as f:
 		json.dump(data, f, indent=4, default=custom_serializer)
 
-def load_cancelled_events(data_folder, year=None):
-	"""
-	Load cancelled events from cancelled_events.json in the data folder.
-
-	Parses event date strings immediately and returns parsed event_ids.
-
-	Args:
-		data_folder: Path to the data folder containing cancelled_events.json
-		year: Year to use for parsing event dates (required for correct parsing)
-
-	Returns:
-		set: Set of parsed event_id strings in format "YYYY-MM-DD HH:MM".
-		     Returns empty set if file doesn't exist (backward compatible).
-
-	Raises:
-		Exception: If cancelled_events.json exists but contains invalid JSON
-		ValueError: If any event string cannot be parsed
-	"""
-	cancelled_file = os.path.join(data_folder, "cancelled_events.json")
-
-	# Return empty set if file doesn't exist (backward compatible)
-	if not os.path.exists(cancelled_file):
-		return set()
-
-	# File exists - parse it and raise errors if malformed
-	try:
-		with open(cancelled_file, "r") as f:
-			data = json.load(f)
-	except json.JSONDecodeError as e:
-		raise Exception(f"invalid cancelled_events.json: {e}") from e
-
-	# Handle missing or null 'cancelled_events' key
-	cancelled_event_strings = data.get("cancelled_events")
-	if cancelled_event_strings is None:
-		return set()
-
-	# Parse event strings immediately and return event_ids
-	parsed_event_ids = set()
-	for event_str in cancelled_event_strings:
-		try:
-			event_id, _, _ = parse_event_date(event_str, year=year)
-			parsed_event_ids.add(event_id)
-		except Exception as e:
-			raise ValueError(f"Cannot parse event string in cancelled_events.json: '{event_str}' - {e}") from e
-
-	return parsed_event_ids
-
 def load_data_from_json(filename):
 	"""Load peeps and events from an existing output JSON file."""
 	json_data = load_json(filename)
@@ -216,6 +169,87 @@ def convert_to_json(response_csv_path, peeps_csv_path, output_json_path, year=No
 		"peeps": [peep.to_dict() for peep in updated_peeps],
 	}
 	save_json(output, output_json_path)
+
+def load_cancellations(filename, year=None):
+    """
+    Load cancellations from a JSON file.
+
+    Parses event date strings immediately and returns parsed event_ids.
+
+    Args:
+        filename: Path to the cancellations JSON file
+        year: Optional year for parsing event dates
+
+    Returns:
+        tuple: (cancelled_event_ids set, cancelled_availability dict)
+    """
+    if not os.path.exists(filename):
+        return set(), {}
+
+    try:
+        with open(filename, "r") as f:
+            data = json.load(f)
+    except json.JSONDecodeError as e:
+        raise Exception(f"invalid cancellations file {filename}: {e}") from e
+
+    if not isinstance(data, dict):
+        raise ValueError("cancellations.json must contain a JSON object")
+
+    if "cancelled_events" not in data:
+        raise ValueError("cancellations.json missing 'cancelled_events'")
+    if "cancelled_availability" not in data:
+        raise ValueError("cancellations.json missing 'cancelled_availability'")
+
+    cancelled_event_strings = data.get("cancelled_events")
+    cancelled_availability_entries = data.get("cancelled_availability")
+
+    if not isinstance(cancelled_event_strings, list):
+        raise ValueError("cancellations.json 'cancelled_events' must be a list")
+    if not isinstance(cancelled_availability_entries, list):
+        raise ValueError("cancellations.json 'cancelled_availability' must be a list")
+
+    cancelled_event_ids = set()
+    for event_str in cancelled_event_strings:
+        if not isinstance(event_str, str) or not event_str.strip():
+            raise ValueError("cancelled_events entries must be non-empty strings")
+        try:
+            event_id, _, _ = parse_event_date(event_str, year=year)
+        except Exception as e:
+            raise ValueError(f"Cannot parse event string in cancellations.json: '{event_str}' - {e}") from e
+        cancelled_event_ids.add(event_id)
+
+    cancelled_availability = {}
+    for entry in cancelled_availability_entries:
+        if not isinstance(entry, dict):
+            raise ValueError("cancelled_availability entries must be objects")
+
+        email = normalize_email(entry.get("email", ""))
+        if not email:
+            raise ValueError("cancelled_availability entries require an email")
+
+        if email in cancelled_availability:
+            raise ValueError(f"Duplicate cancelled_availability entry for email: {email}")
+
+        event_strings = entry.get("events")
+        if not isinstance(event_strings, list):
+            raise ValueError(f"cancelled_availability events for {email} must be a list")
+
+        parsed_event_ids = set()
+        for event_str in event_strings:
+            if not isinstance(event_str, str) or not event_str.strip():
+                raise ValueError(f"cancelled_availability event for {email} must be a non-empty string")
+            try:
+                event_id, _, _ = parse_event_date(event_str, year=year)
+            except Exception as e:
+                raise ValueError(
+                    f"Cannot parse event string in cancellations.json for {email}: '{event_str}' - {e}"
+                ) from e
+            parsed_event_ids.add(event_id)
+
+        cancelled_availability[email] = parsed_event_ids
+
+    return cancelled_event_ids, cancelled_availability
+
 
 def extract_events(rows, year=None):
 	"""

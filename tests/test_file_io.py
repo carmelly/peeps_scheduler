@@ -17,7 +17,8 @@ from file_io import (
 	save_peeps_csv,
 	load_json,
 	save_json,
-	normalize_email
+	normalize_email, 
+	load_cancellations
 )
 from models import Event, EventSequence, Role, SwitchPreference, Peep
 
@@ -761,138 +762,172 @@ class TestEmailNormalization:
 		assert updated_peeps[0].responded is True
 
 
-class TestCancelledEvents:
-	"""Tests for loading and filtering cancelled events."""
+class TestCancellations:
+	"""Tests for loading cancellations.json (events + availability)."""
 
-	def test_load_cancelled_events_returns_parsed_event_ids(self, tmp_path):
-		"""Test loading valid cancelled_events.json returns parsed event_id strings.
+	def test_load_cancellations_returns_parsed_event_ids(self, tmp_path):
+		"""Test loading valid cancellations.json returns parsed event_id strings.
 
 		Event strings are parsed immediately and returned as event_ids in format:
 		"YYYY-MM-DD HH:MM"
 		"""
-		cancelled_file = tmp_path / "cancelled_events.json"
+		cancelled_file = tmp_path / "cancellations.json"
 		cancelled_file.write_text(json.dumps({
 			"cancelled_events": [
 				"Saturday March 1 - 5pm to 6pm",
 				"Friday March 7 - 5:30pm to 7pm"
 			],
+			"cancelled_availability": [
+				{
+					"email": "alex@example.com",
+					"events": [
+						"Saturday March 1 - 5pm to 6pm"
+					]
+				}
+			],
 			"notes": "Instructor unavailable"
 		}))
 
-		from file_io import load_cancelled_events
-		result = load_cancelled_events(str(tmp_path), year=2025)
+		cancelled_event_ids, cancelled_availability = load_cancellations(str(cancelled_file), year=2025)
 
-		assert isinstance(result, set)
-		assert len(result) == 2
+		assert isinstance(cancelled_event_ids, set)
+		assert len(cancelled_event_ids) == 2
 		# Event IDs should be parsed to format "YYYY-MM-DD HH:MM"
-		assert "2025-03-01 17:00" in result
-		assert "2025-03-07 17:30" in result
+		assert "2025-03-01 17:00" in cancelled_event_ids
+		assert "2025-03-07 17:30" in cancelled_event_ids
+		assert cancelled_availability["alex@example.com"] == {"2025-03-01 17:00"}
 
-	def test_load_cancelled_events_invalid_event_string(self, tmp_path):
+	def test_load_cancellations_invalid_event_string(self, tmp_path):
 		"""Test that unparseable event string raises exception with meaningful message.
 
 		Configuration error - user specified event string that cannot be parsed.
 		"""
-		cancelled_file = tmp_path / "cancelled_events.json"
+		cancelled_file = tmp_path / "cancellations.json"
 		cancelled_file.write_text(json.dumps({
 			"cancelled_events": [
 				"Invalid Event String"
 			],
+			"cancelled_availability": [],
 			"notes": "Bad format"
 		}))
 
-		from file_io import load_cancelled_events
 		with pytest.raises(ValueError, match="invalid event format|Cannot parse|unparseable"):
-			load_cancelled_events(str(tmp_path), year=2025)
+			load_cancellations(str(cancelled_file), year=2025)
 
-	def test_load_cancelled_events_requires_year_parameter(self, tmp_path):
+	def test_load_cancellations_requires_year_parameter(self, tmp_path):
 		"""Test that year parameter is required for proper event_id parsing."""
-		cancelled_file = tmp_path / "cancelled_events.json"
+		cancelled_file = tmp_path / "cancellations.json"
 		cancelled_file.write_text(json.dumps({
 			"cancelled_events": [
 				"Saturday March 1 - 5pm to 6pm"
+			],
+			"cancelled_availability": [
+				{
+					"email": "alex@example.com",
+					"events": ["Friday March 7 - 5:30pm to 7pm"]
+				}
 			]
 		}))
 
-		from file_io import load_cancelled_events
-		result = load_cancelled_events(str(tmp_path), year=2026)
+		cancelled_event_ids, cancelled_availability = load_cancellations(str(cancelled_file), year=2026)
 
 		# Event ID should use provided year
-		assert "2026-03-01 17:00" in result
-		assert "2025-03-01 17:00" not in result
+		assert "2026-03-01 17:00" in cancelled_event_ids
+		assert "2026-03-07 17:30" in cancelled_availability["alex@example.com"]
+		assert "2025-03-01 17:00" not in cancelled_event_ids
 
-	def test_load_cancelled_events_file_not_found(self, tmp_path):
+	def test_load_cancellations_file_not_found(self, tmp_path):
 		"""Test file doesn't exist returns empty set (backward compatible)."""
-		from file_io import load_cancelled_events
-		result = load_cancelled_events(str(tmp_path), year=2025)
+		cancelled_file = tmp_path / "cancellations.json"
+		cancelled_event_ids, cancelled_availability = load_cancellations(str(cancelled_file), year=2025)
 
-		assert isinstance(result, set)
-		assert len(result) == 0
+		assert isinstance(cancelled_event_ids, set)
+		assert len(cancelled_event_ids) == 0
+		assert cancelled_availability == {}
 
-	def test_load_cancelled_events_empty_array(self, tmp_path):
-		"""Test empty cancelled_events array returns empty set."""
-		cancelled_file = tmp_path / "cancelled_events.json"
+	def test_load_cancellations_empty_array(self, tmp_path):
+		"""Test empty cancellation arrays return empty structures."""
+		cancelled_file = tmp_path / "cancellations.json"
 		cancelled_file.write_text(json.dumps({
 			"cancelled_events": [],
+			"cancelled_availability": [],
 			"notes": "None cancelled"
 		}))
 
-		from file_io import load_cancelled_events
-		result = load_cancelled_events(str(tmp_path), year=2025)
+		cancelled_event_ids, cancelled_availability = load_cancellations(str(cancelled_file), year=2025)
 
-		assert isinstance(result, set)
-		assert len(result) == 0
+		assert isinstance(cancelled_event_ids, set)
+		assert len(cancelled_event_ids) == 0
+		assert cancelled_availability == {}
 
-	def test_load_cancelled_events_malformed_json(self, tmp_path):
+	def test_load_cancellations_malformed_json(self, tmp_path):
 		"""Test malformed JSON raises JSONDecodeError (configuration error)."""
-		cancelled_file = tmp_path / "cancelled_events.json"
+		cancelled_file = tmp_path / "cancellations.json"
 		cancelled_file.write_text("{invalid json")
 
 		# Malformed JSON is a configuration error - should raise
-		with pytest.raises(Exception, match="invalid cancelled_events.json"):
-			from file_io import load_cancelled_events
-			load_cancelled_events(str(tmp_path), year=2025)
+		with pytest.raises(Exception, match="invalid cancellations file"):
+			load_cancellations(str(cancelled_file), year=2025)
 
-	def test_load_cancelled_events_missing_key(self, tmp_path):
-		"""Test missing 'cancelled_events' key returns empty set."""
-		cancelled_file = tmp_path / "cancelled_events.json"
+	def test_load_cancellations_missing_key_raises(self, tmp_path):
+		"""Test missing required keys raises error."""
+		cancelled_file = tmp_path / "cancellations.json"
 		cancelled_file.write_text(json.dumps({
-			"notes": "Some notes but no cancelled_events key"
+			"cancelled_events": []
 		}))
 
-		from file_io import load_cancelled_events
-		result = load_cancelled_events(str(tmp_path), year=2025)
+		with pytest.raises(ValueError, match="cancelled_availability"):
+			load_cancellations(str(cancelled_file), year=2025)
 
-		assert isinstance(result, set)
-		assert len(result) == 0
-
-	def test_load_cancelled_events_null_value(self, tmp_path):
-		"""Test null cancelled_events value returns empty set."""
-		cancelled_file = tmp_path / "cancelled_events.json"
+	def test_load_cancellations_null_value_raises(self, tmp_path):
+		"""Test null cancelled_events value raises error."""
+		cancelled_file = tmp_path / "cancellations.json"
 		cancelled_file.write_text(json.dumps({
 			"cancelled_events": None,
-			"notes": "Null value"
+			"cancelled_availability": []
 		}))
 
-		from file_io import load_cancelled_events
-		result = load_cancelled_events(str(tmp_path), year=2025)
+		with pytest.raises(ValueError, match="cancelled_events"):
+			load_cancellations(str(cancelled_file), year=2025)
 
-		assert isinstance(result, set)
-		assert len(result) == 0
-
-	def test_load_cancelled_events_mixed_valid_and_invalid_strings(self, tmp_path):
+	def test_load_cancellations_mixed_valid_and_invalid_strings(self, tmp_path):
 		"""Test that even one invalid event string raises error (fail-fast)."""
-		cancelled_file = tmp_path / "cancelled_events.json"
+		cancelled_file = tmp_path / "cancellations.json"
 		cancelled_file.write_text(json.dumps({
 			"cancelled_events": [
 				"Saturday March 1 - 5pm to 6pm",  # Valid
 				"Not A Valid Event",               # Invalid
 				"Friday March 7 - 5:30pm to 7pm"  # Valid but not processed
+			],
+			"cancelled_availability": []
+		}))
+
+		with pytest.raises(ValueError):
+			load_cancellations(str(cancelled_file), year=2025)
+
+	def test_load_cancellations_missing_email_raises(self, tmp_path):
+		"""Test cancelled_availability entries require email."""
+		cancelled_file = tmp_path / "cancellations.json"
+		cancelled_file.write_text(json.dumps({
+			"cancelled_events": [],
+			"cancelled_availability": [
+				{"events": ["Saturday March 1 - 5pm to 6pm"]}
 			]
 		}))
 
-		from file_io import load_cancelled_events
-		with pytest.raises(ValueError):
-			load_cancelled_events(str(tmp_path), year=2025)
+		with pytest.raises(ValueError, match="email"):
+			load_cancellations(str(cancelled_file), year=2025)
 
+	def test_load_cancellations_invalid_events_list_raises(self, tmp_path):
+		"""Test cancelled_availability entries require events list."""
+		cancelled_file = tmp_path / "cancellations.json"
+		cancelled_file.write_text(json.dumps({
+			"cancelled_events": [],
+			"cancelled_availability": [
+				{"email": "alex@example.com", "events": "Saturday March 1 - 5pm to 6pm"}
+			]
+		}))
+
+		with pytest.raises(ValueError, match="events"):
+			load_cancellations(str(cancelled_file), year=2025)
 

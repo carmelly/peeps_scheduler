@@ -8,11 +8,12 @@ import utils
 from data_manager import get_data_manager
 
 class Scheduler:
-	def __init__(self, data_folder, max_events, interactive=True, sequence_choice=0):
+	def __init__(self, data_folder, max_events, interactive=True, sequence_choice=0, cancellations_file='cancellations.json'):
 		self.data_folder = data_folder
 		self.max_events = max_events
 		self.interactive = interactive
 		self.sequence_choice = sequence_choice  # Which tied sequence to auto-select in non-interactive mode
+		self.cancellations_file = cancellations_file
 		self.data_manager = get_data_manager()
 
 		# Ensure period directory exists
@@ -238,7 +239,7 @@ class Scheduler:
 		]
 
 	def run(self, generate_test_data=False, load_from_csv=False):
-		# Extract year from data_folder for cancelled events parsing
+		# Extract year from data_folder for cancellations parsing
 		# (e.g., "2026-01" -> 2026) - handle both absolute paths and folder names
 		from pathlib import Path
 		folder_name = Path(self.data_folder).name
@@ -260,22 +261,72 @@ class Scheduler:
 
 		peeps, events = file_io.load_data_from_json(str(self.output_json))
 
-		# Filter cancelled events after loading from output.json
-		cancelled_event_ids = file_io.load_cancelled_events(str(self.period_path), year=year)
+		event_date_to_id = {e.date.strftime("%Y-%m-%d %H:%M"): e.id for e in events}
+		event_id_to_date = {e.id: e.date.strftime("%Y-%m-%d %H:%M") for e in events}
+
+		cancellations_path = self.period_path / self.cancellations_file
+		cancelled_event_ids, cancelled_availability = file_io.load_cancellations(
+			str(cancellations_path),
+			year=year
+		)
+
 		if cancelled_event_ids:
-			# Validate that all cancelled events exist in loaded events
-			loaded_event_ids = {e.date.strftime("%Y-%m-%d %H:%M") for e in events}
+			loaded_event_ids = set(event_date_to_id.keys())
 			unknown_cancelled = cancelled_event_ids - loaded_event_ids
 			if unknown_cancelled:
 				event_word = "event" if len(unknown_cancelled) == 1 else "events"
 				raise ValueError(f"cancelled {event_word} not found in loaded events: {sorted(unknown_cancelled)}")
 
-			# Filter out cancelled events
 			original_count = len(events)
 			events = [e for e in events if e.date.strftime("%Y-%m-%d %H:%M") not in cancelled_event_ids]
 			excluded_count = original_count - len(events)
 			if excluded_count > 0:
 				logging.info(f"Excluding {excluded_count} cancelled event(s) from scheduling")
+
+		if cancelled_availability:
+			peeps_by_email = {file_io.normalize_email(p.email): p for p in peeps}
+			unknown_emails = set(cancelled_availability.keys()) - set(peeps_by_email.keys())
+			if unknown_emails:
+				raise ValueError(f"cancelled availability email(s) not found in members: {sorted(unknown_emails)}")
+
+			loaded_event_ids = set(event_date_to_id.keys())
+			unknown_events = set()
+			unavailable_events = {}
+			for email, event_ids in cancelled_availability.items():
+				unknown_for_email = event_ids - loaded_event_ids
+				if unknown_for_email:
+					unknown_events.update(unknown_for_email)
+
+				peep = peeps_by_email[email]
+				peep_event_ids = {
+					event_id_to_date[event_id]
+					for event_id in peep.availability
+					if event_id in event_id_to_date
+				}
+				missing = event_ids - peep_event_ids
+				if missing:
+					unavailable_events[email] = sorted(missing)
+
+			if unknown_events:
+				raise ValueError(
+					f"cancelled availability event(s) not found in loaded events: {sorted(unknown_events)}"
+				)
+			if unavailable_events:
+				raise ValueError(
+					f"cancelled availability includes events not in member availability: {unavailable_events}"
+				)
+
+			for email, event_ids in cancelled_availability.items():
+				peep = peeps_by_email[email]
+				cancelled_event_int_ids = {
+					event_date_to_id[event_id] for event_id in event_ids
+					if event_id in event_date_to_id
+				}
+				if cancelled_event_int_ids:
+					peep.availability = [
+						event_id for event_id in peep.availability
+						if event_id not in cancelled_event_int_ids
+					]
 		responders = [p for p in peeps if p.responded]
 		no_availability = [p.name for p in responders if not p.availability]
 		non_responders = [p.name for p in peeps if not p.responded and p.active]
