@@ -59,19 +59,17 @@ def apply_event_results( result_json, members_csv, responses_csv):
 		)
 		fresh_peeps.append(peep)
 
-	# Load response data to identify who responded
-	if not responses_csv:
-		raise ValueError("responses_csv parameter is required")
-	if not os.path.exists(responses_csv):
-		raise FileNotFoundError(f"Responses file not found: {responses_csv}")
-
+	# Process responses to mark who responded
 	responded_emails = set()
-	response_rows = load_csv(responses_csv)
-	for row in response_rows:
-		email = normalize_email(row.get('Email Address', ''))
-		if email:  # Only add non-empty emails
-			responded_emails.add(email)
-	logging.debug(f"Found {len(responded_emails)} unique respondents in {responses_csv}")
+	if responses_csv and os.path.exists(responses_csv):
+		response_rows = load_csv(responses_csv)
+		for row in response_rows:
+			email = normalize_email(row.get('Email Address', ''))
+			if email:  # Only add non-empty emails
+				responded_emails.add(email)
+		logging.debug(f"Found {len(responded_emails)} unique respondents in {responses_csv}")
+	else: 
+		logging.debug("No responses file provided or file does not exist; skipping response processing.")
 
 	# Set responded flag based on email match
 	for peep in fresh_peeps:

@@ -3,11 +3,15 @@ import argparse
 import logging
 import utils
 from scheduler import Scheduler
+from data_manager import get_data_manager
 
 def apply_results(period_folder, results_filename="actual_attendance.json"):
-	actual_attendance_file = os.path.join(period_folder, results_filename)
-	members_file = os.path.join(period_folder, "members.csv")
-	responses_file = os.path.join(period_folder, "responses.csv")
+
+	dm = get_data_manager()
+	period_path = dm.get_period_path(period_folder)
+	actual_attendance_file = os.path.join(period_path, results_filename)
+	members_file = os.path.join(period_path, "members.csv")
+	responses_file = os.path.join(period_path, "responses.csv")
 
 	# Check that required files exist
 	if not os.path.exists(actual_attendance_file):
