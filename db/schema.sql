@@ -269,10 +269,10 @@ CREATE TABLE schedule_periods (
     period_name TEXT UNIQUE NOT NULL,    -- "2025-09", "2024-10", etc.
     display_name TEXT,                   -- "May 2025"
     start_date DATE NOT NULL,            -- Period start (when available)
-    end_date DATE NOT NULL,              -- Period end (when available) 
-    status TEXT DEFAULT 'draft',         -- draft, active, completed
+    end_date DATE NOT NULL,              -- Period end (when available)
+    status TEXT DEFAULT 'draft',         -- draft, scheduled, completed
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 
     CHECK(start_date <= end_date),
-    CHECK(status IN ('draft', 'active', 'completed'))
+    CHECK(status IN ('draft', 'scheduled', 'completed'))
 );

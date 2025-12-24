@@ -395,12 +395,15 @@ class PeriodImporter:
         # Update period status based on attendance existence
         self.update_period_status(num_attendance, num_assignments)
 
-        # Mark events that were scheduled but didn't occur as cancelled
-        # IMPORTANT: Must run AFTER update_events_from_attendance() to avoid marking
-        # events as cancelled when they're actually in attendance data
-        num_cancelled = self.mark_cancelled_events()
-        if num_cancelled > 0:
-            self.logger.info(f"Marked {num_cancelled} events as cancelled")
+        # Only mark events as cancelled if we have attendance data to compare against
+        # If there's no attendance data, it's a future period and we can't determine which events were cancelled
+        if num_attendance > 0:
+            # Mark events that were scheduled but didn't occur as cancelled
+            # IMPORTANT: Must run AFTER update_events_from_attendance() to avoid marking
+            # events as cancelled when they're actually in attendance data
+            num_cancelled = self.mark_cancelled_events()
+            if num_cancelled > 0:
+                self.logger.info(f"Marked {num_cancelled} events as cancelled")
 
         # Only derive changes if there's attendance data (skip for future periods)
         if num_attendance > 0:
@@ -1075,7 +1078,7 @@ class PeriodImporter:
         if num_attendance > 0:
             new_status = 'completed'
         elif num_assignments > 0:
-            new_status = 'active'  # Has schedule but not yet occurred
+            new_status = 'scheduled'  # Has schedule but not yet occurred
         else:
             new_status = 'draft'
 

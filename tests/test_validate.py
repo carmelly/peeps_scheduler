@@ -69,7 +69,7 @@ def test_db_with_period():
     cursor.execute("""
         INSERT INTO schedule_periods (id, period_name, display_name, start_date, end_date, status)
         VALUES (?, ?, ?, ?, ?, ?)
-    """, (1, '2025-02', 'Feb 2025', '2025-02-01', '2025-02-28', 'active'))
+    """, (1, '2025-02', 'Feb 2025', '2025-02-01', '2025-02-28', 'scheduled'))
 
     conn.commit()
 

@@ -12,7 +12,7 @@ import sys
 import json
 import csv as csv_module
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -3040,9 +3040,9 @@ class TestDatabaseImportBugFixes:
         """, (importer.period_id,))
         status = cursor.fetchone()[0]
 
-        # Expected: 'active' (has results.json but no attendance)
-        assert status == 'active', \
-            f"Period status should be 'active' (has schedule but no attendance data), got '{status}'"
+        # Expected: 'scheduled' (has results.json but no attendance)
+        assert status == 'scheduled', \
+            f"Period status should be 'scheduled' (has schedule but no attendance data), got '{status}'"
 
     def test_fix_snapshots_only_created_when_attendance_exists(self, test_db, test_period_data):
         """
@@ -3303,3 +3303,1230 @@ class TestDatabaseImportBugFixes:
         # Event 3: Completed (in both results and attendance)
         assert events[2][1] == 'completed', \
             f"Event 3 (2025-02-21) should be 'completed', got '{events[2][1]}'"
+
+@pytest.mark.skip(reason="Working on blocking bug fixes first")
+class TestCancelledEventsImport:
+    """Tests for importing cancelled events from cancellations.json."""
+
+    def test_import_cancelled_events_from_json(self, test_db, test_period_data):
+        """Test loading cancellations.json and marking matching events as cancelled."""
+        period_data = next(test_period_data(period_name='2025-02', num_members=10, num_events=3))
+
+        cursor = test_db.cursor()
+
+        # Import members and period first
+        collector = MemberCollector(processed_data_path=Path(period_data['temp_dir']), verbose=False)
+        collector.scan_all_periods()
+        collector.insert_members_to_db(cursor)
+
+        importer = PeriodImporter(
+            period_name='2025-02',
+            processed_data_path=Path(period_data['temp_dir']),
+            peep_id_mapping=collector.peep_id_mapping,
+            cursor=cursor,
+            verbose=False,
+            skip_snapshots=True
+        )
+        importer.import_period()
+        period_id = importer.period_id
+
+        # Get the first event's datetime string for cancellation
+        cursor.execute("""
+            SELECT event_datetime FROM events
+            WHERE period_id = ?
+            ORDER BY event_datetime
+            LIMIT 1
+        """, (period_id,))
+        first_event = cursor.fetchone()
+        event_datetime = first_event[0]
+
+        # Parse datetime to create cancellation string
+        # Expected format: "Friday February 7th - 5pm to 7pm"
+        dt = datetime.fromisoformat(event_datetime)
+        day_name = dt.strftime('%A')
+        month_name = dt.strftime('%B')
+        day = dt.day
+        # Convert day to ordinal (1->1st, 2->2nd, 3->3rd, 21->21st, etc.)
+        if day in (1, 21, 31):
+            day_suffix = 'st'
+        elif day in (2, 22):
+            day_suffix = 'nd'
+        elif day in (3, 23):
+            day_suffix = 'rd'
+        else:
+            day_suffix = 'th'
+        day_str = f"{day}{day_suffix}"
+        hour = dt.hour
+        hour_12 = dt.strftime('%I').lstrip('0')
+        am_pm = dt.strftime('%p').lower()
+        # Duration is 120 minutes (2 hours)
+        end_hour = (dt + timedelta(hours=2)).strftime('%I').lstrip('0')
+        end_am_pm = (dt + timedelta(hours=2)).strftime('%p').lower()
+
+        event_string = f"{day_name} {month_name} {day_str} - {hour_12}{am_pm} to {end_hour}{end_am_pm}"
+
+        # Create cancellations.json
+        cancellations_data = {
+            "cancelled_events": [event_string],
+            "cancelled_availability": []
+        }
+        cancellations_path = Path(period_data['period_dir']) / 'cancellations.json'
+        with open(cancellations_path, 'w') as f:
+            json.dump(cancellations_data, f)
+
+        # Import cancelled events
+        from db.import_period_data import import_cancelled_events
+        import_cancelled_events(cancellations_path, period_id, cursor)
+
+        # Verify first event is marked as cancelled
+        cursor.execute("""
+            SELECT status FROM events
+            WHERE period_id = ? AND event_datetime = ?
+        """, (period_id, event_datetime))
+        result = cursor.fetchone()
+        assert result is not None, "Event should exist"
+        assert result[0] == 'cancelled', f"Event should be cancelled, got {result[0]}"
+
+    def test_cancelled_events_backward_compatible_missing_file(self, test_db, test_period_data):
+        """Test that missing cancellations.json returns empty set (backward compatible)."""
+        period_data = next(test_period_data(period_name='2025-02', num_members=10, num_events=3))
+
+        cursor = test_db.cursor()
+
+        # Import members and period
+        collector = MemberCollector(processed_data_path=Path(period_data['temp_dir']), verbose=False)
+        collector.scan_all_periods()
+        collector.insert_members_to_db(cursor)
+
+        importer = PeriodImporter(
+            period_name='2025-02',
+            processed_data_path=Path(period_data['temp_dir']),
+            peep_id_mapping=collector.peep_id_mapping,
+            cursor=cursor,
+            verbose=False,
+            skip_snapshots=True
+        )
+        importer.import_period()
+        period_id = importer.period_id
+
+        # Try to import with missing file (should not crash)
+        from db.import_period_data import import_cancelled_events
+        missing_path = Path(period_data['period_dir']) / 'nonexistent.json'
+
+        # Should handle gracefully
+        import_cancelled_events(missing_path, period_id, cursor)
+
+        # Verify all events are still proposed (not cancelled)
+        cursor.execute("""
+            SELECT COUNT(*) FROM events
+            WHERE period_id = ? AND status = 'cancelled'
+        """, (period_id,))
+        assert cursor.fetchone()[0] == 0, "No events should be cancelled when file is missing"
+
+    def test_cancelled_events_empty_list_handling(self, test_db, test_period_data):
+        """Test that empty cancelled_events list doesn't cancel any events."""
+        period_data = next(test_period_data(period_name='2025-02', num_members=10, num_events=3))
+
+        cursor = test_db.cursor()
+
+        # Import members and period
+        collector = MemberCollector(processed_data_path=Path(period_data['temp_dir']), verbose=False)
+        collector.scan_all_periods()
+        collector.insert_members_to_db(cursor)
+
+        importer = PeriodImporter(
+            period_name='2025-02',
+            processed_data_path=Path(period_data['temp_dir']),
+            peep_id_mapping=collector.peep_id_mapping,
+            cursor=cursor,
+            verbose=False,
+            skip_snapshots=True
+        )
+        importer.import_period()
+        period_id = importer.period_id
+
+        # Create cancellations.json with empty list
+        cancellations_data = {
+            "cancelled_events": [],
+            "cancelled_availability": []
+        }
+        cancellations_path = Path(period_data['period_dir']) / 'cancellations.json'
+        with open(cancellations_path, 'w') as f:
+            json.dump(cancellations_data, f)
+
+        # Import cancelled events
+        from db.import_period_data import import_cancelled_events
+        import_cancelled_events(cancellations_path, period_id, cursor)
+
+        # Verify no events are cancelled
+        cursor.execute("""
+            SELECT COUNT(*) FROM events
+            WHERE period_id = ? AND status = 'cancelled'
+        """, (period_id,))
+        assert cursor.fetchone()[0] == 0, "No events should be cancelled with empty list"
+
+    def test_cancelled_events_validates_invalid_event_strings(self, test_db, test_period_data):
+        """Test that invalid event strings raise ValueError."""
+        period_data = next(test_period_data(period_name='2025-02', num_members=10, num_events=3))
+
+        cursor = test_db.cursor()
+
+        # Import members and period
+        collector = MemberCollector(processed_data_path=Path(period_data['temp_dir']), verbose=False)
+        collector.scan_all_periods()
+        collector.insert_members_to_db(cursor)
+
+        importer = PeriodImporter(
+            period_name='2025-02',
+            processed_data_path=Path(period_data['temp_dir']),
+            peep_id_mapping=collector.peep_id_mapping,
+            cursor=cursor,
+            verbose=False,
+            skip_snapshots=True
+        )
+        importer.import_period()
+        period_id = importer.period_id
+
+        # Create cancellations.json with invalid event string
+        cancellations_data = {
+            "cancelled_events": ["Invalid Event String That Doesn't Match Anything"],
+            "cancelled_availability": []
+        }
+        cancellations_path = Path(period_data['period_dir']) / 'cancellations.json'
+        with open(cancellations_path, 'w') as f:
+            json.dump(cancellations_data, f)
+
+        # Import should raise ValueError
+        from db.import_period_data import import_cancelled_events
+        with pytest.raises(ValueError, match="(?s).*cancelled_events.*does not match"):
+            import_cancelled_events(cancellations_path, period_id, cursor)
+
+
+@pytest.mark.skip(reason="Working on blocking bug fixes first")
+class TestCancelledAvailabilityImport:
+    """Tests for importing cancelled availability from cancellations.json."""
+
+    def test_cancelled_availability_removes_event_availability_records(self, test_db, test_period_data):
+        """Test that cancelled_availability removes matching event_availability records."""
+        period_data = next(test_period_data(period_name='2025-02', num_members=10, num_events=3))
+
+        cursor = test_db.cursor()
+
+        # Import members and period
+        collector = MemberCollector(processed_data_path=Path(period_data['temp_dir']), verbose=False)
+        collector.scan_all_periods()
+        collector.insert_members_to_db(cursor)
+
+        importer = PeriodImporter(
+            period_name='2025-02',
+            processed_data_path=Path(period_data['temp_dir']),
+            peep_id_mapping=collector.peep_id_mapping,
+            cursor=cursor,
+            verbose=False,
+            skip_snapshots=True
+        )
+        importer.import_period()
+        period_id = importer.period_id
+
+        # Get a response and event to work with
+        cursor.execute("""
+            SELECT id FROM responses
+            WHERE period_id = ?
+            LIMIT 1
+        """, (period_id,))
+        response_id = cursor.fetchone()[0]
+
+        cursor.execute("""
+            SELECT id, event_datetime FROM events
+            WHERE period_id = ?
+            ORDER BY event_datetime
+            LIMIT 1
+        """, (period_id,))
+        event_id, event_datetime = cursor.fetchone()
+
+        # Verify event_availability exists
+        cursor.execute("""
+            SELECT COUNT(*) FROM event_availability
+            WHERE response_id = ? AND event_id = ?
+        """, (response_id, event_id))
+        assert cursor.fetchone()[0] > 0, "Event availability should exist before cancellation"
+
+        # Get peep email and event string for cancellation
+        cursor.execute("SELECT peep_id FROM responses WHERE id = ?", (response_id,))
+        peep_id = cursor.fetchone()[0]
+
+        cursor.execute("SELECT email FROM peeps WHERE id = ?", (peep_id,))
+        peep_email = cursor.fetchone()[0]
+
+        # Create event string
+        dt = datetime.fromisoformat(event_datetime)
+        day_name = dt.strftime('%A')
+        month_name = dt.strftime('%B')
+        day = dt.day
+        if day in (1, 21, 31):
+            day_suffix = 'st'
+        elif day in (2, 22):
+            day_suffix = 'nd'
+        elif day in (3, 23):
+            day_suffix = 'rd'
+        else:
+            day_suffix = 'th'
+        day_str = f"{day}{day_suffix}"
+        hour = dt.hour
+        hour_12 = dt.strftime('%I').lstrip('0')
+        am_pm = dt.strftime('%p').lower()
+        end_hour = (dt + timedelta(hours=2)).strftime('%I').lstrip('0')
+        end_am_pm = (dt + timedelta(hours=2)).strftime('%p').lower()
+
+        event_string = f"{day_name} {month_name} {day_str} - {hour_12}{am_pm} to {end_hour}{end_am_pm}"
+
+        # Create cancellations.json
+        cancellations_data = {
+            "cancelled_events": [],
+            "cancelled_availability": [
+                {
+                    "email": peep_email,
+                    "events": [event_string]
+                }
+            ]
+        }
+        cancellations_path = Path(period_data['period_dir']) / 'cancellations.json'
+        with open(cancellations_path, 'w') as f:
+            json.dump(cancellations_data, f)
+
+        # Import cancelled availability
+        from db.import_period_data import import_cancelled_availability
+        import_cancelled_availability(cancellations_path, period_id, cursor, collector.peep_id_mapping)
+
+        # Verify event_availability record is removed
+        cursor.execute("""
+            SELECT COUNT(*) FROM event_availability
+            WHERE response_id = ? AND event_id = ?
+        """, (response_id, event_id))
+        assert cursor.fetchone()[0] == 0, "Event availability record should be deleted"
+
+    def test_cancelled_availability_handles_duplicate_emails(self, test_db, test_period_data):
+        """Test that duplicate email entries are merged without data loss."""
+        period_data = next(test_period_data(period_name='2025-02', num_members=10, num_events=3))
+
+        cursor = test_db.cursor()
+
+        # Import members and period
+        collector = MemberCollector(processed_data_path=Path(period_data['temp_dir']), verbose=False)
+        collector.scan_all_periods()
+        collector.insert_members_to_db(cursor)
+
+        importer = PeriodImporter(
+            period_name='2025-02',
+            processed_data_path=Path(period_data['temp_dir']),
+            peep_id_mapping=collector.peep_id_mapping,
+            cursor=cursor,
+            verbose=False,
+            skip_snapshots=True
+        )
+        importer.import_period()
+        period_id = importer.period_id
+
+        # Get peep email and events
+        cursor.execute("""
+            SELECT peep_id FROM responses
+            WHERE period_id = ?
+            LIMIT 1
+        """, (period_id,))
+        peep_id = cursor.fetchone()[0]
+
+        cursor.execute("SELECT email FROM peeps WHERE id = ?", (peep_id,))
+        peep_email = cursor.fetchone()[0]
+
+        # Get two events
+        cursor.execute("""
+            SELECT id, event_datetime FROM events
+            WHERE period_id = ?
+            ORDER BY event_datetime
+            LIMIT 2
+        """, (period_id,))
+        events = cursor.fetchall()
+
+        event_strings = []
+        for event_id, event_datetime in events:
+            dt = datetime.fromisoformat(event_datetime)
+            day_name = dt.strftime('%A')
+            month_name = dt.strftime('%B')
+            day = dt.day
+            if day in (1, 21, 31):
+                day_suffix = 'st'
+            elif day in (2, 22):
+                day_suffix = 'nd'
+            elif day in (3, 23):
+                day_suffix = 'rd'
+            else:
+                day_suffix = 'th'
+            day_str = f"{day}{day_suffix}"
+            hour = dt.hour
+            hour_12 = dt.strftime('%I').lstrip('0')
+            am_pm = dt.strftime('%p').lower()
+            end_hour = (dt + timedelta(hours=2)).strftime('%I').lstrip('0')
+            end_am_pm = (dt + timedelta(hours=2)).strftime('%p').lower()
+
+            event_strings.append(f"{day_name} {month_name} {day_str} - {hour_12}{am_pm} to {end_hour}{end_am_pm}")
+
+        # Create cancellations.json with duplicate emails (one per event)
+        cancellations_data = {
+            "cancelled_events": [],
+            "cancelled_availability": [
+                {
+                    "email": peep_email,
+                    "events": [event_strings[0]]
+                },
+                {
+                    "email": peep_email,
+                    "events": [event_strings[1]]
+                }
+            ]
+        }
+        cancellations_path = Path(period_data['period_dir']) / 'cancellations.json'
+        with open(cancellations_path, 'w') as f:
+            json.dump(cancellations_data, f)
+
+        # Import cancelled availability
+        from db.import_period_data import import_cancelled_availability
+        import_cancelled_availability(cancellations_path, period_id, cursor, collector.peep_id_mapping)
+
+        # Verify both event_availability records are removed (merged handling)
+        for event_id, _ in events:
+            cursor.execute("""
+                SELECT response_id FROM responses
+                WHERE peep_id = ? AND period_id = ?
+                LIMIT 1
+            """, (peep_id, period_id))
+            response_id = cursor.fetchone()[0]
+
+            cursor.execute("""
+                SELECT COUNT(*) FROM event_availability
+                WHERE response_id = ? AND event_id = ?
+            """, (response_id, event_id))
+            assert cursor.fetchone()[0] == 0, f"Event availability should be removed for both duplicate emails"
+
+    def test_cancelled_availability_backward_compatible_missing_section(self, test_db, test_period_data):
+        """Test that missing cancelled_availability section returns empty dict."""
+        period_data = next(test_period_data(period_name='2025-02', num_members=10, num_events=3))
+
+        cursor = test_db.cursor()
+
+        # Import members and period
+        collector = MemberCollector(processed_data_path=Path(period_data['temp_dir']), verbose=False)
+        collector.scan_all_periods()
+        collector.insert_members_to_db(cursor)
+
+        importer = PeriodImporter(
+            period_name='2025-02',
+            processed_data_path=Path(period_data['temp_dir']),
+            peep_id_mapping=collector.peep_id_mapping,
+            cursor=cursor,
+            verbose=False,
+            skip_snapshots=True
+        )
+        importer.import_period()
+        period_id = importer.period_id
+
+        # Create cancellations.json without cancelled_availability section
+        cancellations_data = {
+            "cancelled_events": []
+        }
+        cancellations_path = Path(period_data['period_dir']) / 'cancellations.json'
+        with open(cancellations_path, 'w') as f:
+            json.dump(cancellations_data, f)
+
+        # Import should handle missing section gracefully
+        from db.import_period_data import import_cancelled_availability
+        import_cancelled_availability(cancellations_path, period_id, cursor, collector.peep_id_mapping)
+
+        # Verify no event_availability records are removed
+        cursor.execute("""
+            SELECT COUNT(*) FROM event_availability
+            WHERE id > 0
+        """)
+        original_count = cursor.fetchone()[0]
+
+        # Should be unchanged since no cancellations were imported
+        assert original_count > 0, "Should have event_availability records"
+
+    def test_cancelled_availability_empty_list_handling(self, test_db, test_period_data):
+        """Test that empty cancelled_availability list doesn't remove anything."""
+        period_data = next(test_period_data(period_name='2025-02', num_members=10, num_events=3))
+
+        cursor = test_db.cursor()
+
+        # Import members and period
+        collector = MemberCollector(processed_data_path=Path(period_data['temp_dir']), verbose=False)
+        collector.scan_all_periods()
+        collector.insert_members_to_db(cursor)
+
+        importer = PeriodImporter(
+            period_name='2025-02',
+            processed_data_path=Path(period_data['temp_dir']),
+            peep_id_mapping=collector.peep_id_mapping,
+            cursor=cursor,
+            verbose=False,
+            skip_snapshots=True
+        )
+        importer.import_period()
+        period_id = importer.period_id
+
+        # Get initial count
+        cursor.execute("SELECT COUNT(*) FROM event_availability")
+        initial_count = cursor.fetchone()[0]
+
+        # Create cancellations.json with empty list
+        cancellations_data = {
+            "cancelled_events": [],
+            "cancelled_availability": []
+        }
+        cancellations_path = Path(period_data['period_dir']) / 'cancellations.json'
+        with open(cancellations_path, 'w') as f:
+            json.dump(cancellations_data, f)
+
+        # Import cancelled availability
+        from db.import_period_data import import_cancelled_availability
+        import_cancelled_availability(cancellations_path, period_id, cursor, collector.peep_id_mapping)
+
+        # Verify count is unchanged
+        cursor.execute("SELECT COUNT(*) FROM event_availability")
+        final_count = cursor.fetchone()[0]
+        assert final_count == initial_count, "Event availability records should be unchanged with empty list"
+
+
+@pytest.mark.skip(reason="Working on blocking bug fixes first")
+class TestPartnershipRequestsImport:
+    """Tests for importing partnership requests from partnerships.json."""
+
+    def test_import_partnerships_and_store_in_database(self, test_db, test_period_data):
+        """Test loading partnerships.json and storing in partnership_requests table."""
+        period_data = next(test_period_data(period_name='2025-02', num_members=10, num_events=3))
+
+        cursor = test_db.cursor()
+
+        # Import members and period
+        collector = MemberCollector(processed_data_path=Path(period_data['temp_dir']), verbose=False)
+        collector.scan_all_periods()
+        collector.insert_members_to_db(cursor)
+
+        importer = PeriodImporter(
+            period_name='2025-02',
+            processed_data_path=Path(period_data['temp_dir']),
+            peep_id_mapping=collector.peep_id_mapping,
+            cursor=cursor,
+            verbose=False,
+            skip_snapshots=True
+        )
+        importer.import_period()
+        period_id = importer.period_id
+
+        # Create partnerships.json with test data
+        partnerships_data = {
+            "1": [2],
+            "2": [1],
+            "3": [4, 5]
+        }
+        partnerships_path = Path(period_data['period_dir']) / 'partnerships.json'
+        with open(partnerships_path, 'w') as f:
+            json.dump(partnerships_data, f)
+
+        # Import partnerships
+        from db.import_period_data import import_partnerships
+        import_partnerships(partnerships_path, period_id, cursor)
+
+        # Verify partnerships are stored
+        cursor.execute("""
+            SELECT requester_peep_id, partner_peep_id FROM partnership_requests
+            WHERE period_id = ?
+            ORDER BY requester_peep_id, partner_peep_id
+        """, (period_id,))
+        results = cursor.fetchall()
+
+        # Should have 4 records: (1,2), (2,1), (3,4), (3,5)
+        assert len(results) == 4, f"Should have 4 partnership records, got {len(results)}"
+
+        # Verify specific partnerships
+        assert (1, 2) in results, "Should have partnership request from 1 to 2"
+        assert (2, 1) in results, "Should have partnership request from 2 to 1"
+        assert (3, 4) in results, "Should have partnership request from 3 to 4"
+        assert (3, 5) in results, "Should have partnership request from 3 to 5"
+
+    def test_partnerships_wrapped_format_support(self, test_db, test_period_data):
+        """Test that partnerships.json with wrapped 'partnerships' key is supported."""
+        period_data = next(test_period_data(period_name='2025-02', num_members=10, num_events=3))
+
+        cursor = test_db.cursor()
+
+        # Import members and period
+        collector = MemberCollector(processed_data_path=Path(period_data['temp_dir']), verbose=False)
+        collector.scan_all_periods()
+        collector.insert_members_to_db(cursor)
+
+        importer = PeriodImporter(
+            period_name='2025-02',
+            processed_data_path=Path(period_data['temp_dir']),
+            peep_id_mapping=collector.peep_id_mapping,
+            cursor=cursor,
+            verbose=False,
+            skip_snapshots=True
+        )
+        importer.import_period()
+        period_id = importer.period_id
+
+        # Create partnerships.json with wrapped format
+        partnerships_data = {
+            "partnerships": {
+                "1": [2],
+                "2": [1]
+            }
+        }
+        partnerships_path = Path(period_data['period_dir']) / 'partnerships.json'
+        with open(partnerships_path, 'w') as f:
+            json.dump(partnerships_data, f)
+
+        # Import partnerships
+        from db.import_period_data import import_partnerships
+        import_partnerships(partnerships_path, period_id, cursor)
+
+        # Verify partnerships are stored
+        cursor.execute("""
+            SELECT COUNT(*) FROM partnership_requests
+            WHERE period_id = ?
+        """, (period_id,))
+        count = cursor.fetchone()[0]
+        assert count == 2, f"Should have 2 partnership records from wrapped format, got {count}"
+
+    def test_partnerships_backward_compatible_missing_file(self, test_db, test_period_data):
+        """Test that missing partnerships.json returns empty dict (backward compatible)."""
+        period_data = next(test_period_data(period_name='2025-02', num_members=10, num_events=3))
+
+        cursor = test_db.cursor()
+
+        # Import members and period
+        collector = MemberCollector(processed_data_path=Path(period_data['temp_dir']), verbose=False)
+        collector.scan_all_periods()
+        collector.insert_members_to_db(cursor)
+
+        importer = PeriodImporter(
+            period_name='2025-02',
+            processed_data_path=Path(period_data['temp_dir']),
+            peep_id_mapping=collector.peep_id_mapping,
+            cursor=cursor,
+            verbose=False,
+            skip_snapshots=True
+        )
+        importer.import_period()
+        period_id = importer.period_id
+
+        # Try to import with missing file (should not crash)
+        from db.import_period_data import import_partnerships
+        missing_path = Path(period_data['period_dir']) / 'nonexistent.json'
+
+        # Should handle gracefully
+        import_partnerships(missing_path, period_id, cursor)
+
+        # Verify no partnerships were created
+        cursor.execute("""
+            SELECT COUNT(*) FROM partnership_requests
+            WHERE period_id = ?
+        """, (period_id,))
+        assert cursor.fetchone()[0] == 0, "No partnerships should be created when file is missing"
+
+    def test_partnerships_validates_invalid_member_ids(self, test_db, test_period_data):
+        """Test that invalid member IDs raise ValueError with clear error message."""
+        period_data = next(test_period_data(period_name='2025-02', num_members=5, num_events=3))
+
+        cursor = test_db.cursor()
+
+        # Import members and period
+        collector = MemberCollector(processed_data_path=Path(period_data['temp_dir']), verbose=False)
+        collector.scan_all_periods()
+        collector.insert_members_to_db(cursor)
+
+        importer = PeriodImporter(
+            period_name='2025-02',
+            processed_data_path=Path(period_data['temp_dir']),
+            peep_id_mapping=collector.peep_id_mapping,
+            cursor=cursor,
+            verbose=False,
+            skip_snapshots=True
+        )
+        importer.import_period()
+        period_id = importer.period_id
+
+        # Create partnerships.json with invalid member ID (999)
+        partnerships_data = {
+            "1": [999]  # 999 doesn't exist in peeps table
+        }
+        partnerships_path = Path(period_data['period_dir']) / 'partnerships.json'
+        with open(partnerships_path, 'w') as f:
+            json.dump(partnerships_data, f)
+
+        # Import should raise ValueError
+        from db.import_period_data import import_partnerships
+        with pytest.raises(ValueError, match="(?s).*(member|peep).*999.*does not exist.*peeps"):
+            import_partnerships(partnerships_path, period_id, cursor)
+
+    def test_partnerships_validates_requester_member_ids(self, test_db, test_period_data):
+        """Test that invalid requester IDs raise ValueError."""
+        period_data = next(test_period_data(period_name='2025-02', num_members=5, num_events=3))
+
+        cursor = test_db.cursor()
+
+        # Import members and period
+        collector = MemberCollector(processed_data_path=Path(period_data['temp_dir']), verbose=False)
+        collector.scan_all_periods()
+        collector.insert_members_to_db(cursor)
+
+        importer = PeriodImporter(
+            period_name='2025-02',
+            processed_data_path=Path(period_data['temp_dir']),
+            peep_id_mapping=collector.peep_id_mapping,
+            cursor=cursor,
+            verbose=False,
+            skip_snapshots=True
+        )
+        importer.import_period()
+        period_id = importer.period_id
+
+        # Create partnerships.json with invalid requester ID (999)
+        partnerships_data = {
+            "999": [1]  # 999 doesn't exist in peeps table
+        }
+        partnerships_path = Path(period_data['period_dir']) / 'partnerships.json'
+        with open(partnerships_path, 'w') as f:
+            json.dump(partnerships_data, f)
+
+        # Import should raise ValueError
+        from db.import_period_data import import_partnerships
+        with pytest.raises(ValueError, match="(?s).*(member|peep).*999.*does not exist.*peeps"):
+            import_partnerships(partnerships_path, period_id, cursor)
+
+    def test_partnerships_strict_validation_malformed_data(self, test_db, test_period_data):
+        """Test that malformed partnership data raises ValueError with clear error."""
+        period_data = next(test_period_data(period_name='2025-02', num_members=5, num_events=3))
+
+        cursor = test_db.cursor()
+
+        # Import members and period
+        collector = MemberCollector(processed_data_path=Path(period_data['temp_dir']), verbose=False)
+        collector.scan_all_periods()
+        collector.insert_members_to_db(cursor)
+
+        importer = PeriodImporter(
+            period_name='2025-02',
+            processed_data_path=Path(period_data['temp_dir']),
+            peep_id_mapping=collector.peep_id_mapping,
+            cursor=cursor,
+            verbose=False,
+            skip_snapshots=True
+        )
+        importer.import_period()
+        period_id = importer.period_id
+
+        # Create partnerships.json with invalid structure (value should be array)
+        partnerships_data = {
+            "1": "not_an_array"  # Should be list, not string
+        }
+        partnerships_path = Path(period_data['period_dir']) / 'partnerships.json'
+        with open(partnerships_path, 'w') as f:
+            json.dump(partnerships_data, f)
+
+        # Import should raise ValueError
+        from db.import_period_data import import_partnerships
+        with pytest.raises(ValueError, match="(?s).*format.*array.*list"):
+            import_partnerships(partnerships_path, period_id, cursor)
+
+
+class TestStatusLifecycleBugs:
+    """Tests demonstrating three critical status lifecycle bugs in database import.
+
+    Bug #002: Period Status Bug
+    Bug #003: Snapshot Creation Bug
+    Bug #004: Event Status Lifecycle Bug
+
+    These tests will FAIL initially but PASS once bugs are fixed.
+    """
+
+    # ========================================================================
+    # Bug #002: Period Status Bug
+    # ========================================================================
+
+    def test_period_status_scheduled_when_no_attendance(self, test_db, test_period_data):
+        """
+        Bug #002: Period status should be 'scheduled' when:
+        - Has assignments (from results.json)
+        - NO attendance data (from actual_attendance.json)
+        - This indicates future/upcoming period with schedule
+        """
+        # Create test data with results.json but NO actual_attendance.json
+        period_data = next(test_period_data(period_name='2025-02', num_members=5, num_events=3))
+
+        # Remove actual_attendance.json to simulate future period
+        attendance_file = Path(period_data['period_dir']) / 'actual_attendance.json'
+        attendance_file.unlink()
+
+        cursor = test_db.cursor()
+
+        # Import members
+        collector = MemberCollector(processed_data_path=Path(period_data['temp_dir']), verbose=False)
+        collector.scan_all_periods()
+        collector.insert_members_to_db(cursor)
+
+        # Import period (has assignments but no attendance)
+        importer = PeriodImporter(
+            period_name='2025-02',
+            processed_data_path=Path(period_data['temp_dir']),
+            peep_id_mapping=collector.peep_id_mapping,
+            cursor=cursor,
+            verbose=False,
+            skip_snapshots=True
+        )
+        importer.import_period()
+
+        # Check period status
+        cursor.execute("""
+            SELECT status FROM schedule_periods WHERE id = ?
+        """, (importer.period_id,))
+        result = cursor.fetchone()
+        actual_status = result[0] if result else None
+
+        # EXPECTED: status should be 'scheduled' (has schedule but not yet completed)
+        assert actual_status == 'scheduled', \
+            f"Period with assignments but no attendance should be 'scheduled', got '{actual_status}'"
+
+    def test_period_status_completed_when_has_attendance(self, test_db, test_period_data):
+        """
+        Bug #002: Period status should be 'completed' when:
+        - Has attendance data (from actual_attendance.json)
+        - This indicates period has occurred with recorded participation
+        """
+        period_data = next(test_period_data(period_name='2025-02', num_members=5, num_events=3))
+
+        cursor = test_db.cursor()
+
+        # Import members
+        collector = MemberCollector(processed_data_path=Path(period_data['temp_dir']), verbose=False)
+        collector.scan_all_periods()
+        collector.insert_members_to_db(cursor)
+
+        # Import period (has both assignments and attendance)
+        importer = PeriodImporter(
+            period_name='2025-02',
+            processed_data_path=Path(period_data['temp_dir']),
+            peep_id_mapping=collector.peep_id_mapping,
+            cursor=cursor,
+            verbose=False,
+            skip_snapshots=True
+        )
+        importer.import_period()
+
+        # Check period status
+        cursor.execute("""
+            SELECT status FROM schedule_periods WHERE id = ?
+        """, (importer.period_id,))
+        result = cursor.fetchone()
+        actual_status = result[0] if result else None
+
+        # EXPECTED: status should be 'completed' (has attendance data)
+        assert actual_status == 'completed', \
+            f"Period with attendance data should be 'completed', got '{actual_status}'"
+
+    def test_period_status_active_when_has_assignments_no_attendance(self, test_db, test_period_data):
+        """
+        Bug #002: Period status should be 'active' when:
+        - Has assignments (from results.json)
+        - NO attendance data (from actual_attendance.json)
+        - This indicates scheduled but not yet occurred
+        """
+        # Create test data without attendance
+        period_data = next(test_period_data(period_name='2025-02', num_members=5, num_events=3))
+
+        # Remove actual_attendance.json
+        attendance_file = Path(period_data['period_dir']) / 'actual_attendance.json'
+        attendance_file.unlink()
+
+        cursor = test_db.cursor()
+
+        # Import members
+        collector = MemberCollector(processed_data_path=Path(period_data['temp_dir']), verbose=False)
+        collector.scan_all_periods()
+        collector.insert_members_to_db(cursor)
+
+        # Import period
+        importer = PeriodImporter(
+            period_name='2025-02',
+            processed_data_path=Path(period_data['temp_dir']),
+            peep_id_mapping=collector.peep_id_mapping,
+            cursor=cursor,
+            verbose=False,
+            skip_snapshots=True
+        )
+        importer.import_period()
+
+        # Verify assignments exist
+        cursor.execute("""
+            SELECT COUNT(*) FROM event_assignments ea
+            JOIN events e ON ea.event_id = e.id
+            WHERE e.period_id = ?
+        """, (importer.period_id,))
+        num_assignments = cursor.fetchone()[0]
+        assert num_assignments > 0, "Period should have assignments"
+
+        # Check period status
+        cursor.execute("""
+            SELECT status FROM schedule_periods WHERE id = ?
+        """, (importer.period_id,))
+        result = cursor.fetchone()
+        actual_status = result[0] if result else None
+
+        # EXPECTED: status should be 'active' (has schedule but hasn't occurred)
+        assert actual_status == 'scheduled', \
+            f"Period with assignments but no attendance should be 'scheduled', got '{actual_status}'"
+
+    def test_period_status_draft_when_no_assignments_no_attendance(self, test_db, test_period_data):
+        """
+        Bug #002: Period status should be 'draft' when:
+        - NO assignments (empty results.json)
+        - NO attendance data
+        - This indicates unopened/unscheduled period
+        """
+        period_data = next(test_period_data(period_name='2025-02', num_members=5, num_events=0))
+
+        # Create empty results.json (no assignments)
+        results_file = Path(period_data['period_dir']) / 'results.json'
+        with open(results_file, 'w') as f:
+            json.dump({'valid_events': []}, f)
+
+        # Remove actual_attendance.json
+        attendance_file = Path(period_data['period_dir']) / 'actual_attendance.json'
+        attendance_file.unlink()
+
+        cursor = test_db.cursor()
+
+        # Import members
+        collector = MemberCollector(processed_data_path=Path(period_data['temp_dir']), verbose=False)
+        collector.scan_all_periods()
+        collector.insert_members_to_db(cursor)
+
+        # Import period (no assignments, no attendance)
+        importer = PeriodImporter(
+            period_name='2025-02',
+            processed_data_path=Path(period_data['temp_dir']),
+            peep_id_mapping=collector.peep_id_mapping,
+            cursor=cursor,
+            verbose=False,
+            skip_snapshots=True
+        )
+        importer.import_period()
+
+        # Verify no assignments exist
+        cursor.execute("""
+            SELECT COUNT(*) FROM event_assignments ea
+            JOIN events e ON ea.event_id = e.id
+            WHERE e.period_id = ?
+        """, (importer.period_id,))
+        num_assignments = cursor.fetchone()[0]
+        assert num_assignments == 0, "Period should have no assignments"
+
+        # Check period status
+        cursor.execute("""
+            SELECT status FROM schedule_periods WHERE id = ?
+        """, (importer.period_id,))
+        result = cursor.fetchone()
+        actual_status = result[0] if result else None
+
+        # EXPECTED: status should be 'draft' (not yet started/scheduled)
+        assert actual_status == 'draft', \
+            f"Period with no assignments and no attendance should be 'draft', got '{actual_status}'"
+
+    # ========================================================================
+    # Bug #003: Snapshot Creation Bug
+    # ========================================================================
+
+    def test_snapshots_not_created_without_attendance_data(self, test_db, test_period_data):
+        """
+        Bug #003: Snapshots should NOT be created when:
+        - No attendance data exists (future/incomplete period)
+        - This prevents stale snapshots for periods that haven't occurred
+        """
+        period_data = next(test_period_data(period_name='2025-02', num_members=5, num_events=3))
+
+        # Remove actual_attendance.json to simulate future period
+        attendance_file = Path(period_data['period_dir']) / 'actual_attendance.json'
+        attendance_file.unlink()
+
+        cursor = test_db.cursor()
+
+        # Import members
+        collector = MemberCollector(processed_data_path=Path(period_data['temp_dir']), verbose=False)
+        collector.scan_all_periods()
+        collector.insert_members_to_db(cursor)
+
+        # Import period WITHOUT skip_snapshots flag
+        importer = PeriodImporter(
+            period_name='2025-02',
+            processed_data_path=Path(period_data['temp_dir']),
+            peep_id_mapping=collector.peep_id_mapping,
+            cursor=cursor,
+            verbose=False,
+            skip_snapshots=False  # Should respect the logic: only create if attendance exists
+        )
+        importer.import_period()
+
+        # Check that NO snapshots were created
+        cursor.execute("""
+            SELECT COUNT(*) FROM peep_order_snapshots WHERE period_id = ?
+        """, (importer.period_id,))
+        num_snapshots = cursor.fetchone()[0]
+
+        # EXPECTED: num_snapshots should be 0 (no attendance = no snapshots)
+        assert num_snapshots == 0, \
+            f"Period without attendance data should have 0 snapshots, got {num_snapshots}"
+
+    def test_snapshots_created_with_attendance_data(self, test_db, test_period_data):
+        """
+        Bug #003: Snapshots SHOULD be created when:
+        - Attendance data exists (period has been completed)
+        - This captures the final state after the period
+        """
+        period_data = next(test_period_data(period_name='2025-02', num_members=5, num_events=3))
+
+        cursor = test_db.cursor()
+
+        # Import members
+        collector = MemberCollector(processed_data_path=Path(period_data['temp_dir']), verbose=False)
+        collector.scan_all_periods()
+        collector.insert_members_to_db(cursor)
+
+        # Import period with attendance data
+        importer = PeriodImporter(
+            period_name='2025-02',
+            processed_data_path=Path(period_data['temp_dir']),
+            peep_id_mapping=collector.peep_id_mapping,
+            cursor=cursor,
+            verbose=False,
+            skip_snapshots=False
+        )
+        importer.import_period()
+
+        # Check that snapshots WERE created
+        cursor.execute("""
+            SELECT COUNT(*) FROM peep_order_snapshots WHERE period_id = ?
+        """, (importer.period_id,))
+        num_snapshots = cursor.fetchone()[0]
+
+        # EXPECTED: num_snapshots should be > 0 (has attendance = has snapshots)
+        assert num_snapshots > 0, \
+            f"Period with attendance data should have snapshots, got {num_snapshots}"
+
+    def test_snapshots_skipped_with_skip_snapshots_flag(self, test_db, test_period_data):
+        """
+        Bug #003: Snapshots should NOT be created when:
+        - --skip-snapshots flag is used
+        - Even if attendance data exists
+        - This allows testing import without snapshot overhead
+        """
+        period_data = next(test_period_data(period_name='2025-02', num_members=5, num_events=3))
+
+        cursor = test_db.cursor()
+
+        # Import members
+        collector = MemberCollector(processed_data_path=Path(period_data['temp_dir']), verbose=False)
+        collector.scan_all_periods()
+        collector.insert_members_to_db(cursor)
+
+        # Import period WITH skip_snapshots=True
+        importer = PeriodImporter(
+            period_name='2025-02',
+            processed_data_path=Path(period_data['temp_dir']),
+            peep_id_mapping=collector.peep_id_mapping,
+            cursor=cursor,
+            verbose=False,
+            skip_snapshots=True  # Skip snapshot creation
+        )
+        importer.import_period()
+
+        # Check that NO snapshots were created
+        cursor.execute("""
+            SELECT COUNT(*) FROM peep_order_snapshots WHERE period_id = ?
+        """, (importer.period_id,))
+        num_snapshots = cursor.fetchone()[0]
+
+        # EXPECTED: num_snapshots should be 0 (skipped due to flag)
+        assert num_snapshots == 0, \
+            f"Period imported with --skip-snapshots should have 0 snapshots, got {num_snapshots}"
+
+    # ========================================================================
+    # Bug #004: Event Status Lifecycle Bug
+    # ========================================================================
+
+    def test_event_status_proposed_from_responses(self, test_db, test_period_data):
+        """
+        Bug #004: Events created from responses.csv should have:
+        - status='proposed' (not yet scheduled by scheduler)
+        - This is the initial state before scheduler processes them
+        """
+        period_data = next(test_period_data(period_name='2025-02', num_members=5, num_events=3))
+
+        # Remove results.json so events stay in 'proposed' state
+        results_file = Path(period_data['period_dir']) / 'results.json'
+        results_file.unlink()
+
+        # Also remove actual_attendance.json so events don't transition to 'completed'
+        attendance_file = Path(period_data['period_dir']) / 'actual_attendance.json'
+        attendance_file.unlink()
+
+        cursor = test_db.cursor()
+
+        # Import members
+        collector = MemberCollector(processed_data_path=Path(period_data['temp_dir']), verbose=False)
+        collector.scan_all_periods()
+        collector.insert_members_to_db(cursor)
+
+        # Import period (only responses, no scheduler results)
+        importer = PeriodImporter(
+            period_name='2025-02',
+            processed_data_path=Path(period_data['temp_dir']),
+            peep_id_mapping=collector.peep_id_mapping,
+            cursor=cursor,
+            verbose=False,
+            skip_snapshots=True
+        )
+        importer.import_period()
+
+        # Check event statuses
+        cursor.execute("""
+            SELECT status FROM events WHERE period_id = ? ORDER BY event_datetime
+        """, (importer.period_id,))
+        statuses = [row[0] for row in cursor.fetchall()]
+
+        # EXPECTED: all events should be 'proposed'
+        assert len(statuses) > 0, "Period should have events"
+        assert all(status == 'proposed' for status in statuses), \
+            f"Events from responses.csv should all be 'proposed', got {statuses}"
+
+    def test_event_status_scheduled_from_results(self, test_db, test_period_data):
+        """
+        Bug #004: Events in results.json should have:
+        - status='scheduled' (after scheduler has processed)
+        - This indicates scheduler has created assignments
+        """
+        period_data = next(test_period_data(period_name='2025-02', num_members=5, num_events=3))
+
+        # Remove actual_attendance.json so events stay 'scheduled' (not completed)
+        attendance_file = Path(period_data['period_dir']) / 'actual_attendance.json'
+        attendance_file.unlink()
+
+        cursor = test_db.cursor()
+
+        # Import members
+        collector = MemberCollector(processed_data_path=Path(period_data['temp_dir']), verbose=False)
+        collector.scan_all_periods()
+        collector.insert_members_to_db(cursor)
+
+        # Import period (with results.json but no attendance)
+        importer = PeriodImporter(
+            period_name='2025-02',
+            processed_data_path=Path(period_data['temp_dir']),
+            peep_id_mapping=collector.peep_id_mapping,
+            cursor=cursor,
+            verbose=False,
+            skip_snapshots=True
+        )
+        importer.import_period()
+
+        # Check event statuses - specifically those in results.json
+        cursor.execute("""
+            SELECT status FROM events WHERE period_id = ? AND status = 'scheduled'
+            ORDER BY event_datetime
+        """, (importer.period_id,))
+        scheduled_events = cursor.fetchall()
+
+        # EXPECTED: events from results.json should be 'scheduled'
+        assert len(scheduled_events) > 0, \
+            "Period with results.json should have scheduled events"
+
+    def test_event_status_completed_from_attendance(self, test_db, test_period_data):
+        """
+        Bug #004: Events in actual_attendance.json should have:
+        - status='completed' (after attendance has been recorded)
+        - This indicates the event has occurred with recorded participation
+        """
+        period_data = next(test_period_data(period_name='2025-02', num_members=5, num_events=3))
+
+        cursor = test_db.cursor()
+
+        # Import members
+        collector = MemberCollector(processed_data_path=Path(period_data['temp_dir']), verbose=False)
+        collector.scan_all_periods()
+        collector.insert_members_to_db(cursor)
+
+        # Import period (with both results.json and actual_attendance.json)
+        importer = PeriodImporter(
+            period_name='2025-02',
+            processed_data_path=Path(period_data['temp_dir']),
+            peep_id_mapping=collector.peep_id_mapping,
+            cursor=cursor,
+            verbose=False,
+            skip_snapshots=True
+        )
+        importer.import_period()
+
+        # Check event statuses
+        cursor.execute("""
+            SELECT status FROM events WHERE period_id = ? AND status = 'completed'
+            ORDER BY event_datetime
+        """, (importer.period_id,))
+        completed_events = cursor.fetchall()
+
+        # EXPECTED: events from actual_attendance.json should be 'completed'
+        assert len(completed_events) > 0, \
+            "Period with actual_attendance.json should have completed events"
+
+    def test_event_status_lifecycle_transitions(self, test_db, test_period_data):
+        """
+        Bug #004: Events should follow the complete status lifecycle:
+        proposed → scheduled → completed
+
+        This tests the full transition sequence in a single period import.
+        """
+        period_data = next(test_period_data(period_name='2025-02', num_members=5, num_events=3))
+
+        cursor = test_db.cursor()
+
+        # Import members
+        collector = MemberCollector(processed_data_path=Path(period_data['temp_dir']), verbose=False)
+        collector.scan_all_periods()
+        collector.insert_members_to_db(cursor)
+
+        # Import period with full data (responses + results + attendance)
+        importer = PeriodImporter(
+            period_name='2025-02',
+            processed_data_path=Path(period_data['temp_dir']),
+            peep_id_mapping=collector.peep_id_mapping,
+            cursor=cursor,
+            verbose=False,
+            skip_snapshots=True
+        )
+        importer.import_period()
+
+        # Get all events and their statuses
+        cursor.execute("""
+            SELECT id, status FROM events WHERE period_id = ?
+            ORDER BY event_datetime
+        """, (importer.period_id,))
+        events = cursor.fetchall()
+
+        # EXPECTED:
+        # - Events should have progressed through lifecycle
+        # - All events in attendance should be 'completed'
+        # - Lifecycle should be: proposed → scheduled → completed
+        assert len(events) > 0, "Period should have events"
+
+        # Check that at least some events reached 'completed' state
+        completed_count = sum(1 for _, status in events if status == 'completed')
+        assert completed_count > 0, \
+            f"Events with attendance should transition to 'completed', got statuses: {[s for _, s in events]}"
