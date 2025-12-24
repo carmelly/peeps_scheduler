@@ -44,7 +44,7 @@
 			"type": "debugpy",
 			"request": "launch",
 			"program": "${workspaceFolder}/main.py",
-			"args": ["run", "--data-folder", "2026-01"],
+			"args": ["apply-results", "--period-folder", "${input:dataDir}"],
 			"console": "integratedTerminal"
 		}
 	]
