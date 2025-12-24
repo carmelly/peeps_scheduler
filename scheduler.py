@@ -279,8 +279,8 @@ class Scheduler:
 			total_requests = sum(len(partners) for partners in self.partnership_requests.values())
 			logging.info(f"Loaded {total_requests} partnership request(s)")
 
-		event_date_to_id = {e.date.strftime("%Y-%m-%d %H:%M"): e.id for e in events}
-		event_id_to_date = {e.id: e.date.strftime("%Y-%m-%d %H:%M") for e in events}
+		date_string_to_event_id = {e.date.strftime("%Y-%m-%d %H:%M"): e.id for e in events}
+		event_id_to_date_string = {e.id: e.date.strftime("%Y-%m-%d %H:%M") for e in events}
 
 		cancellations_path = self.period_path / self.cancellations_file
 		cancelled_event_ids, cancelled_availability = file_io.load_cancellations(
@@ -289,7 +289,7 @@ class Scheduler:
 		)
 
 		if cancelled_event_ids:
-			loaded_event_ids = set(event_date_to_id.keys())
+			loaded_event_ids = set(date_string_to_event_id.keys())
 			unknown_cancelled = cancelled_event_ids - loaded_event_ids
 			if unknown_cancelled:
 				event_word = "event" if len(unknown_cancelled) == 1 else "events"
@@ -307,7 +307,7 @@ class Scheduler:
 			if unknown_emails:
 				raise ValueError(f"cancelled availability email(s) not found in members: {sorted(unknown_emails)}")
 
-			loaded_event_ids = set(event_date_to_id.keys())
+			loaded_event_ids = set(date_string_to_event_id.keys())
 			unknown_events = set()
 			unavailable_events = {}
 			for email, event_ids in cancelled_availability.items():
@@ -317,9 +317,9 @@ class Scheduler:
 
 				peep = peeps_by_email[email]
 				peep_event_ids = {
-					event_id_to_date[event_id]
+					event_id_to_date_string[event_id]
 					for event_id in peep.availability
-					if event_id in event_id_to_date
+					if event_id in event_id_to_date_string
 				}
 				missing = event_ids - peep_event_ids
 				if missing:
@@ -337,8 +337,8 @@ class Scheduler:
 			for email, event_ids in cancelled_availability.items():
 				peep = peeps_by_email[email]
 				cancelled_event_int_ids = {
-					event_date_to_id[event_id] for event_id in event_ids
-					if event_id in event_date_to_id
+					date_string_to_event_id[event_id] for event_id in event_ids
+					if event_id in date_string_to_event_id
 				}
 				if cancelled_event_int_ids:
 					peep.availability = [
