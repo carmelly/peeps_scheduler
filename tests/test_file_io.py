@@ -282,17 +282,17 @@ class TestTimeDateParsing:
 
 	def test_parse_time_range_invalid_format(self):
 		"""Test that invalid format raises ValueError."""
-		with pytest.raises(ValueError, match="Invalid time range format"):
+		with pytest.raises(ValueError, match="invalid time range format"):
 			parse_time_range("5pm - 6pm")  # Wrong separator
 
 	def test_parse_time_range_invalid_time(self):
 		"""Test that invalid time format raises ValueError."""
-		with pytest.raises(ValueError, match="Time out of range"):
+		with pytest.raises(ValueError, match="time out of range"):
 			parse_time_range("25pm to 6pm")  # Invalid hour
 
 	def test_parse_time_range_end_before_start(self):
 		"""Test that end time before start time raises ValueError."""
-		with pytest.raises(ValueError, match="End time must be after start time"):
+		with pytest.raises(ValueError, match="end time must be after start time"):
 			parse_time_range("6pm to 5pm")
 
 	def test_parse_event_date_with_time_range(self):
@@ -476,19 +476,19 @@ class TestEventExtraction:
 	def test_extract_events_invalid_duration_raises(self):
 		"""Non-integer Event Duration should raise."""
 		rows = [{"Name": "Event: Saturday July 5 - 1pm", "Event Duration": "abc"}]
-		with pytest.raises(ValueError, match="Invalid Event Duration"):
+		with pytest.raises(ValueError, match="invalid event duration value"):
 			extract_events(rows)
 
 	def test_extract_events_missing_duration_raises(self):
 		"""Missing Event Duration field should raise."""
 		rows = [{"Name": "Event: Saturday July 5 - 1pm"}]
-		with pytest.raises(ValueError, match="Missing Event Duration"):
+		with pytest.raises(ValueError, match="missing event duration"):
 			extract_events(rows)
 
 	def test_extract_events_duration_not_in_config_raises(self):
 		"""Duration not listed in CLASS_CONFIG should raise ValueError."""
 		rows = [{"Name": "Event: Saturday July 5 - 1pm", "Event Duration": "666"}]
-		with pytest.raises(ValueError, match="Duration 666 not in CLASS_CONFIG"):
+		with pytest.raises(ValueError, match="duration 666 not in class_config"):
 			extract_events(rows)
 
 
@@ -524,7 +524,7 @@ class TestPeepLoading:
 		with tempfile.NamedTemporaryFile(mode="w", delete=False, newline='') as f:
 			f.write(content)
 			f.flush()
-			with pytest.raises(ValueError, match="Duplicate email"):
+			with pytest.raises(ValueError, match="duplicate email"):
 				load_peeps(f.name)
 
 	def test_load_peeps_allows_inactive_peep_with_email(self, tmp_path):
@@ -577,7 +577,7 @@ class TestResponseProcessing:
 			"Timestamp": "2025-07-01 12:01"
 		})
 		event_map = extract_events(responses_csv_rows)
-		with pytest.raises(ValueError, match="Response from inactive peep: Inactive Gamma"):
+		with pytest.raises(ValueError, match="response from inactive peep: Inactive Gamma"):
 			updated_peeps, responses = process_responses(responses_csv_rows, peeps, event_map)
 
 	def test_unknown_event_in_availability_logs_warning(self, peeps_csv_path):
@@ -617,7 +617,7 @@ class TestResponseProcessing:
 		peeps = [Peep.from_csv(p) for p in valid_peeps_rows]
 		rows = [{"Name": "Alice", "Email Address": "", "Primary Role": "Leader", "Secondary Role": "NONE",
 				 "Max Sessions": "1", "Availability": "July 5 - 1pm", "Timestamp": "2025-07-01 12:00"}]
-		with pytest.raises(ValueError, match="Missing email"):
+		with pytest.raises(ValueError, match="missing email"):
 			process_responses(rows, peeps, {})
 
 	def test_process_responses_unknown_email_raises(self, valid_peeps_rows):
@@ -626,7 +626,7 @@ class TestResponseProcessing:
 		rows = [{"Name": "Unknown", "Email Address": "notfound@test.com", "Primary Role": "Leader",
 				 "Secondary Role": "NONE", "Max Sessions": "1", "Availability": "July 5 - 1pm",
 				 "Timestamp": "2025-07-01 12:00"}]
-		with pytest.raises(ValueError, match="No matching peep found for email"):
+		with pytest.raises(ValueError, match="no matching peep found for email"):
 			process_responses(rows, peeps, {})
 
 
@@ -812,7 +812,7 @@ class TestCancellations:
 			"notes": "Bad format"
 		}))
 
-		with pytest.raises(ValueError, match="invalid event format|Cannot parse|unparseable"):
+		with pytest.raises(ValueError, match="invalid event format|cannot parse|unparseable"):
 			load_cancellations(str(cancelled_file), year=2025)
 
 	def test_load_cancellations_requires_year_parameter(self, tmp_path):

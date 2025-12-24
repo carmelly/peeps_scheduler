@@ -25,7 +25,7 @@ def parse_availability(responses_file, members_file, cancelled_event_ids=None, c
 				event_id, _, _ = parse_event_date(date, year=year)
 				all_event_ids.add(event_id)
 			except Exception as e:
-				raise ValueError(f"Cannot parse availability date '{date}': {e}") from e
+				raise ValueError(f"cannot parse availability date '{date}': {e}") from e
 
 	# Validate cancelled events exist
 	unknown_cancelled = cancelled_event_ids - all_event_ids

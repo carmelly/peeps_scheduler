@@ -53,7 +53,7 @@ def load_csv(filename, required_columns=[]):
 		# Check required columns
 		missing = set(required_columns) - set(fieldnames)
 		if required_columns and missing:
-			raise ValueError(f"Missing required column(s): {missing}")
+			raise ValueError(f"missing required column(s): {missing}")
 
 		# Rebuild DictReader with cleaned headers
 		dict_reader = csv.DictReader(csvfile, fieldnames=fieldnames)
@@ -84,14 +84,14 @@ def load_peeps(peeps_csv_path):
 		email = normalize_email(peep.email)
 		if peep.active:
 			if not email:
-				raise ValueError(f"Active peep '{peep.full_name}' is missing an email.")
+				raise ValueError(f"active peep '{peep.full_name}' is missing an email.")
 			emails.append(email)
 		elif email:
 			emails.append(email)
 
 	dupes = {email for email in emails if emails.count(email) > 1}
 	if dupes:
-		raise ValueError(f"Duplicate email(s) found in peeps: {sorted(dupes)}")
+		raise ValueError(f"duplicate email(s) found in peeps: {sorted(dupes)}")
 
 	return peeps
 
@@ -176,7 +176,7 @@ def load_cancelled_events(data_folder, year=None):
 			event_id, _, _ = parse_event_date(event_str, year=year)
 			parsed_event_ids.add(event_id)
 		except Exception as e:
-			raise ValueError(f"Cannot parse event string in cancelled_events.json: '{event_str}' - {e}") from e
+			raise ValueError(f"cannot parse event string in cancelled_events.json: '{event_str}' - {e}") from e
 
 	return parsed_event_ids
 
@@ -225,7 +225,7 @@ def load_partnerships(data_folder, partnerships_filename='partnerships.json', va
 		try:
 			return int(value)
 		except (TypeError, ValueError):
-			raise ValueError(f"Invalid {context} id '{value}': must be an integer")
+			raise ValueError(f"invalid {context} id '{value}': must be an integer")
 
 	requests = {}
 	for requester_key, partners in raw_requests.items():
@@ -233,13 +233,13 @@ def load_partnerships(data_folder, partnerships_filename='partnerships.json', va
 		requester_id = coerce_id(requester_key, "requester")
 
 		if valid_peep_ids is not None and requester_id not in valid_peep_ids:
-			raise ValueError(f"Partnership requester id {requester_id} not found in peeps")
+			raise ValueError(f"partnership requester id {requester_id} not found in peeps")
 
 		# Validate partners list exists and is a list
 		if partners is None:
-			raise ValueError(f"Partner list for requester {requester_id} cannot be null or missing")
+			raise ValueError(f"partner list for requester {requester_id} cannot be null or missing")
 		if not isinstance(partners, list):
-			raise ValueError(f"Partner list for requester {requester_id} must be a list, got {type(partners).__name__}")
+			raise ValueError(f"partner list for requester {requester_id} must be a list, got {type(partners).__name__}")
 
 		# Validate each partner
 		partner_set = set()
@@ -247,10 +247,10 @@ def load_partnerships(data_folder, partnerships_filename='partnerships.json', va
 			partner_id = coerce_id(partner, "partner")
 
 			if partner_id == requester_id:
-				raise ValueError(f"Requester {requester_id} cannot partner with themselves")
+				raise ValueError(f"requester {requester_id} cannot partner with themselves")
 
 			if valid_peep_ids is not None and partner_id not in valid_peep_ids:
-				raise ValueError(f"Partnership partner id {partner_id} for requester {requester_id} not found in peeps")
+				raise ValueError(f"partnership partner id {partner_id} for requester {requester_id} not found in peeps")
 
 			partner_set.add(partner_id)
 
@@ -270,7 +270,7 @@ def load_data_from_json(filename):
 
 	sorted_peeps = sorted(peeps, key=lambda peep: peep.index)
 	if not Peep.is_peeps_list_sorted_by_priority(sorted_peeps):
-		raise ValueError("Peeps data is not sorted by priority (highest to lowest). Check input file data integrity.")
+		raise ValueError("peeps data is not sorted by priority (highest to lowest). check input file data integrity.")
 
 	return sorted_peeps, events
 
@@ -318,7 +318,7 @@ def load_cancellations(filename, year=None):
         raise Exception(f"invalid cancellations file {filename}: {e}") from e
 
     if not isinstance(data, dict):
-        raise ValueError("cancellations.json must contain a JSON object")
+        raise ValueError("cancellations.json must contain a json object")
 
     if "cancelled_events" not in data:
         raise ValueError("cancellations.json missing 'cancelled_events'")
@@ -340,7 +340,7 @@ def load_cancellations(filename, year=None):
         try:
             event_id, _, _ = parse_event_date(event_str, year=year)
         except Exception as e:
-            raise ValueError(f"Cannot parse event string in cancellations.json: '{event_str}' - {e}") from e
+            raise ValueError(f"cannot parse event string in cancellations.json: '{event_str}' - {e}") from e
         cancelled_event_ids.add(event_id)
 
     cancelled_availability = {}
@@ -353,7 +353,7 @@ def load_cancellations(filename, year=None):
             raise ValueError("cancelled_availability entries require an email")
 
         if email in cancelled_availability:
-            raise ValueError(f"Duplicate cancelled_availability entry for email: {email}")
+            raise ValueError(f"duplicate cancelled_availability entry for email: {email}")
 
         event_strings = entry.get("events")
         if not isinstance(event_strings, list):
@@ -367,7 +367,7 @@ def load_cancellations(filename, year=None):
                 event_id, _, _ = parse_event_date(event_str, year=year)
             except Exception as e:
                 raise ValueError(
-                    f"Cannot parse event string in cancellations.json for {email}: '{event_str}' - {e}"
+                    f"cannot parse event string in cancellations.json for {email}: '{event_str}' - {e}"
                 ) from e
             parsed_event_ids.add(event_id)
 
@@ -403,7 +403,7 @@ def extract_events(rows, year=None):
 			name = row.get("Name", "")
 			parts = name.split("Event: ", 1)
 			if len(parts) < 2 or not parts[1]:
-				raise ValueError(f"Malformed event row: missing date in 'Name' field -> {name}")
+				raise ValueError(f"malformed event row: missing date in 'Name' field -> {name}")
 
 			date_str = parts[1].strip()
 			event_id, duration_from_str, display_name = parse_event_date(date_str, year=year)
@@ -414,15 +414,15 @@ def extract_events(rows, year=None):
 				try:
 					duration = int(duration_str)
 				except ValueError:
-					raise ValueError(f"Invalid Event Duration value: {duration_str}")
+					raise ValueError(f"invalid event duration value: {duration_str}")
 			elif duration_from_str is not None:
 				# New format Event row with time range
 				duration = duration_from_str
 			else:
-				raise ValueError(f"Missing Event Duration for event row: {name}")
+				raise ValueError(f"missing event duration for event row: {name}")
 
 			if duration not in constants.CLASS_CONFIG:
-				raise ValueError(f"Duration {duration} not in CLASS_CONFIG")
+				raise ValueError(f"duration {duration} not in class_config")
 
 			event = Event.from_dict({
 				"id": event_counter,
@@ -454,10 +454,10 @@ def extract_events(rows, year=None):
 					event_id, duration, display_name = parse_event_date(date_str, year=year)
 
 					if duration is None:
-						raise ValueError(f"Cannot auto-derive event duration from '{date_str}' - time range required")
+						raise ValueError(f"cannot auto-derive event duration from '{date_str}' - time range required")
 
 					if duration not in constants.CLASS_CONFIG:
-						raise ValueError(f"Duration {duration} minutes not in CLASS_CONFIG (valid: {list(constants.CLASS_CONFIG.keys())})")
+						raise ValueError(f"duration {duration} minutes not in class_config (valid: {list(constants.CLASS_CONFIG.keys())})")
 
 					# Track unique events
 					if event_id not in unique_events:
@@ -466,7 +466,7 @@ def extract_events(rows, year=None):
 						# Verify consistency if same event appears multiple times
 						existing_duration, _ = unique_events[event_id]
 						if existing_duration != duration:
-							raise ValueError(f"Inconsistent duration for event {event_id}: {existing_duration} vs {duration}")
+							raise ValueError(f"inconsistent duration for event {event_id}: {existing_duration} vs {duration}")
 
 				except ValueError as e:
 					logging.warning(f"Skipping invalid availability string '{date_str}' for {name}: {e}")
@@ -496,13 +496,13 @@ def process_responses(rows, peeps, event_map, year=None):
 
 		email = normalize_email(row.get("Email Address", ""))
 		if not email:
-			raise ValueError(f"Missing email for row: {name}")
+			raise ValueError(f"missing email for row: {name}")
 
 		peep = next((p for p in peeps if normalize_email(p.email) == email), None)
 		if not peep:
-			raise ValueError(f"No matching peep found for email: {email} (row: {name})")
+			raise ValueError(f"no matching peep found for email: {email} (row: {name})")
 		if not peep.active: 
-			raise ValueError(f"Response from inactive peep: {peep.full_name} (ID {peep.id}) — please activate them in the members spreadsheet.")
+			raise ValueError(f"response from inactive peep: {peep.full_name} (ID {peep.id}) — please activate them in the members spreadsheet.")
 
 		peep.role = Role.from_string(row["Primary Role"])
 		peep.event_limit = int(row["Max Sessions"])
@@ -550,7 +550,7 @@ def parse_time_range(time_str):
 	# Split on " to "
 	parts = time_str.lower().split(" to ")
 	if len(parts) != 2:
-		raise ValueError(f"Invalid time range format (expected 'X to Y'): {time_str}")
+		raise ValueError(f"invalid time range format (expected 'X to Y'): {time_str}")
 
 	start_str, end_str = parts[0].strip(), parts[1].strip()
 
@@ -559,7 +559,7 @@ def parse_time_range(time_str):
 		# Match patterns like "5:30pm", "5pm", "17:30"
 		match = re.match(r'^(\d{1,2})(?::(\d{2}))?([ap]m)?$', t)
 		if not match:
-			raise ValueError(f"Invalid time format: {t}")
+			raise ValueError(f"invalid time format: {t}")
 
 		hour = int(match.group(1))
 		minute = int(match.group(2)) if match.group(2) else 0
@@ -572,7 +572,7 @@ def parse_time_range(time_str):
 				hour = 0
 
 		if hour < 0 or hour > 23 or minute < 0 or minute > 59:
-			raise ValueError(f"Time out of range: {t}")
+			raise ValueError(f"time out of range: {t}")
 
 		return datetime.time(hour, minute)
 
@@ -584,7 +584,7 @@ def parse_time_range(time_str):
 	end_minutes = end_time.hour * 60 + end_time.minute
 
 	if end_minutes <= start_minutes:
-		raise ValueError(f"End time must be after start time: {time_str}")
+		raise ValueError(f"end time must be after start time: {time_str}")
 
 	duration = end_minutes - start_minutes
 
@@ -623,7 +623,7 @@ def parse_event_date(date_str, year=None):
 		# Split on " - " to separate date from time range
 		parts = date_str.split(" - ")
 		if len(parts) != 2:
-			raise ValueError(f"Invalid event date format (expected 'Date - Time Range'): {date_str}")
+			raise ValueError(f"invalid event date format (expected 'Date - Time Range'): {date_str}")
 
 		date_part = parts[0].strip()
 		time_range_part = parts[1].strip()
@@ -635,7 +635,7 @@ def parse_event_date(date_str, year=None):
 		try:
 			dt = datetime.datetime.strptime(date_part, "%A %B %d")
 		except ValueError as e:
-			raise ValueError(f"Invalid date format in '{date_str}': {e}")
+			raise ValueError(f"invalid date format in '{date_str}': {e}")
 
 		# Parse the time range to get start time and duration
 		start_time_str, end_time_str, duration = parse_time_range(time_range_part)

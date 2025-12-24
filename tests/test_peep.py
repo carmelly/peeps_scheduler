@@ -117,7 +117,7 @@ class TestSwitchPreferences:
     
     def test_switch_preference_from_string_invalid_raises(self):
         """Test that invalid switch preference strings raise ValueError."""
-        with pytest.raises(ValueError, match="Unknown role"):
+        with pytest.raises(ValueError, match="unknown role"):
             SwitchPreference.from_string("Invalid preference string")
 
 
@@ -142,7 +142,7 @@ class TestRoleHandling:
     
     def test_role_from_string_invalid_raises(self):
         """Test that invalid role strings raise ValueError."""
-        with pytest.raises(ValueError, match="Unknown role"):
+        with pytest.raises(ValueError, match="unknown role"):
             Role.from_string("invalid")
     
     def test_role_opposite_behavior(self):
@@ -227,12 +227,12 @@ class TestDataConversion:
     
     def test_constructor_requires_id(self):
         """Test that constructor raises clear error for missing ID."""
-        with pytest.raises(ValueError, match="Peep requires an 'id' field"):
+        with pytest.raises(ValueError, match="peep requires an 'id' field"):
             Peep(role="leader")
     
     def test_constructor_requires_role(self):
         """Test that constructor raises clear error for missing role."""
-        with pytest.raises(ValueError, match="Peep requires a 'role' field"):
+        with pytest.raises(ValueError, match="peep requires a 'role' field"):
             Peep(id=1)
 
 

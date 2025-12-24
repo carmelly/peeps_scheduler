@@ -15,7 +15,7 @@ class Role(Enum):
 			return Role.FOLLOWER
 		elif self == Role.FOLLOWER:
 			return Role.LEADER
-		raise ValueError(f"No opposite defined for Role: {self}")
+		raise ValueError(f"no opposite defined for role: {self}")
 	
 	@classmethod
 	def from_string(cls, value):
@@ -25,7 +25,7 @@ class Role(Enum):
 		elif value in ["follow", "follower"]:
 			return cls.FOLLOWER
 		else:
-			raise ValueError(f"Unknown role: {value}")
+			raise ValueError(f"unknown role: {value}")
 
 class SwitchPreference(Enum): 
 	PRIMARY_ONLY = 1       # "I only want to be scheduled in my primary role"
@@ -42,16 +42,16 @@ class SwitchPreference(Enum):
 		elif value == "I'm willing to dance my secondary role only if it's needed to enable filling a session": 
 			return cls.SWITCH_IF_NEEDED
 		else:
-			raise ValueError(f"Unknown role: {value}")
+			raise ValueError(f"unknown role: {value}")
 
 class Peep:
 	def __init__(self, **kwargs):
 		# Validate required fields first
 		if not kwargs.get("id"):
-			raise ValueError("Peep requires an 'id' field")
+			raise ValueError("peep requires an 'id' field")
 		
 		if not kwargs.get("role"):
-			raise ValueError("Peep requires a 'role' field")
+			raise ValueError("peep requires a 'role' field")
 		
 		self.id = int(kwargs.get("id"))
 		self.full_name = str(kwargs.get("full_name", "")).strip()
@@ -62,7 +62,7 @@ class Peep:
 		try:
 			self.role = role_input if isinstance(role_input, Role) else Role.from_string(role_input)
 		except ValueError as e:
-			raise ValueError(f"Invalid role '{role_input}': {str(e)}") from e
+			raise ValueError(f"invalid role '{role_input}': {str(e)}") from e
 
 		switch_input = kwargs.get("switch_pref", SwitchPreference.PRIMARY_ONLY)
 		self.switch_pref = switch_input if isinstance(switch_input, SwitchPreference) else SwitchPreference(switch_input)
@@ -236,7 +236,7 @@ class Event:
 		
 		self.duration_minutes = kwargs.get("duration_minutes")
 		if self.duration_minutes not in constants.CLASS_CONFIG:
-			raise ValueError(f"Unknown event duration: {self.duration_minutes}")
+			raise ValueError(f"unknown event duration: {self.duration_minutes}")
 
 		# Attendee lists are role-specific and managed via internal assignment methods.
 		self._leaders = [] 
