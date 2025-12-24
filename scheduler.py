@@ -20,8 +20,8 @@ class Scheduler:
 
 		# Ensure period directory exists
 		self.period_path = self.data_manager.ensure_period_exists(data_folder)
-		self.output_json = (self.period_path / 'output.json').as_posix()
-		self.result_json = (self.period_path / 'results.json').as_posix()
+		self.output_json = self.period_path / 'output.json'
+		self.result_json = self.period_path / 'results.json'
 		self.target_max = None # max per role used for each run 
 
 	def sanitize_events(self, events, peeps):
@@ -262,8 +262,8 @@ class Scheduler:
 			logging.info(f"Generating test data and saving to {self.output_json}")
 			utils.generate_test_data(5, 30, self.output_json)
 		elif load_from_csv:
-			responses_csv = (self.period_path / 'responses.csv').as_posix()
-			peeps_csv = (self.period_path / 'members.csv').as_posix()
+			responses_csv = self.period_path / 'responses.csv'
+			peeps_csv = self.period_path / 'members.csv'
 			logging.info(f"Loading data from {peeps_csv} and {responses_csv}")
 			file_io.convert_to_json(str(responses_csv), str(peeps_csv), str(self.output_json), year=year)
 

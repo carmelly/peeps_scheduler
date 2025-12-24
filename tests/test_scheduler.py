@@ -36,10 +36,10 @@ class TestSchedulerInitialization:
     def test_scheduler_sets_output_paths_correctly(self):
         """Test that Scheduler sets correct file paths based on data folder."""
         scheduler = Scheduler(data_folder='my_folder', max_events=3)
-        
-        # The paths use the new data manager format
-        assert scheduler.output_json.endswith('my_folder/output.json')
-        assert scheduler.result_json.endswith('my_folder/results.json')
+
+        # The paths use the new data manager format - check as Path objects
+        assert str(scheduler.output_json).endswith('my_folder/output.json')
+        assert str(scheduler.result_json).endswith('my_folder/results.json')
 
 
 class TestSchedulerEventSanitization:

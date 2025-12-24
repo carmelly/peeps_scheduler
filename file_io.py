@@ -40,6 +40,8 @@ def normalize_email(email):
 
 def load_csv(filename, required_columns=[]):
 	"""Load CSV file and validate required columns, trimming whitespace from headers and values."""
+	from pathlib import Path
+	filename = Path(filename)
 	with open(filename, newline='', encoding='utf-8') as csvfile:
 		# Read the first line (fieldnames), trim whitespace
 		reader = csv.reader(csvfile)
@@ -101,7 +103,9 @@ def load_responses(response_csv_path):
 
 def save_peeps_csv(peeps: list[Peep], filename):
 	"""Save updated peeps to a new CSV called members_updated.csv in the same folder as the original."""
-	output_path = os.path.join(os.path.dirname(filename), "members_updated.csv")
+	from pathlib import Path
+	filename = Path(filename)
+	output_path = filename.parent / "members_updated.csv"
 	with open(output_path, "w", newline='', encoding='utf-8') as csvfile:
 		writer = csv.DictWriter(csvfile, fieldnames=PEEPS_CSV_FIELDS)
 		writer.writeheader()
@@ -151,10 +155,12 @@ def load_cancelled_events(data_folder, year=None):
 		Exception: If cancelled_events.json exists but contains invalid JSON
 		ValueError: If any event string cannot be parsed
 	"""
-	cancelled_file = os.path.join(data_folder, "cancelled_events.json")
+	from pathlib import Path
+	data_folder = Path(data_folder)
+	cancelled_file = data_folder / "cancelled_events.json"
 
 	# Return empty set if file doesn't exist (backward compatible)
-	if not os.path.exists(cancelled_file):
+	if not cancelled_file.exists():
 		return set()
 
 	# File exists - parse it and raise errors if malformed
@@ -202,8 +208,10 @@ def load_partnerships(data_folder, partnerships_filename='partnerships.json', va
 		Exception: If the partnerships file contains invalid JSON
 		ValueError: If structure is invalid or contains errors (strict validation)
 	"""
-	requests_file = os.path.join(data_folder, partnerships_filename)
-	if not os.path.exists(requests_file):
+	from pathlib import Path
+	data_folder = Path(data_folder)
+	requests_file = data_folder / partnerships_filename
+	if not requests_file.exists():
 		return {}
 
 	try:
@@ -302,13 +310,15 @@ def load_cancellations(filename, year=None):
     Parses event date strings immediately and returns parsed event_ids.
 
     Args:
-        filename: Path to the cancellations JSON file
+        filename: Path to the cancellations JSON file (str or Path)
         year: Optional year for parsing event dates
 
     Returns:
         tuple: (cancelled_event_ids set, cancelled_availability dict)
     """
-    if not os.path.exists(filename):
+    from pathlib import Path
+    filename = Path(filename)
+    if not filename.exists():
         return set(), {}
 
     try:

@@ -1,9 +1,12 @@
 from collections import defaultdict
+from pathlib import Path
 from data_manager import DataManager, get_data_manager
 from models import Role, SwitchPreference
 from file_io import load_cancellations, load_csv, normalize_email, parse_event_date
 
 def parse_availability(responses_file, members_file, cancelled_event_ids=None, cancelled_availability=None, year=None):
+	responses_file = Path(responses_file)
+	members_file = Path(members_file)
 	members = {normalize_email(row["Email Address"]): row for row in load_csv(members_file)}
 	cancelled_event_ids = cancelled_event_ids or set()
 	cancelled_availability = cancelled_availability or {}
@@ -18,7 +21,7 @@ def parse_availability(responses_file, members_file, cancelled_event_ids=None, c
 
 	# Collect all events from responses
 	all_event_ids = set()
-	for row in load_csv(str(responses_file)):
+	for row in load_csv(responses_file):
 		dates = [d.strip() for d in row.get("Availability", "").split(",") if d.strip()]
 		for date in dates:
 			try:
@@ -49,7 +52,7 @@ def parse_availability(responses_file, members_file, cancelled_event_ids=None, c
 			cancelled_availability_details[display_name] = sorted(event_ids)
 
 	# Process availability from responses
-	for row in load_csv(str(responses_file)):
+	for row in load_csv(responses_file):
 		email = normalize_email(row["Email Address"])
 		role = Role.from_string(row["Primary Role"].strip())
 		switch_pref = SwitchPreference.from_string(row["Secondary Role"].strip())
@@ -137,7 +140,6 @@ def run_availability_report(data_folder, cancellations_file='cancellations.json'
 
 	# Extract year from data_folder (e.g., "2026-01" -> 2026)
 	# Handle both absolute paths and folder names
-	from pathlib import Path
 	folder_name = Path(data_folder).name
 	try:
 		year = int(folder_name[:4]) if folder_name and len(folder_name) >= 4 and folder_name[:4].isdigit() else None
@@ -145,7 +147,7 @@ def run_availability_report(data_folder, cancellations_file='cancellations.json'
 		year = None
 
 	cancellations_path = period_path / cancellations_file
-	cancelled_event_ids, cancelled_availability = load_cancellations(str(cancellations_path), year=year)
+	cancelled_event_ids, cancelled_availability = load_cancellations(cancellations_path, year=year)
 	availability, unavailable, non_responders, cancelled_events, cancelled_availability_details = parse_availability(
 		responses_file,
 		members_file,
