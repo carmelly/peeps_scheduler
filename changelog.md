@@ -5,15 +5,34 @@ This project uses semantic versioning. For planned future changes, see the "Plan
 
 ## [Unreleased]
 
-### Planned for next release
-
-- Partnership request support with scoring heuristic
-
 ### Deferred (db-migration branch)
 
 - Database-backed persistence with normalized schema
 - Web UI for scheduling input and results browsing
 - Historical data snapshots and verification tools
+
+---
+
+## [v1.1.0] – 2025-12-24
+
+**Enhancement Release:** Event cancellations, partnership requests, and code quality improvements.
+
+### Added
+
+- Event cancellation support via `cancelled_events.json`
+- Unified cancellation workflow in `cancellations.json` (cancelled events + member unavailability)
+- Partnership request support via `partnerships.json` with multi-tier scoring heuristic
+- Edge case handling for utilization metric (non-responded peeps, empty availability, zero eligible peeps)
+
+### Changed
+
+- Standardized error messages to lowercase for consistency
+- Modernized path handling to use `pathlib.Path` objects
+- Improved scheduler variable naming for clarity
+
+### Fixed
+
+- Normalized utilization calculation now properly accounts for member-imposed event limits
 
 ---
 
