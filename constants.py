@@ -5,7 +5,7 @@ DATESTR_FORMAT = "%A %B %d - %I%p"
 
 CLASS_CONFIG = {
 	60: {
-		"price": 120.0, #TODO: Not sure if this is correct, or what the role limits should be 
+		"price": 120.0, 
 		"min_role": 2,
 		"max_role": 3,
 		"allow_downgrade": False
@@ -33,3 +33,6 @@ PRIVATE_DATA_ROOT = os.getenv("PEEPS_DATA_PATH", "peeps_data")
 # Database paths
 SCHEMA_PATH = "db/schema.sql"
 DEFAULT_DB_PATH = "peeps_data/peeps_scheduler.db"
+
+# Optional data files
+PARTNERSHIPS_FILE = "partnerships.json"

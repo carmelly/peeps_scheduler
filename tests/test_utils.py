@@ -119,16 +119,68 @@ class TestApplyEventResultsErrorHandling:
                 temp_files['responses']
             )
 
-    def test_missing_responses_file_raises_error(self, temp_files):
-        """Test that missing responses.csv raises an error."""
+    def test_missing_responses_file_handles_gracefully(self, temp_files):
+        """Test that missing responses.csv is handled gracefully (responses_csv is optional)."""
         os.remove(temp_files['responses'])
 
-        with pytest.raises(FileNotFoundError):
+        # Should not raise an error, just handle gracefully
+        result_peeps = utils.apply_event_results(
+            temp_files['attendance'],
+            temp_files['members'],
+            temp_files['responses']
+        )
+
+        # Should return peeps even without responses file
+        assert len(result_peeps) > 0
+
+        # All peeps should have responded=False since no responses file was processed
+        for peep in result_peeps:
+            assert peep.responded == False
+
+    def test_none_responses_file_handles_gracefully(self, temp_files):
+        """Test that None can be passed for responses_csv (responses_csv is optional)."""
+        # Should not raise an error when responses_csv is None
+        result_peeps = utils.apply_event_results(
+            temp_files['attendance'],
+            temp_files['members'],
+            None
+        )
+
+        # Should return peeps even with None responses file
+        assert len(result_peeps) > 0
+
+        # All peeps should have responded=False since no responses file was processed
+        for peep in result_peeps:
+            assert peep.responded == False
+
+    def test_missing_responses_file_logs_debug_message(self, temp_files, caplog):
+        """Test that debug message is logged when responses.csv is missing."""
+        import logging
+        os.remove(temp_files['responses'])
+
+        with caplog.at_level(logging.DEBUG):
             utils.apply_event_results(
                 temp_files['attendance'],
                 temp_files['members'],
                 temp_files['responses']
             )
+
+        assert "No responses file provided or file does not exist" in caplog.text
+        assert "skipping response processing" in caplog.text
+
+    def test_none_responses_file_logs_debug_message(self, temp_files, caplog):
+        """Test that debug message is logged when responses_csv is None."""
+        import logging
+
+        with caplog.at_level(logging.DEBUG):
+            utils.apply_event_results(
+                temp_files['attendance'],
+                temp_files['members'],
+                None
+            )
+
+        assert "No responses file provided or file does not exist" in caplog.text
+        assert "skipping response processing" in caplog.text
 
 
 class TestRespondedFlagSetting:

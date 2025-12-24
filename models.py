@@ -1,4 +1,5 @@
 import datetime
+import itertools
 import random
 import logging
 from enum import Enum
@@ -14,7 +15,7 @@ class Role(Enum):
 			return Role.FOLLOWER
 		elif self == Role.FOLLOWER:
 			return Role.LEADER
-		raise ValueError(f"No opposite defined for Role: {self}")
+		raise ValueError(f"no opposite defined for role: {self}")
 	
 	@classmethod
 	def from_string(cls, value):
@@ -24,7 +25,7 @@ class Role(Enum):
 		elif value in ["follow", "follower"]:
 			return cls.FOLLOWER
 		else:
-			raise ValueError(f"Unknown role: {value}")
+			raise ValueError(f"unknown role: {value}")
 
 class SwitchPreference(Enum): 
 	PRIMARY_ONLY = 1       # "I only want to be scheduled in my primary role"
@@ -41,16 +42,16 @@ class SwitchPreference(Enum):
 		elif value == "I'm willing to dance my secondary role only if it's needed to enable filling a session": 
 			return cls.SWITCH_IF_NEEDED
 		else:
-			raise ValueError(f"Unknown role: {value}")
+			raise ValueError(f"unknown role: {value}")
 
 class Peep:
 	def __init__(self, **kwargs):
 		# Validate required fields first
 		if not kwargs.get("id"):
-			raise ValueError("Peep requires an 'id' field")
+			raise ValueError("peep requires an 'id' field")
 		
 		if not kwargs.get("role"):
-			raise ValueError("Peep requires a 'role' field")
+			raise ValueError("peep requires a 'role' field")
 		
 		self.id = int(kwargs.get("id"))
 		self.full_name = str(kwargs.get("full_name", "")).strip()
@@ -61,7 +62,7 @@ class Peep:
 		try:
 			self.role = role_input if isinstance(role_input, Role) else Role.from_string(role_input)
 		except ValueError as e:
-			raise ValueError(f"Invalid role '{role_input}': {str(e)}") from e
+			raise ValueError(f"invalid role '{role_input}': {str(e)}") from e
 
 		switch_input = kwargs.get("switch_pref", SwitchPreference.PRIMARY_ONLY)
 		self.switch_pref = switch_input if isinstance(switch_input, SwitchPreference) else SwitchPreference(switch_input)
@@ -231,11 +232,11 @@ class Peep:
 class Event:
 	def __init__(self, **kwargs):
 		self.id = kwargs.get("id", 0)
-		self.date = kwargs.get("date", None) #TODO: validate that this is a datetime
+		self.date = kwargs.get("date", None) 
 		
 		self.duration_minutes = kwargs.get("duration_minutes")
 		if self.duration_minutes not in constants.CLASS_CONFIG:
-			raise ValueError(f"Unknown event duration: {self.duration_minutes}")
+			raise ValueError(f"unknown event duration: {self.duration_minutes}")
 
 		# Attendee lists are role-specific and managed via internal assignment methods.
 		self._leaders = [] 
@@ -342,7 +343,6 @@ class Event:
 		"""
 		Add a peep to the alternate list for the given role.
 		"""
-		#TODO: sanity check that peep is not already an alternate on either list 
 		if role == Role.LEADER: 
 			self._alt_leaders.append(peep)
 		else: 
@@ -624,8 +624,12 @@ class EventSequence:
 		self.total_attendees = 0
 		self.system_weight = 0
 		self.priority_fulfilled = 0 
-		self.normalized_utilization = 0 
-				
+		self.partnerships_fulfilled = 0
+		self.mutual_unique_fulfilled = 0
+		self.mutual_repeat_fulfilled = 0
+		self.one_sided_fulfilled = 0
+		self.normalized_utilization = 0
+
 	
 	def to_dict(self): 
 		return {
@@ -659,11 +663,18 @@ class EventSequence:
 			"peeps": [peep.to_dict() for peep in self.peeps],
 			"num_unique_attendees": self.num_unique_attendees,
 			"priority_fulfilled": self.priority_fulfilled,
+			"partnerships_fulfilled": self.partnerships_fulfilled,
+			"mutual_unique_fulfilled": self.mutual_unique_fulfilled,
+			"mutual_repeat_fulfilled": self.mutual_repeat_fulfilled,
+			"one_sided_fulfilled": self.one_sided_fulfilled,
 			"system_weight": self.system_weight
 		}
 	
 	def finalize(self):
 		"""Finalizes a sequence by increasing priority for unsuccessful peeps and tracking metrics."""
+		utilization_sum = 0
+		eligible_count = 0
+
 		for peep in self.peeps:
 			# Update peep stats 
 			if peep.num_events == 0: 
@@ -676,9 +687,18 @@ class EventSequence:
 			# Track sequence efficiency metrics 
 			self.num_unique_attendees += 1 if peep.num_events > 0 else 0 
 			self.priority_fulfilled += peep.original_priority if peep.num_events > 0 else 0
-			self.normalized_utilization += peep.num_events / peep.event_limit if peep.event_limit > 0 else 0
 			self.total_attendees += peep.num_events 
 			self.system_weight += peep.priority  
+
+			if peep.responded and peep.availability and peep.event_limit > 0:
+				availability_count = len(set(peep.availability))
+				if availability_count > 0:
+					eligible_count += 1
+					effective_limit = min(peep.event_limit, availability_count)
+					utilization_sum += peep.num_events / effective_limit
+
+		if eligible_count > 0:
+			self.normalized_utilization = (utilization_sum / eligible_count) * 100
 
 		# Sort peeps by priority descending
 		self.peeps.sort(key=lambda p: p.priority, reverse=True)
@@ -686,6 +706,53 @@ class EventSequence:
 		# Reassign index based on sorted order
 		for i, peep in enumerate(self.peeps):
 			peep.index = i
+
+	def calculate_partnerships_fulfilled(self, partnership_requests):
+		"""Calculate partnership fulfillment metrics for this sequence."""
+		self.partnerships_fulfilled = 0
+		self.mutual_unique_fulfilled = 0
+		self.mutual_repeat_fulfilled = 0
+		self.one_sided_fulfilled = 0
+
+		if not partnership_requests:
+			return
+
+		mutual_pairs = set()
+		one_sided_requests = set()
+
+		for requester_id, partner_ids in partnership_requests.items():
+			for partner_id in partner_ids:
+				if partner_id in partnership_requests and requester_id in partnership_requests[partner_id]:
+					pair = tuple(sorted((requester_id, partner_id)))
+					mutual_pairs.add(pair)
+				else:
+					one_sided_requests.add((requester_id, partner_id))
+
+		mutual_occurrences = {}
+		one_sided_satisfied = set()
+
+		for event in self.valid_events:
+			attendee_ids = {peep.id for peep in event.attendees}
+			if not attendee_ids:
+				continue
+
+			if mutual_pairs:
+				for pair in itertools.combinations(attendee_ids, 2):
+					normalized_pair = tuple(sorted(pair))
+					if normalized_pair in mutual_pairs:
+						mutual_occurrences[normalized_pair] = mutual_occurrences.get(normalized_pair, 0) + 1
+
+			if one_sided_requests:
+				for requester_id, partner_id in one_sided_requests:
+					if requester_id in attendee_ids and partner_id in attendee_ids:
+						one_sided_satisfied.add((requester_id, partner_id))
+
+		self.mutual_unique_fulfilled = len(mutual_occurrences)
+		self.mutual_repeat_fulfilled = sum(
+			count - 1 for count in mutual_occurrences.values() if count > 1
+		)
+		self.one_sided_fulfilled = len(one_sided_satisfied)
+		self.partnerships_fulfilled = self.mutual_unique_fulfilled + self.one_sided_fulfilled
 
 	@staticmethod
 	def get_unique_sequences(sequences):
@@ -738,7 +805,7 @@ class EventSequence:
 			f"valid events: {{ {', '.join(str(event.id) for event in sorted_events)} }}, "
 			f"unique attendees {self.num_unique_attendees}/{len(self.peeps)}, " 
 			f"priority fulfilled {self.priority_fulfilled}, "
-			f"normalized utilization {self.normalized_utilization:.2f}, "
+			f"normalized utilization {self.normalized_utilization:.2f}%, "
 			f"total attendees {self.total_attendees}, "
 			f"system_weight {self.system_weight}"
 		)

@@ -3,6 +3,7 @@ import tempfile
 import os
 import json
 import datetime
+import logging
 from file_io import (
 	load_data_from_json,
 	convert_to_json,
@@ -16,7 +17,9 @@ from file_io import (
 	save_peeps_csv,
 	load_json,
 	save_json,
-	normalize_email
+	normalize_email,
+	load_cancellations,
+	load_partnerships
 )
 from models import Event, EventSequence, Role, SwitchPreference, Peep
 
@@ -54,8 +57,8 @@ def responses_csv_path():
 Event: Saturday July 5 - 1pm,,,,,,,120,
 Event: Sunday July 6 - 2pm (extra info),,,,,,,90,
 Event: Monday July 7 - 11am,,,,,,,60,
-Alice Alpha,alice@test.com,Leader,I'm happy to dance my secondary role if it lets me attend when my primary is full,2,"Saturday July 5 - 1pm, Monday July 7 - 11am",0,,"2025-07-01 12:00"
-Bob Beta,bob@test.com,Follower,I only want to be scheduled in my primary role,1,"Sunday July 6 - 2pm (extra info)",6,,"2025-07-01 12:01"
+Alice Alpha,alice@test.com,Leader,I'm happy to dance my secondary role if it lets me attend when my primary is full,2,"Saturday July 5 - 1pm, Monday July 7 - 11am",0,,"7/1/2025 12:00:00"
+Bob Beta,bob@test.com,Follower,I only want to be scheduled in my primary role,1,"Sunday July 6 - 2pm (extra info)",6,,"7/1/2025 12:01:00"
 """
 	with tempfile.NamedTemporaryFile(mode="w", delete=False, newline="") as f:
 		f.write(content)
@@ -76,7 +79,7 @@ def responses_csv_rows():
 			"Max Sessions": "2",
 			"Availability": "Saturday July 5 - 1pm, Monday July 7 - 11am",
 			"Min Interval Days": "0",
-			"Timestamp": "2025-07-01 12:00"
+			"Timestamp": "7/1/2025 12:00:00"
 		},
 		{
 			"Name": "Bob Beta",
@@ -86,7 +89,7 @@ def responses_csv_rows():
 			"Max Sessions": "1",
 			"Availability": "Sunday July 6 - 2pm (extra info)",
 			"Min Interval Days": "6",
-			"Timestamp": "2025-07-01 12:01"
+			"Timestamp": "7/1/2025 12:01:00"
 		}
 	]
 
@@ -279,17 +282,17 @@ class TestTimeDateParsing:
 
 	def test_parse_time_range_invalid_format(self):
 		"""Test that invalid format raises ValueError."""
-		with pytest.raises(ValueError, match="Invalid time range format"):
+		with pytest.raises(ValueError, match="invalid time range format"):
 			parse_time_range("5pm - 6pm")  # Wrong separator
 
 	def test_parse_time_range_invalid_time(self):
 		"""Test that invalid time format raises ValueError."""
-		with pytest.raises(ValueError, match="Time out of range"):
+		with pytest.raises(ValueError, match="time out of range"):
 			parse_time_range("25pm to 6pm")  # Invalid hour
 
 	def test_parse_time_range_end_before_start(self):
 		"""Test that end time before start time raises ValueError."""
-		with pytest.raises(ValueError, match="End time must be after start time"):
+		with pytest.raises(ValueError, match="end time must be after start time"):
 			parse_time_range("6pm to 5pm")
 
 	def test_parse_event_date_with_time_range(self):
@@ -502,19 +505,19 @@ class TestEventExtraction:
 	def test_extract_events_invalid_duration_raises(self):
 		"""Non-integer Event Duration should raise."""
 		rows = [{"Name": "Event: Saturday July 5 - 1pm", "Event Duration": "abc"}]
-		with pytest.raises(ValueError, match="Invalid Event Duration"):
+		with pytest.raises(ValueError, match="invalid event duration value"):
 			extract_events(rows)
 
 	def test_extract_events_missing_duration_raises(self):
 		"""Missing Event Duration field should raise."""
 		rows = [{"Name": "Event: Saturday July 5 - 1pm"}]
-		with pytest.raises(ValueError, match="Missing Event Duration"):
+		with pytest.raises(ValueError, match="missing event duration"):
 			extract_events(rows)
 
 	def test_extract_events_duration_not_in_config_raises(self):
 		"""Duration not listed in CLASS_CONFIG should raise ValueError."""
 		rows = [{"Name": "Event: Saturday July 5 - 1pm", "Event Duration": "666"}]
-		with pytest.raises(ValueError, match="Duration 666 not in CLASS_CONFIG"):
+		with pytest.raises(ValueError, match="duration 666 not in class_config"):
 			extract_events(rows)
 
 
@@ -550,7 +553,7 @@ class TestPeepLoading:
 		with tempfile.NamedTemporaryFile(mode="w", delete=False, newline='') as f:
 			f.write(content)
 			f.flush()
-			with pytest.raises(ValueError, match="Duplicate email"):
+			with pytest.raises(ValueError, match="duplicate email"):
 				load_peeps(f.name)
 
 	def test_load_peeps_allows_inactive_peep_with_email(self, tmp_path):
@@ -600,10 +603,10 @@ class TestResponseProcessing:
 			"Max Sessions": "2",
 			"Availability": "Sunday July 6 - 2pm (extra info)",
 			"Min Interval Days": "0",
-			"Timestamp": "2025-07-01 12:01"
+			"Timestamp": "7/1/2025 12:01:00"
 		})
 		event_map = extract_events(responses_csv_rows)
-		with pytest.raises(ValueError, match="Response from inactive peep: Inactive Gamma"):
+		with pytest.raises(ValueError, match="response from inactive peep: Inactive Gamma"):
 			updated_peeps, responses = process_responses(responses_csv_rows, peeps, event_map)
 
 	def test_unknown_event_in_availability_logs_warning(self, peeps_csv_path):
@@ -618,7 +621,7 @@ class TestResponseProcessing:
 				"Max Sessions": "2",
 				"Availability": "Saturday July 5 - 1pm, Monday July 7 - 11am",  # Monday not in events
 				"Min Interval Days": "0",
-				"Timestamp": "2025-07-01 12:00"
+				"Timestamp": "7/1/2025 12:00:00"
 			}
 		]
 		peeps = load_peeps(peeps_csv_path)
@@ -635,15 +638,15 @@ class TestResponseProcessing:
 		"""Row missing name should be skipped without error."""
 		peeps = [Peep.from_csv(p) for p in valid_peeps_rows]
 		rows = [{"Name": "", "Email Address": "x", "Primary Role": "Leader", "Secondary Role": "NONE",
-				 "Max Sessions": "1", "Availability": "July 5 - 1pm", "Timestamp": "2025-07-01 12:00"}]
+				 "Max Sessions": "1", "Availability": "July 5 - 1pm", "Timestamp": "7/1/2025 12:00:00"}]
 		assert process_responses(rows, peeps, {})[1] == []
 
 	def test_process_responses_missing_email_raises(self, valid_peeps_rows):
 		"""Blank email in active response row should raise ValueError."""
 		peeps = [Peep.from_csv(p) for p in valid_peeps_rows]
 		rows = [{"Name": "Alice", "Email Address": "", "Primary Role": "Leader", "Secondary Role": "NONE",
-				 "Max Sessions": "1", "Availability": "July 5 - 1pm", "Timestamp": "2025-07-01 12:00"}]
-		with pytest.raises(ValueError, match="Missing email"):
+				 "Max Sessions": "1", "Availability": "July 5 - 1pm", "Timestamp": "7/1/2025 12:00:00"}]
+		with pytest.raises(ValueError, match="missing email"):
 			process_responses(rows, peeps, {})
 
 	def test_process_responses_unknown_email_raises(self, valid_peeps_rows):
@@ -651,8 +654,8 @@ class TestResponseProcessing:
 		peeps = [Peep.from_csv(p) for p in valid_peeps_rows]
 		rows = [{"Name": "Unknown", "Email Address": "notfound@test.com", "Primary Role": "Leader",
 				 "Secondary Role": "NONE", "Max Sessions": "1", "Availability": "July 5 - 1pm",
-				 "Timestamp": "2025-07-01 12:00"}]
-		with pytest.raises(ValueError, match="No matching peep found for email"):
+				 "Timestamp": "7/1/2025 12:00:00"}]
+		with pytest.raises(ValueError, match="no matching peep found for email"):
 			process_responses(rows, peeps, {})
 
 
@@ -773,7 +776,7 @@ class TestEmailNormalization:
 			"Max Sessions": "1",
 			"Availability": "",
 			"Min Interval Days": "0",
-			"Timestamp": "2025-07-01 12:00"
+			"Timestamp": "7/1/2025 12:00:00"
 		}]
 
 		with tempfile.NamedTemporaryFile(mode="w", delete=False, newline='') as f:
@@ -787,3 +790,311 @@ class TestEmailNormalization:
 		# Should match despite different dots
 		updated_peeps, responses = process_responses(responses_rows, peeps, {})
 		assert updated_peeps[0].responded is True
+
+
+class TestCancellations:
+	"""Tests for loading cancellations.json (events + availability)."""
+
+	def test_load_cancellations_returns_parsed_event_ids(self, tmp_path):
+		"""Test loading valid cancellations.json returns parsed event_id strings.
+
+		Event strings are parsed immediately and returned as event_ids in format:
+		"YYYY-MM-DD HH:MM"
+		"""
+		cancelled_file = tmp_path / "cancellations.json"
+		cancelled_file.write_text(json.dumps({
+			"cancelled_events": [
+				"Saturday March 1 - 5pm to 6pm",
+				"Friday March 7 - 5:30pm to 7pm"
+			],
+			"cancelled_availability": [
+				{
+					"email": "alex@example.com",
+					"events": [
+						"Saturday March 1 - 5pm to 6pm"
+					]
+				}
+			],
+			"notes": "Instructor unavailable"
+		}))
+
+		cancelled_event_ids, cancelled_availability = load_cancellations(str(cancelled_file), year=2025)
+
+		assert isinstance(cancelled_event_ids, set)
+		assert len(cancelled_event_ids) == 2
+		# Event IDs should be parsed to format "YYYY-MM-DD HH:MM"
+		assert "2025-03-01 17:00" in cancelled_event_ids
+		assert "2025-03-07 17:30" in cancelled_event_ids
+		assert cancelled_availability["alex@example.com"] == {"2025-03-01 17:00"}
+
+	def test_load_cancellations_invalid_event_string(self, tmp_path):
+		"""Test that unparseable event string raises exception with meaningful message.
+
+		Configuration error - user specified event string that cannot be parsed.
+		"""
+		cancelled_file = tmp_path / "cancellations.json"
+		cancelled_file.write_text(json.dumps({
+			"cancelled_events": [
+				"Invalid Event String"
+			],
+			"cancelled_availability": [],
+			"notes": "Bad format"
+		}))
+
+		with pytest.raises(ValueError, match="invalid event format|cannot parse|unparseable"):
+			load_cancellations(str(cancelled_file), year=2025)
+
+	def test_load_cancellations_requires_year_parameter(self, tmp_path):
+		"""Test that year parameter is required for proper event_id parsing."""
+		cancelled_file = tmp_path / "cancellations.json"
+		cancelled_file.write_text(json.dumps({
+			"cancelled_events": [
+				"Saturday March 1 - 5pm to 6pm"
+			],
+			"cancelled_availability": [
+				{
+					"email": "alex@example.com",
+					"events": ["Friday March 7 - 5:30pm to 7pm"]
+				}
+			]
+		}))
+
+		cancelled_event_ids, cancelled_availability = load_cancellations(str(cancelled_file), year=2026)
+
+		# Event ID should use provided year
+		assert "2026-03-01 17:00" in cancelled_event_ids
+		assert "2026-03-07 17:30" in cancelled_availability["alex@example.com"]
+		assert "2025-03-01 17:00" not in cancelled_event_ids
+
+	def test_load_cancellations_file_not_found(self, tmp_path):
+		"""Test file doesn't exist returns empty set (backward compatible)."""
+		cancelled_file = tmp_path / "cancellations.json"
+		cancelled_event_ids, cancelled_availability = load_cancellations(str(cancelled_file), year=2025)
+
+		assert isinstance(cancelled_event_ids, set)
+		assert len(cancelled_event_ids) == 0
+		assert cancelled_availability == {}
+
+	def test_load_cancellations_empty_array(self, tmp_path):
+		"""Test empty cancellation arrays return empty structures."""
+		cancelled_file = tmp_path / "cancellations.json"
+		cancelled_file.write_text(json.dumps({
+			"cancelled_events": [],
+			"cancelled_availability": [],
+			"notes": "None cancelled"
+		}))
+
+		cancelled_event_ids, cancelled_availability = load_cancellations(str(cancelled_file), year=2025)
+
+		assert isinstance(cancelled_event_ids, set)
+		assert len(cancelled_event_ids) == 0
+		assert cancelled_availability == {}
+
+	def test_load_cancellations_malformed_json(self, tmp_path):
+		"""Test malformed JSON raises JSONDecodeError (configuration error)."""
+		cancelled_file = tmp_path / "cancellations.json"
+		cancelled_file.write_text("{invalid json")
+
+		# Malformed JSON is a configuration error - should raise
+		with pytest.raises(Exception, match="invalid cancellations file"):
+			load_cancellations(str(cancelled_file), year=2025)
+
+	def test_load_cancellations_missing_key_raises(self, tmp_path):
+		"""Test missing required keys raises error."""
+		cancelled_file = tmp_path / "cancellations.json"
+		cancelled_file.write_text(json.dumps({
+			"cancelled_events": []
+		}))
+
+		with pytest.raises(ValueError, match="cancelled_availability"):
+			load_cancellations(str(cancelled_file), year=2025)
+
+	def test_load_cancellations_null_value_raises(self, tmp_path):
+		"""Test null cancelled_events value raises error."""
+		cancelled_file = tmp_path / "cancellations.json"
+		cancelled_file.write_text(json.dumps({
+			"cancelled_events": None,
+			"cancelled_availability": []
+		}))
+
+		with pytest.raises(ValueError, match="cancelled_events"):
+			load_cancellations(str(cancelled_file), year=2025)
+
+	def test_load_cancellations_mixed_valid_and_invalid_strings(self, tmp_path):
+		"""Test that even one invalid event string raises error (fail-fast)."""
+		cancelled_file = tmp_path / "cancellations.json"
+		cancelled_file.write_text(json.dumps({
+			"cancelled_events": [
+				"Saturday March 1 - 5pm to 6pm",  # Valid
+				"Not A Valid Event",               # Invalid
+				"Friday March 7 - 5:30pm to 7pm"  # Valid but not processed
+			],
+			"cancelled_availability": []
+		}))
+
+		with pytest.raises(ValueError):
+			load_cancellations(str(cancelled_file), year=2025)
+
+	def test_load_cancellations_missing_email_raises(self, tmp_path):
+		"""Test cancelled_availability entries require email."""
+		cancelled_file = tmp_path / "cancellations.json"
+		cancelled_file.write_text(json.dumps({
+			"cancelled_events": [],
+			"cancelled_availability": [
+				{"events": ["Saturday March 1 - 5pm to 6pm"]}
+			]
+		}))
+
+		with pytest.raises(ValueError, match="email"):
+			load_cancellations(str(cancelled_file), year=2025)
+
+	def test_load_cancellations_invalid_events_list_raises(self, tmp_path):
+		"""Test cancelled_availability entries require events list."""
+		cancelled_file = tmp_path / "cancellations.json"
+		cancelled_file.write_text(json.dumps({
+			"cancelled_events": [],
+			"cancelled_availability": [
+				{"email": "alex@example.com", "events": "Saturday March 1 - 5pm to 6pm"}
+			]
+		}))
+
+		with pytest.raises(ValueError, match="events"):
+			load_cancellations(str(cancelled_file), year=2025)
+
+class TestPartnershipRequests:
+	"""Tests for loading partnership requests from JSON."""
+
+	def test_load_partnerships_file_not_found(self, tmp_path):
+		result = load_partnerships(str(tmp_path))
+		assert result == {}
+
+	def test_load_partnerships_with_wrapper(self, tmp_path):
+		import constants
+
+		requests_file = tmp_path / constants.PARTNERSHIPS_FILE
+		requests_file.write_text(json.dumps({
+			"partnerships": {
+				"1": [2, 3],
+				"2": [4]
+			}
+		}))
+
+		result = load_partnerships(str(tmp_path))
+		assert result == {1: {2, 3}, 2: {4}}
+
+	def test_load_partnerships_all_ids_valid(self, tmp_path):
+		"""Test loading partnerships when all IDs are valid (strict validation)."""
+		import constants
+
+		requests_file = tmp_path / constants.PARTNERSHIPS_FILE
+		requests_file.write_text(json.dumps({
+			"1": [2, 3],
+			"2": [1]
+		}))
+
+		result = load_partnerships(str(tmp_path), valid_peep_ids={1, 2, 3})
+		assert result == {1: {2, 3}, 2: {1}}
+
+	def test_load_partnerships_requires_mapping(self, tmp_path):
+		import constants
+
+		requests_file = tmp_path / constants.PARTNERSHIPS_FILE
+		requests_file.write_text(json.dumps(["1", "2"]))
+
+		with pytest.raises(ValueError, match="partnerships.json must map"):
+			load_partnerships(str(tmp_path))
+
+	def test_load_partnerships_malformed_json_raises(self, tmp_path):
+		"""Test that invalid JSON syntax raises an error."""
+		import constants
+
+		requests_file = tmp_path / constants.PARTNERSHIPS_FILE
+		requests_file.write_text("{invalid json")
+
+		with pytest.raises(Exception, match="invalid partnerships.json"):
+			load_partnerships(str(tmp_path))
+
+	def test_load_partnerships_non_list_partners_raises(self, tmp_path):
+		"""Test that partner value that is not a list raises an error (strict validation)."""
+		import constants
+
+		requests_file = tmp_path / constants.PARTNERSHIPS_FILE
+		requests_file.write_text(json.dumps({
+			"1": "2"  # String instead of list
+		}))
+
+		with pytest.raises(ValueError, match="must be a list"):
+			load_partnerships(str(tmp_path))
+
+	def test_load_partnerships_self_partnership_raises(self, tmp_path):
+		"""Test that self-partnership requests raise an error (strict validation)."""
+		import constants
+
+		requests_file = tmp_path / constants.PARTNERSHIPS_FILE
+		requests_file.write_text(json.dumps({
+			"1": [1, 2]  # Includes self (1)
+		}))
+
+		with pytest.raises(ValueError, match="cannot partner with themselves"):
+			load_partnerships(str(tmp_path))
+
+	def test_load_partnerships_unknown_requester_id_raises(self, tmp_path):
+		"""Test that unknown requester ID raises an error (strict validation)."""
+		import constants
+
+		requests_file = tmp_path / constants.PARTNERSHIPS_FILE
+		requests_file.write_text(json.dumps({
+			"99": [1, 2]  # 99 is not in valid peeps
+		}))
+
+		with pytest.raises(ValueError, match="requester.*not found|unknown requester"):
+			load_partnerships(str(tmp_path), valid_peep_ids={1, 2, 3})
+
+	def test_load_partnerships_unknown_partner_id_raises(self, tmp_path):
+		"""Test that unknown partner ID raises an error (strict validation)."""
+		import constants
+
+		requests_file = tmp_path / constants.PARTNERSHIPS_FILE
+		requests_file.write_text(json.dumps({
+			"1": [2, 99]  # 99 is not in valid peeps
+		}))
+
+		with pytest.raises(ValueError, match="partner.*not found|unknown.*partner"):
+			load_partnerships(str(tmp_path), valid_peep_ids={1, 2, 3})
+
+	def test_load_partnerships_invalid_id_string_raises(self, tmp_path):
+		"""Test that non-integer IDs raise an error."""
+		import constants
+
+		requests_file = tmp_path / constants.PARTNERSHIPS_FILE
+		requests_file.write_text(json.dumps({
+			"abc": [1, 2]  # Invalid requester id
+		}))
+
+		with pytest.raises(ValueError, match="invalid.*id|must be.*integer"):
+			load_partnerships(str(tmp_path))
+
+	def test_load_partnerships_invalid_partner_id_string_raises(self, tmp_path):
+		"""Test that non-integer partner IDs raise an error."""
+		import constants
+
+		requests_file = tmp_path / constants.PARTNERSHIPS_FILE
+		requests_file.write_text(json.dumps({
+			"1": ["xyz", 2]  # Invalid partner id
+		}))
+
+		with pytest.raises(ValueError, match="invalid.*id|must be.*integer"):
+			load_partnerships(str(tmp_path))
+
+	def test_load_partnerships_null_partners_list_raises(self, tmp_path):
+		"""Test that null partners list raises an error."""
+		import constants
+
+		requests_file = tmp_path / constants.PARTNERSHIPS_FILE
+		requests_file.write_text(json.dumps({
+			"1": None  # Null
+		}))
+
+		with pytest.raises(ValueError, match="partners.*required|cannot be null"):
+			load_partnerships(str(tmp_path))
+

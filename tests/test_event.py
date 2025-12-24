@@ -381,7 +381,7 @@ class TestEventConfiguration:
     
     def test_invalid_duration_raises_error(self, event_factory, peep_factory):
         """Test that invalid durations raise ValueError."""
-        with pytest.raises(ValueError, match="Unknown event duration"):
+        with pytest.raises(ValueError, match="unknown event duration"):
             Event(id=1, duration_minutes=45)  # Not in CLASS_CONFIG
 
 

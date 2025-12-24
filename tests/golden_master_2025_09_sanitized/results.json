@@ -1044,5 +1044,9 @@
     ],
     "num_unique_attendees": 24,
     "priority_fulfilled": 1,
-    "system_weight": 29
+    "system_weight": 29,
+    "partnerships_fulfilled": 0,
+    "mutual_unique_fulfilled": 0,
+    "mutual_repeat_fulfilled": 0,
+    "one_sided_fulfilled": 0
 }

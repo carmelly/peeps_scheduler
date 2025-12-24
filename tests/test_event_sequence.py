@@ -27,6 +27,10 @@ class TestEventSequenceInitialization:
         assert sequence.num_unique_attendees == 0
         assert sequence.total_attendees == 0
         assert sequence.priority_fulfilled == 0
+        assert sequence.partnerships_fulfilled == 0
+        assert sequence.mutual_unique_fulfilled == 0
+        assert sequence.mutual_repeat_fulfilled == 0
+        assert sequence.one_sided_fulfilled == 0
     
     def test_initialization_with_events_and_peeps(self, event_factory, peep_factory):
         """Test that EventSequence stores provided events and peeps."""
@@ -51,6 +55,10 @@ class TestEventSequenceInitialization:
         assert sequence.total_attendees == 0
         assert sequence.system_weight == 0
         assert sequence.priority_fulfilled == 0
+        assert sequence.partnerships_fulfilled == 0
+        assert sequence.mutual_unique_fulfilled == 0
+        assert sequence.mutual_repeat_fulfilled == 0
+        assert sequence.one_sided_fulfilled == 0
         assert sequence.normalized_utilization == 0
 
 
@@ -334,27 +342,27 @@ class TestEventSequenceFinalizationMetrics:
         assert sequence.priority_fulfilled == 8  # 3 + 5
     
     def test_finalize_calculates_normalized_utilization_correctly(self, event_factory, peep_factory):
-        """Test that normalized_utilization correctly averages utilization rates."""
+        """Test that normalized_utilization averages utilization rates as a percent with clamping."""
         event = event_factory(id=1)
-        peep1 = peep_factory(id=1, event_limit=2)  # attends 1/2 = 0.5
-        peep2 = peep_factory(id=2, event_limit=1)  # attends 1/1 = 1.0
-        peep3 = peep_factory(id=3, event_limit=3)  # attends 0/3 = 0.0
+        peep1 = peep_factory(id=1, event_limit=4, availability=[1, 2])  # clamp 4 -> 2
+        peep2 = peep_factory(id=2, event_limit=1, availability=[1])
+        peep3 = peep_factory(id=3, event_limit=3, availability=[1, 2, 3])
         peeps = [peep1, peep2, peep3]
-        
+
         event.add_attendee(peep1, Role.LEADER)
         event.add_attendee(peep2, Role.FOLLOWER)
-        
+
         peep1.num_events = 1
         peep2.num_events = 1
         peep3.num_events = 0
-        
+
         sequence = EventSequence([event], peeps)
         sequence.valid_events = [event]
-        
+
         sequence.finalize()
-        
-        # Should be sum of individual utilization rates: 0.5 + 1.0 + 0.0 = 1.5
-        assert sequence.normalized_utilization == 1.5
+
+        # (1/2 + 1/1 + 0/3) / 3 * 100 = 50%
+        assert sequence.normalized_utilization == 50.0
     
     def test_finalize_calculates_total_attendees_correctly(self, event_factory, peep_factory):
         """Test that total_attendees sums all num_events across peeps."""
@@ -363,19 +371,99 @@ class TestEventSequenceFinalizationMetrics:
         peep2 = peep_factory(id=2)
         peep3 = peep_factory(id=3)
         peeps = [peep1, peep2, peep3]
-        
+
         # Simulate various attendance patterns
         peep1.num_events = 2  # Attends both events
         peep2.num_events = 1  # Attends one event
         peep3.num_events = 0  # Attends no events
-        
+
         sequence = EventSequence(events, peeps)
         sequence.valid_events = events
-        
+
         sequence.finalize()
-        
+
         # Should sum all num_events: 2 + 1 + 0 = 3
         assert sequence.total_attendees == 3
+
+    def test_normalized_utilization_excludes_non_responded_peeps(self, event_factory, peep_factory):
+        """Test that non-responded peeps are excluded from normalized_utilization denominator."""
+        # Create 5 total peeps: 3 responded, 2 did not
+        peep1 = peep_factory(id=1, responded=True, event_limit=2, availability=[1])
+        peep2 = peep_factory(id=2, responded=True, event_limit=2, availability=[1])
+        peep3 = peep_factory(id=3, responded=True, event_limit=2, availability=[1])
+        peep4 = peep_factory(id=4, responded=False, event_limit=2, availability=[1])  # Did not respond
+        peep5 = peep_factory(id=5, responded=False, event_limit=2, availability=[1])  # Did not respond
+
+        peeps = [peep1, peep2, peep3, peep4, peep5]
+
+        event = event_factory(id=1)
+        event.add_attendee(peep1, Role.LEADER)
+        event.add_attendee(peep2, Role.FOLLOWER)
+
+        peep1.num_events = 1
+        peep2.num_events = 1
+        peep3.num_events = 0  # Responded but unscheduled
+        peep4.num_events = 0  # Did not respond
+        peep5.num_events = 0  # Did not respond
+
+        sequence = EventSequence([event], peeps)
+        sequence.valid_events = [event]
+
+        sequence.finalize()
+
+        # Utilization should only count responding peeps (3, not 5):
+        # (1/1 + 1/1 + 0/2) / 3 * 100 = 66.67%
+        # NOT (1/1 + 1/1 + 0/2 + 0/2 + 0/2) / 5 * 100 = 40%
+        assert sequence.normalized_utilization == pytest.approx(66.67, abs=0.01)
+
+    def test_normalized_utilization_handles_empty_availability(self, event_factory, peep_factory):
+        """Test that peeps with empty availability lists don't break utilization calculation."""
+        peep1 = peep_factory(id=1, responded=True, event_limit=2, availability=[1])
+        peep2 = peep_factory(id=2, responded=True, event_limit=2, availability=[])  # Empty availability
+        peep3 = peep_factory(id=3, responded=True, event_limit=2, availability=[])  # Empty availability
+
+        peeps = [peep1, peep2, peep3]
+
+        event = event_factory(id=1)
+        event.add_attendee(peep1, Role.LEADER)
+
+        peep1.num_events = 1
+        peep2.num_events = 0
+        peep3.num_events = 0
+
+        sequence = EventSequence([event], peeps)
+        sequence.valid_events = [event]
+
+        # Should not raise division by zero or crash
+        sequence.finalize()
+
+        # Utilization should only count peep1 (has availability and responded):
+        # (1/1) / 1 * 100 = 100%
+        # peep2 and peep3 should be excluded due to empty availability
+        assert sequence.normalized_utilization == 100.0
+
+    def test_normalized_utilization_handles_zero_eligible_peeps(self, event_factory, peep_factory):
+        """Test that zero eligible peeps after filtering doesn't cause division by zero."""
+        # Create peeps but none are eligible for utilization calculation
+        peep1 = peep_factory(id=1, responded=False, event_limit=2, availability=[1])  # Did not respond
+        peep2 = peep_factory(id=2, responded=True, event_limit=0, availability=[1])   # event_limit is 0
+        peep3 = peep_factory(id=3, responded=True, event_limit=2, availability=[])   # Empty availability
+
+        peeps = [peep1, peep2, peep3]
+
+        event = event_factory(id=1)
+        peep1.num_events = 0
+        peep2.num_events = 0
+        peep3.num_events = 0
+
+        sequence = EventSequence([event], peeps)
+        sequence.valid_events = [event]
+
+        # Should not raise division by zero
+        sequence.finalize()
+
+        # Should return sensible default (0) when no eligible peeps
+        assert sequence.normalized_utilization == 0
 
 
 class TestEventSequenceFinalizationSorting:
@@ -448,6 +536,10 @@ class TestEventSequenceDataConversion:
         sequence = EventSequence(events, peeps)
         sequence.num_unique_attendees = 2
         sequence.system_weight = 10
+        sequence.partnerships_fulfilled = 3
+        sequence.mutual_unique_fulfilled = 2
+        sequence.mutual_repeat_fulfilled = 1
+        sequence.one_sided_fulfilled = 1
         
         data = sequence.to_dict()
         
@@ -456,9 +548,17 @@ class TestEventSequenceDataConversion:
         assert 'peeps' in data
         assert 'num_unique_attendees' in data
         assert 'system_weight' in data
+        assert 'partnerships_fulfilled' in data
+        assert 'mutual_unique_fulfilled' in data
+        assert 'mutual_repeat_fulfilled' in data
+        assert 'one_sided_fulfilled' in data
         
         assert data['num_unique_attendees'] == 2
         assert data['system_weight'] == 10
+        assert data['partnerships_fulfilled'] == 3
+        assert data['mutual_unique_fulfilled'] == 2
+        assert data['mutual_repeat_fulfilled'] == 1
+        assert data['one_sided_fulfilled'] == 1
     
     def test_to_dict_serializes_valid_events_with_attendees(self, event_factory, peep_factory):
         """Test that to_dict properly serializes valid events with attendee info."""
@@ -491,6 +591,43 @@ class TestEventSequenceDataConversion:
         assert data['peeps'] == []
         assert data['num_unique_attendees'] == 0
         assert data['system_weight'] == 0
+        assert data['partnerships_fulfilled'] == 0
+        assert data['mutual_unique_fulfilled'] == 0
+        assert data['mutual_repeat_fulfilled'] == 0
+        assert data['one_sided_fulfilled'] == 0
 
 
+class TestEventSequencePartnerships:
+    """Test partnership fulfillment scoring for EventSequence."""
 
+    def test_calculate_partnerships_fulfilled_counts_mutuals_and_one_sided(self, event_factory, peep_factory):
+        peep1 = peep_factory(id=1, role=Role.LEADER)
+        peep2 = peep_factory(id=2, role=Role.FOLLOWER)
+        peep3 = peep_factory(id=3, role=Role.FOLLOWER)
+
+        event1 = event_factory(id=1)
+        event1.add_attendee(peep1, Role.LEADER)
+        event1.add_attendee(peep2, Role.FOLLOWER)
+
+        event2 = event_factory(id=2)
+        event2.add_attendee(peep1, Role.LEADER)
+        event2.add_attendee(peep2, Role.FOLLOWER)
+
+        event3 = event_factory(id=3)
+        event3.add_attendee(peep1, Role.LEADER)
+        event3.add_attendee(peep3, Role.FOLLOWER)
+
+        sequence = EventSequence([event1, event2, event3], [peep1, peep2, peep3])
+        sequence.valid_events = [event1, event2, event3]
+
+        partnership_requests = {
+            1: {2, 3},
+            2: {1}
+        }
+
+        sequence.calculate_partnerships_fulfilled(partnership_requests)
+
+        assert sequence.mutual_unique_fulfilled == 1
+        assert sequence.mutual_repeat_fulfilled == 1
+        assert sequence.one_sided_fulfilled == 1
+        assert sequence.partnerships_fulfilled == 2
