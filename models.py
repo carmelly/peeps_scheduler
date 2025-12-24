@@ -232,7 +232,7 @@ class Peep:
 class Event:
 	def __init__(self, **kwargs):
 		self.id = kwargs.get("id", 0)
-		self.date = kwargs.get("date", None) #TODO: validate that this is a datetime
+		self.date = kwargs.get("date", None) 
 		
 		self.duration_minutes = kwargs.get("duration_minutes")
 		if self.duration_minutes not in constants.CLASS_CONFIG:
@@ -343,7 +343,6 @@ class Event:
 		"""
 		Add a peep to the alternate list for the given role.
 		"""
-		#TODO: sanity check that peep is not already an alternate on either list 
 		if role == Role.LEADER: 
 			self._alt_leaders.append(peep)
 		else: 

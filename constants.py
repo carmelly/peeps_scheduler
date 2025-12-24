@@ -5,7 +5,7 @@ DATESTR_FORMAT = "%A %B %d - %I%p"
 
 CLASS_CONFIG = {
 	60: {
-		"price": 120.0, #TODO: Not sure if this is correct, or what the role limits should be 
+		"price": 120.0, 
 		"min_role": 2,
 		"max_role": 3,
 		"allow_downgrade": False

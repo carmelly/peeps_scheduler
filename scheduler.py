@@ -74,9 +74,6 @@ class Scheduler:
 				else:
 					event.add_alternate(peep, primary_role)
 
-			# TODO: Implement advanced dual-role promotion:
-			# 		- Use SWITCH_IF_PRIMARY_FULL peeps to allow a primary-role alternate into the event
-
 			# Promote SWITCH_IF_NEEDED alternates if it enables the session to fill
 			for role in [Role.LEADER, Role.FOLLOWER]:
 				opposite_role = role.opposite()
