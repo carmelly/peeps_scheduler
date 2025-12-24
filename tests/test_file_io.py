@@ -57,8 +57,8 @@ def responses_csv_path():
 Event: Saturday July 5 - 1pm,,,,,,,120,
 Event: Sunday July 6 - 2pm (extra info),,,,,,,90,
 Event: Monday July 7 - 11am,,,,,,,60,
-Alice Alpha,alice@test.com,Leader,I'm happy to dance my secondary role if it lets me attend when my primary is full,2,"Saturday July 5 - 1pm, Monday July 7 - 11am",0,,"2025-07-01 12:00"
-Bob Beta,bob@test.com,Follower,I only want to be scheduled in my primary role,1,"Sunday July 6 - 2pm (extra info)",6,,"2025-07-01 12:01"
+Alice Alpha,alice@test.com,Leader,I'm happy to dance my secondary role if it lets me attend when my primary is full,2,"Saturday July 5 - 1pm, Monday July 7 - 11am",0,,"7/1/2025 12:00:00"
+Bob Beta,bob@test.com,Follower,I only want to be scheduled in my primary role,1,"Sunday July 6 - 2pm (extra info)",6,,"7/1/2025 12:01:00"
 """
 	with tempfile.NamedTemporaryFile(mode="w", delete=False, newline="") as f:
 		f.write(content)
@@ -79,7 +79,7 @@ def responses_csv_rows():
 			"Max Sessions": "2",
 			"Availability": "Saturday July 5 - 1pm, Monday July 7 - 11am",
 			"Min Interval Days": "0",
-			"Timestamp": "2025-07-01 12:00"
+			"Timestamp": "7/1/2025 12:00:00"
 		},
 		{
 			"Name": "Bob Beta",
@@ -89,7 +89,7 @@ def responses_csv_rows():
 			"Max Sessions": "1",
 			"Availability": "Sunday July 6 - 2pm (extra info)",
 			"Min Interval Days": "6",
-			"Timestamp": "2025-07-01 12:01"
+			"Timestamp": "7/1/2025 12:01:00"
 		}
 	]
 
@@ -574,7 +574,7 @@ class TestResponseProcessing:
 			"Max Sessions": "2",
 			"Availability": "Sunday July 6 - 2pm (extra info)",
 			"Min Interval Days": "0",
-			"Timestamp": "2025-07-01 12:01"
+			"Timestamp": "7/1/2025 12:01:00"
 		})
 		event_map = extract_events(responses_csv_rows)
 		with pytest.raises(ValueError, match="response from inactive peep: Inactive Gamma"):
@@ -592,7 +592,7 @@ class TestResponseProcessing:
 				"Max Sessions": "2",
 				"Availability": "Saturday July 5 - 1pm, Monday July 7 - 11am",  # Monday not in events
 				"Min Interval Days": "0",
-				"Timestamp": "2025-07-01 12:00"
+				"Timestamp": "7/1/2025 12:00:00"
 			}
 		]
 		peeps = load_peeps(peeps_csv_path)
@@ -609,14 +609,14 @@ class TestResponseProcessing:
 		"""Row missing name should be skipped without error."""
 		peeps = [Peep.from_csv(p) for p in valid_peeps_rows]
 		rows = [{"Name": "", "Email Address": "x", "Primary Role": "Leader", "Secondary Role": "NONE",
-				 "Max Sessions": "1", "Availability": "July 5 - 1pm", "Timestamp": "2025-07-01 12:00"}]
+				 "Max Sessions": "1", "Availability": "July 5 - 1pm", "Timestamp": "7/1/2025 12:00:00"}]
 		assert process_responses(rows, peeps, {})[1] == []
 
 	def test_process_responses_missing_email_raises(self, valid_peeps_rows):
 		"""Blank email in active response row should raise ValueError."""
 		peeps = [Peep.from_csv(p) for p in valid_peeps_rows]
 		rows = [{"Name": "Alice", "Email Address": "", "Primary Role": "Leader", "Secondary Role": "NONE",
-				 "Max Sessions": "1", "Availability": "July 5 - 1pm", "Timestamp": "2025-07-01 12:00"}]
+				 "Max Sessions": "1", "Availability": "July 5 - 1pm", "Timestamp": "7/1/2025 12:00:00"}]
 		with pytest.raises(ValueError, match="missing email"):
 			process_responses(rows, peeps, {})
 
@@ -625,7 +625,7 @@ class TestResponseProcessing:
 		peeps = [Peep.from_csv(p) for p in valid_peeps_rows]
 		rows = [{"Name": "Unknown", "Email Address": "notfound@test.com", "Primary Role": "Leader",
 				 "Secondary Role": "NONE", "Max Sessions": "1", "Availability": "July 5 - 1pm",
-				 "Timestamp": "2025-07-01 12:00"}]
+				 "Timestamp": "7/1/2025 12:00:00"}]
 		with pytest.raises(ValueError, match="no matching peep found for email"):
 			process_responses(rows, peeps, {})
 
@@ -747,7 +747,7 @@ class TestEmailNormalization:
 			"Max Sessions": "1",
 			"Availability": "",
 			"Min Interval Days": "0",
-			"Timestamp": "2025-07-01 12:00"
+			"Timestamp": "7/1/2025 12:00:00"
 		}]
 
 		with tempfile.NamedTemporaryFile(mode="w", delete=False, newline='') as f:
@@ -945,8 +945,8 @@ class TestPartnershipRequests:
 		requests_file = tmp_path / constants.PARTNERSHIPS_FILE
 		requests_file.write_text(json.dumps({
 			"partnerships": {
-				"1": [2, "3"],
-				2: [4]
+				"1": [2, 3],
+				"2": [4]
 			}
 		}))
 

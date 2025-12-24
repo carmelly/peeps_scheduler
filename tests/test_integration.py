@@ -36,13 +36,13 @@ class TestEndToEndWorkflows:
                 "peeps": [
                     {
                         "id": 1, "full_name": "Alice", "display_name": "Alice", "email": "alice@test.com",
-                        "role": "Leader", "index": 0, "priority": 1, "total_attended": 0,
+                        "role": "leader", "index": 0, "priority": 1, "total_attended": 0,
                         "availability": [0], "event_limit": 1, "min_interval_days": 0,
                         "switch_pref": 1, "responded": True
                     },
                     {
                         "id": 2, "full_name": "Bob", "display_name": "Bob", "email": "bob@test.com",
-                        "role": "Follower", "index": 1, "priority": 1, "total_attended": 0,
+                        "role": "follower", "index": 1, "priority": 1, "total_attended": 0,
                         "availability": [0], "event_limit": 1, "min_interval_days": 0,
                         "switch_pref": 1, "responded": True
                     }
@@ -83,13 +83,13 @@ class TestEndToEndWorkflows:
                 "peeps": [
                     {
                         "id": 1, "full_name": "OnlyLeader", "display_name": "OnlyLeader", "email": "leader@test.com",
-                        "role": "Leader", "index": 0, "priority": 1, "total_attended": 0,
+                        "role": "leader", "index": 0, "priority": 1, "total_attended": 0,
                         "availability": [1], "event_limit": 1, "min_interval_days": 0,
                         "switch_pref": 1, "responded": True
                     },
                     {
                         "id": 2, "full_name": "OnlyFollower", "display_name": "OnlyFollower", "email": "follower@test.com",
-                        "role": "Follower", "index": 1, "priority": 1, "total_attended": 0,
+                        "role": "follower", "index": 1, "priority": 1, "total_attended": 0,
                         "availability": [1], "event_limit": 1, "min_interval_days": 0,
                         "switch_pref": 1, "responded": True
                     }
