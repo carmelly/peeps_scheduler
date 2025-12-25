@@ -130,6 +130,226 @@ def read_partnerships_json(period_path: Path) -> Optional[Dict]:
 
 
 # =============================================================================
+# Schema Validation
+# =============================================================================
+
+def validate_schema(db_path: str) -> List[str]:
+    """
+    Validate database schema integrity.
+
+    Comprehensive schema validation checking:
+    - Foreign key constraints (7 required relationships)
+    - Migration infrastructure (__migrations_applied__ table and migration 013)
+    - Critical indexes (7 performance-critical indexes)
+
+    Args:
+        db_path: Path to SQLite database
+
+    Returns:
+        List[str]: List of validation issues found (empty list = valid schema)
+
+    Examples:
+        Valid schema:
+        >>> issues = validate_schema('peeps_data/peeps_scheduler.db')
+        >>> len(issues)
+        0
+
+        Schema with missing foreign key:
+        >>> issues = validate_schema('test_broken.db')
+        >>> [i for i in issues if 'foreign key' in i.lower()]
+        ['Missing foreign key constraint: event_assignments.event_id -> events.id']
+
+        Schema with multiple issues:
+        >>> issues = validate_schema('test_catastrophic.db')
+        >>> len(issues) >= 7
+        True
+    """
+    issues = []
+
+    # Handle nonexistent database
+    if not Path(db_path).exists():
+        raise FileNotFoundError(f"Database file not found: {db_path}")
+
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+
+        # Check foreign keys
+        fk_issues = _validate_foreign_keys(cursor)
+        issues.extend(fk_issues)
+
+        # Check migration infrastructure
+        migration_issues = _validate_migrations(cursor)
+        issues.extend(migration_issues)
+
+        # Check critical indexes
+        index_issues = _validate_indexes(cursor)
+        issues.extend(index_issues)
+
+        conn.close()
+
+    except sqlite3.Error as e:
+        raise RuntimeError(f"Database error: {e}")
+
+    return issues
+
+
+def _validate_foreign_keys(cursor) -> List[str]:
+    """
+    Validate required foreign key constraints.
+
+    Checks 7 required foreign key relationships:
+    - event_assignments.event_id -> events.id
+    - event_assignments.peep_id -> peeps.id
+    - event_availability.event_id -> events.id
+    - peep_order_snapshots.peep_id -> peeps.id
+    - partnership_requests.period_id -> schedule_periods.id
+    - partnership_requests.requester_peep_id -> peeps.id
+    - partnership_requests.partner_peep_id -> peeps.id
+
+    Returns:
+        List[str]: List of missing foreign key errors
+    """
+    issues = []
+
+    # Define required foreign keys: (table, column, references_table, references_column)
+    required_fks = [
+        ('event_assignments', 'event_id', 'events', 'id'),
+        ('event_assignments', 'peep_id', 'peeps', 'id'),
+        ('event_availability', 'event_id', 'events', 'id'),
+        ('peep_order_snapshots', 'peep_id', 'peeps', 'id'),
+        ('partnership_requests', 'period_id', 'schedule_periods', 'id'),
+        ('partnership_requests', 'requester_peep_id', 'peeps', 'id'),
+        ('partnership_requests', 'partner_peep_id', 'peeps', 'id'),
+    ]
+
+    # Whitelist of valid table names (prevents SQL injection)
+    valid_tables = {t[0] for t in required_fks} | {'events', 'peeps', 'schedule_periods'}
+
+    for table, column, ref_table, ref_column in required_fks:
+        # Validate table name against whitelist
+        if table not in valid_tables:
+            raise ValueError(f"Invalid table name: {table}")
+
+        # Safe to use PRAGMA after validation
+        cursor.execute(f"PRAGMA foreign_key_list({table})")
+        fks = cursor.fetchall()
+
+        # Check if required FK exists
+        fk_found = False
+        for fk in fks:
+            # fk is (id, seq, table, from, to, on_delete, on_update, match)
+            if fk[2] == ref_table and fk[3] == column and fk[4] == ref_column:
+                fk_found = True
+                break
+
+        if not fk_found:
+            issues.append(
+                f"Missing foreign key constraint: {table}.{column} -> {ref_table}.{ref_column}"
+            )
+
+    return issues
+
+
+def _validate_migrations(cursor) -> List[str]:
+    """
+    Validate migration infrastructure.
+
+    Checks:
+    - __migrations_applied__ table exists
+    - Migration 013 (partnership_requests) is applied
+
+    Returns:
+        List[str]: List of migration validation errors
+    """
+    issues = []
+
+    # Check if migrations table exists
+    cursor.execute("""
+        SELECT name FROM sqlite_master
+        WHERE type='table' AND name='__migrations_applied__'
+    """)
+    migration_table = cursor.fetchone()
+
+    if not migration_table:
+        issues.append(
+            "Missing migrations table: __migrations_applied__ table not found"
+        )
+        return issues  # Can't check migrations without the table
+
+    # Check if migration 013 (partnership_requests) is applied
+    cursor.execute("""
+        SELECT filename FROM __migrations_applied__
+        WHERE filename LIKE '%013%'
+    """)
+    migration_013 = cursor.fetchone()
+
+    if not migration_013:
+        issues.append(
+            "Migration 013 not found in __migrations_applied__ table"
+        )
+
+    return issues
+
+
+def _validate_indexes(cursor) -> List[str]:
+    """
+    Validate critical performance indexes.
+
+    Checks 7 required indexes:
+    - idx_event_assignments_event_id on event_assignments(event_id)
+    - idx_event_assignments_peep_id on event_assignments(peep_id)
+    - idx_availability_response on event_availability(response_id)
+    - idx_event_availability_event_id on event_availability(event_id)
+    - idx_snapshots_peep_id on peep_order_snapshots(peep_id)
+    - idx_partnerships_period_requester on partnership_requests(period_id, requester_peep_id)
+    - idx_partnerships_period_partner on partnership_requests(period_id, partner_peep_id)
+
+    Returns:
+        List[str]: List of missing index errors
+    """
+    issues = []
+
+    # Define required indexes: (index_name, table, column_description)
+    required_indexes = [
+        ('idx_event_assignments_event_id', 'event_assignments', 'event_id'),
+        ('idx_event_assignments_peep_id', 'event_assignments', 'peep_id'),
+        ('idx_availability_response', 'event_availability', 'response_id'),
+        ('idx_event_availability_event_id', 'event_availability', 'event_id'),
+        ('idx_snapshots_peep_id', 'peep_order_snapshots', 'peep_id'),
+        ('idx_partnerships_period_requester', 'partnership_requests', 'period_id, requester_peep_id'),
+        ('idx_partnerships_period_partner', 'partnership_requests', 'period_id, partner_peep_id'),
+    ]
+
+    # Whitelist of valid table names (prevents SQL injection)
+    valid_tables = {t[1] for t in required_indexes}
+
+    for index_name, table, column_desc in required_indexes:
+        # Validate table name against whitelist
+        if table not in valid_tables:
+            raise ValueError(f"Invalid table name: {table}")
+
+        # Safe to use PRAGMA after validation
+        cursor.execute(f"PRAGMA index_list({table})")
+        indexes = cursor.fetchall()
+
+        # Check if required index exists
+        index_found = False
+        for idx in indexes:
+            # idx is (seq, name, unique, origin, partial)
+            if idx[1] == index_name:
+                index_found = True
+                break
+
+        if not index_found:
+            issues.append(
+                f"Missing index: {index_name} on {table}({column_desc})"
+            )
+
+    return issues
+
+
+# =============================================================================
 # Validation Commands
 # =============================================================================
 
