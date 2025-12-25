@@ -155,7 +155,7 @@ def test_period_data():
         period_dir = Path(temp_dir) / period_name
         period_dir.mkdir(parents=True)
 
-        # Generate test members
+        # Generate test members (match production format)
         members = []
         for i in range(1, num_members + 1):
             members.append({
@@ -163,12 +163,12 @@ def test_period_data():
                 'Name': f'Test Member {i}',
                 'Display Name': f'Member{i}',
                 'Email Address': f'member{i}@test.com',
-                'Role': 'Leader' if i % 2 == 1 else 'Follower',
+                'Role': 'leader' if i % 2 == 1 else 'follower',
                 'Index': 0,
-                'Priority': 0,
+                'Priority': i,
                 'Total Attended': 0,
                 'Active': 'TRUE',
-                'Date Joined': '2025-01-01'
+                'Date Joined': '1/1/2025'  # Production format: M/D/YYYY
             })
 
         # Write members.csv
@@ -192,16 +192,20 @@ def test_period_data():
                 'Timestamp': '2/1/2025 10:00:00',
                 'Email Address': f'member{i}@test.com',
                 'Name': f'Test Member {i}',
-                'Primary Role': 'Leader' if i % 2 == 1 else 'Follower',
-                'Max Sessions': 2,
-                'Min Interval Days': 0,
+                'Primary Role': 'leader' if i % 2 == 1 else 'follower',
                 'Secondary Role': "I only want to be scheduled in my primary role",
-                'Availability': availability_str
+                'Max Sessions': 2,
+                'Availability': availability_str,
+                'Event Duration': '',
+                'Session Spacing Preference': '',
+                'Min Interval Days': 0,
+                'Partnership Preference': '',
+                'Questions or Comments': ''
             })
 
-        # Write responses.csv
+        # Write responses.csv (match production format with all columns)
         with open(period_dir / 'responses.csv', 'w', newline='') as f:
-            writer = csv.DictWriter(f, fieldnames=['Timestamp', 'Email Address', 'Name', 'Primary Role', 'Max Sessions', 'Min Interval Days', 'Secondary Role', 'Availability'])
+            writer = csv.DictWriter(f, fieldnames=['Timestamp', 'Email Address', 'Name', 'Primary Role', 'Secondary Role', 'Max Sessions', 'Availability', 'Event Duration', 'Session Spacing Preference', 'Min Interval Days', 'Partnership Preference', 'Questions or Comments'])
             writer.writeheader()
             writer.writerows(responses)
 
@@ -275,6 +279,20 @@ def test_period_data():
         # Write empty notes.json
         with open(period_dir / 'notes.json', 'w') as f:
             json.dump([], f, indent=2)
+
+        # Generate cancellations.json (optional - for cancellations feature)
+        cancellations_data = {
+            'cancelled_events': [],
+            'cancelled_availability': [],
+            'notes': 'Test cancellations data'
+        }
+        with open(period_dir / 'cancellations.json', 'w') as f:
+            json.dump(cancellations_data, f, indent=2)
+
+        # Generate partnerships.json (optional - for partnerships feature)
+        partnerships_data = {}
+        with open(period_dir / 'partnerships.json', 'w') as f:
+            json.dump(partnerships_data, f, indent=2)
 
         yield {
             'temp_dir': temp_dir,
