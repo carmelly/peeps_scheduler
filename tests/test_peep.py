@@ -13,86 +13,63 @@ import datetime
 from models import Peep, Event, Role, SwitchPreference
 
 
+@pytest.mark.unit
 class TestPeepConstraints:
     """Test core constraint checking logic - the most critical functionality."""
-    
-    def test_can_attend_when_available(self):
-        """Test that peep can attend event in their availability."""
-        peep = Peep(id=1, role="leader", availability=[1, 2, 3], event_limit=2)
-        event = Event(id=2, duration_minutes=120)
-        
-        assert peep.can_attend(event)
-    
-    def test_cannot_attend_when_unavailable(self):
-        """Test that peep cannot attend event not in availability."""
-        peep = Peep(id=1, role="leader", availability=[1, 3], event_limit=2)  # No event 2
-        event = Event(id=2, duration_minutes=120)
-        
-        assert not peep.can_attend(event)
-    
-    def test_cannot_attend_when_over_event_limit(self):
-        """Test that peep cannot attend when at event limit."""
-        peep = Peep(id=1, role="leader", availability=[1], event_limit=1)
-        peep.num_events = 1  # Already at limit
+
+    @pytest.mark.parametrize("availability,event_id,can_attend_expected", [
+        ([1, 2, 3], 2, True),   # available
+        ([1, 3], 2, False),     # unavailable
+    ])
+    def test_can_attend_availability_constraint(self, availability, event_id, can_attend_expected):
+        """Test that peep can only attend events in their availability."""
+        peep = Peep(id=1, role="leader", availability=availability, event_limit=2)
+        event = Event(id=event_id, duration_minutes=120)
+
+        assert peep.can_attend(event) == can_attend_expected
+
+    @pytest.mark.parametrize("num_events,event_limit,can_attend_expected", [
+        (1, 1, False),  # at or over limit
+        (1, 2, True),   # under limit
+    ])
+    def test_can_attend_event_limit_constraint(self, num_events, event_limit, can_attend_expected):
+        """Test that peep respects event limit."""
+        peep = Peep(id=1, role="leader", availability=[1], event_limit=event_limit)
+        peep.num_events = num_events
         event = Event(id=1, duration_minutes=120)
-        
-        assert not peep.can_attend(event)
-    
-    def test_can_attend_when_under_event_limit(self):
-        """Test that peep can attend when under event limit."""
-        peep = Peep(id=1, role="leader", availability=[1], event_limit=2)
-        peep.num_events = 1  # Under limit
-        event = Event(id=1, duration_minutes=120)
-        
-        assert peep.can_attend(event)
-    
-    def test_cannot_attend_within_interval_days(self):
-        """Test that peep cannot attend event within minimum interval."""
-        peep = Peep(id=1, role="leader", availability=[1], event_limit=2, min_interval_days=3)
-        event = Event(id=1, date=datetime.datetime(2025, 1, 10), duration_minutes=120)
-        
-        # Add a previous event 2 days ago (within 3-day interval)
-        previous_date = datetime.datetime(2025, 1, 8)
-        peep.assigned_event_dates.append(previous_date)
-        
-        assert not peep.can_attend(event)
-    
-    def test_can_attend_exactly_at_interval_days(self):
-        """Test that peep can attend event exactly at minimum interval."""
-        peep = Peep(id=1, role="leader", availability=[1], event_limit=2, min_interval_days=3)
-        event = Event(id=1, date=datetime.datetime(2025, 1, 10), duration_minutes=120)
-        
-        # Add a previous event exactly 3 days ago (meets interval requirement)
-        previous_date = datetime.datetime(2025, 1, 7)
-        peep.assigned_event_dates.append(previous_date)
-        
-        assert peep.can_attend(event)
-    
-    def test_can_attend_with_zero_interval_days(self):
-        """Test that peep with zero interval can attend multiple events same day."""
-        peep = Peep(id=1, role="leader", availability=[1], event_limit=2, min_interval_days=0)
-        event = Event(id=1, date=datetime.datetime(2025, 1, 10, 14), duration_minutes=120)
-        
-        # Add a previous event same day
-        same_day_earlier = datetime.datetime(2025, 1, 10, 10)
-        peep.assigned_event_dates.append(same_day_earlier)
-        
-        assert peep.can_attend(event)
-    
-    def test_interval_calculation_works_both_directions(self):
-        """Test that interval checking works for events before or after previous events."""
-        peep = Peep(id=1, role="leader", availability=[1], event_limit=2, min_interval_days=2)
-        
-        # Event is 2025-01-10
-        event = Event(id=1, date=datetime.datetime(2025, 1, 10), duration_minutes=120)
-        
-        # Previous event 1 day after (2025-01-11) - should block
-        future_date = datetime.datetime(2025, 1, 11)
-        peep.assigned_event_dates.append(future_date)
-        
-        assert not peep.can_attend(event)
+
+        assert peep.can_attend(event) == can_attend_expected
+
+    @pytest.mark.parametrize("min_interval,previous_days_ago,can_attend_expected,description", [
+        (3, 2, False, "within_interval"),
+        (3, 3, True, "exactly_at_interval"),
+        (0, 0, True, "zero_interval_same_day"),
+        (2, 1, False, "bidirectional_blocks_future"),
+    ])
+    def test_can_attend_interval_constraint(self, min_interval, previous_days_ago, can_attend_expected, description):
+        """Test that peep respects minimum interval between events."""
+        peep = Peep(id=1, role="leader", availability=[1], event_limit=2, min_interval_days=min_interval)
+
+        if min_interval == 0:
+            # Same day test - use time offset instead of date offset
+            event = Event(id=1, date=datetime.datetime(2025, 1, 10, 14), duration_minutes=120)
+            same_day_earlier = datetime.datetime(2025, 1, 10, 10)
+            peep.assigned_event_dates.append(same_day_earlier)
+        elif description == "bidirectional_blocks_future":
+            # Event before, previous event after (2025-01-11)
+            event = Event(id=1, date=datetime.datetime(2025, 1, 10), duration_minutes=120)
+            future_date = datetime.datetime(2025, 1, 11)
+            peep.assigned_event_dates.append(future_date)
+        else:
+            # Normal case: event on 2025-01-10, previous event N days ago
+            event = Event(id=1, date=datetime.datetime(2025, 1, 10), duration_minutes=120)
+            previous_date = datetime.datetime(2025, 1, 10) - datetime.timedelta(days=previous_days_ago)
+            peep.assigned_event_dates.append(previous_date)
+
+        assert peep.can_attend(event) == can_attend_expected
 
 
+@pytest.mark.unit
 class TestSwitchPreferences:
     """Test switch preference data handling."""
     
@@ -121,24 +98,25 @@ class TestSwitchPreferences:
             SwitchPreference.from_string("Invalid preference string")
 
 
+@pytest.mark.unit
 class TestRoleHandling:
     """Test role string/enum conversion."""
     
-    def test_role_from_string_leader_variations(self):
-        """Test that various leader strings parse correctly."""
-        assert Role.from_string("Leader") == Role.LEADER
-        assert Role.from_string("leader") == Role.LEADER
-        assert Role.from_string("LEADER") == Role.LEADER
-        assert Role.from_string("lead") == Role.LEADER
-        assert Role.from_string("Lead") == Role.LEADER
-    
-    def test_role_from_string_follower_variations(self):
-        """Test that various follower strings parse correctly."""
-        assert Role.from_string("Follower") == Role.FOLLOWER
-        assert Role.from_string("follower") == Role.FOLLOWER
-        assert Role.from_string("FOLLOWER") == Role.FOLLOWER
-        assert Role.from_string("follow") == Role.FOLLOWER
-        assert Role.from_string("Follow") == Role.FOLLOWER
+    @pytest.mark.parametrize("role_string,expected_role", [
+        ("Leader", Role.LEADER),
+        ("leader", Role.LEADER),
+        ("LEADER", Role.LEADER),
+        ("lead", Role.LEADER),
+        ("Lead", Role.LEADER),
+        ("Follower", Role.FOLLOWER),
+        ("follower", Role.FOLLOWER),
+        ("FOLLOWER", Role.FOLLOWER),
+        ("follow", Role.FOLLOWER),
+        ("Follow", Role.FOLLOWER),
+    ])
+    def test_role_from_string_variations(self, role_string, expected_role):
+        """Test that various role strings parse correctly."""
+        assert Role.from_string(role_string) == expected_role
     
     def test_role_from_string_invalid_raises(self):
         """Test that invalid role strings raise ValueError."""
@@ -151,6 +129,7 @@ class TestRoleHandling:
         assert Role.FOLLOWER.opposite() == Role.LEADER
 
 
+@pytest.mark.unit
 class TestDataConversion:
     """Test CSV/dict conversion for data pipeline."""
     

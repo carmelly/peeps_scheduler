@@ -22,6 +22,8 @@ import file_io
 import utils
 
 
+@pytest.mark.integration
+@pytest.mark.slow
 class TestEndToEndWorkflows:
     """Test complete user workflows from start to finish."""
 
@@ -183,6 +185,8 @@ class TestEndToEndWorkflows:
             print("Golden master integration test passed: CSV -> JSON -> Scheduler pipeline produces identical results")
 
 
+@pytest.mark.integration
+@pytest.mark.slow
 class TestCancellationsWorkflow:
     """Test cancellations.json integration with the scheduler.
 

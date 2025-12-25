@@ -14,6 +14,7 @@ from models import EventSequence, Event, Peep, Role
 
 
 
+@pytest.mark.unit
 class TestEventSequenceInitialization:
     """Test EventSequence creation and initial state."""
     
@@ -62,6 +63,7 @@ class TestEventSequenceInitialization:
         assert sequence.normalized_utilization == 0
 
 
+@pytest.mark.unit
 class TestEventSequenceEquality:
     """Test EventSequence equality and hashing for scheduler deduplication."""
     
@@ -231,6 +233,7 @@ class TestEventSequenceEquality:
         assert hash(empty_seq) != hash(non_empty_seq)
 
 
+@pytest.mark.unit
 class TestEventSequenceFinalizationPriorities:
     """Test EventSequence finalization priority update logic."""
     
@@ -283,6 +286,7 @@ class TestEventSequenceFinalizationPriorities:
         assert peep3.priority == 1  # unchanged
 
 
+@pytest.mark.unit
 class TestEventSequenceFinalizationMetrics:
     """Test EventSequence finalization metrics calculation."""
     
@@ -466,6 +470,7 @@ class TestEventSequenceFinalizationMetrics:
         assert sequence.normalized_utilization == 0
 
 
+@pytest.mark.unit
 class TestEventSequenceFinalizationSorting:
     """Test EventSequence finalization sorting and index updates."""
     
@@ -525,6 +530,7 @@ class TestEventSequenceFinalizationSorting:
         assert peep2.index == 2
 
 
+@pytest.mark.unit
 class TestEventSequenceDataConversion:
     """Test EventSequence data conversion for serialization."""
     
@@ -597,10 +603,12 @@ class TestEventSequenceDataConversion:
         assert data['one_sided_fulfilled'] == 0
 
 
+@pytest.mark.unit
 class TestEventSequencePartnerships:
     """Test partnership fulfillment scoring for EventSequence."""
 
     def test_calculate_partnerships_fulfilled_counts_mutuals_and_one_sided(self, event_factory, peep_factory):
+        """Test that partnership fulfillment correctly counts mutual and one-sided partnerships."""
         peep1 = peep_factory(id=1, role=Role.LEADER)
         peep2 = peep_factory(id=2, role=Role.FOLLOWER)
         peep3 = peep_factory(id=3, role=Role.FOLLOWER)

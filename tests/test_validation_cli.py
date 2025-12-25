@@ -17,16 +17,10 @@ import tempfile
 import csv
 import json
 from pathlib import Path
-
-# Add project root to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
 from file_io import normalize_email
+from tests.conftest import _parse_and_reorder_schema
 
 
-# =============================================================================
-# TEST DATA FIXTURES
-# =============================================================================
 
 @pytest.fixture(scope='module')
 def test_data_dir():
@@ -54,11 +48,11 @@ def test_data_dir():
 
     # Create responses.csv
     responses_data = [
-        {'Email Address': 'alice@example.com', 'Name': 'Alice Leader', 'Primary Role': 'Leader',
-         'Max Sessions': '2', 'Min Interval Days': '7', 'Timestamp': '2020-01-01 10:00:00',
+        {'Email Address': 'alice@example.com', 'Name': 'Alice Leader', 'Primary Role': 'leader',
+         'Max Sessions': '2', 'Min Interval Days': '7', 'Timestamp': '1/1/2020 10:00:00',
          'Availability': 'Thursday January 7th - 5pm to 7pm, Thursday January 14th - 5pm to 7pm'},
-        {'Email Address': 'bob@example.com', 'Name': 'Bob Follower', 'Primary Role': 'Follower',
-         'Max Sessions': '1', 'Min Interval Days': '14', 'Timestamp': '2020-01-01 11:00:00',
+        {'Email Address': 'bob@example.com', 'Name': 'Bob Follower', 'Primary Role': 'follower',
+         'Max Sessions': '1', 'Min Interval Days': '14', 'Timestamp': '1/1/2020 11:00:00',
          'Availability': ''},
     ]
     with open(processed_dir / 'responses.csv', 'w', newline='', encoding='utf-8') as f:
@@ -108,24 +102,11 @@ def test_db(test_data_dir, tmp_path_factory):
     with open(project_root / 'db' / 'schema.sql', 'r') as f:
         schema_sql = f.read()
 
-    lines = [line for line in schema_sql.split('\n') if 'sqlite_sequence' not in line.lower()]
+    # Filter out sqlite_sequence references
+    filtered_sql = '\n'.join([line for line in schema_sql.split('\n') if 'sqlite_sequence' not in line.lower()])
 
-    # Separate CREATE INDEX from CREATE TABLE
-    index_statements = []
-    other_statements = []
-    current_statement = []
-
-    for line in lines:
-        current_statement.append(line)
-        if line.strip().endswith(';'):
-            statement = '\n'.join(current_statement)
-            if statement.strip().upper().startswith('CREATE INDEX'):
-                index_statements.append(statement)
-            else:
-                other_statements.append(statement)
-            current_statement = []
-
-    schema_sql = '\n'.join(other_statements + index_statements)
+    # Reorder schema (CREATE TABLE before CREATE INDEX)
+    schema_sql = _parse_and_reorder_schema(filtered_sql)
 
     # Create database
     db_path = tmp_path_factory.mktemp("db") / "test.db"
@@ -155,8 +136,8 @@ def test_db(test_data_dir, tmp_path_factory):
         # Responses
         ('''INSERT INTO responses (id, peep_id, period_id, response_role, max_sessions, min_interval_days, response_timestamp)
             VALUES (?, ?, ?, ?, ?, ?, ?)''',
-         [(1, 1, 1, 'leader', 2, 7, '2020-01-01 10:00:00'),
-          (2, 2, 1, 'follower', 1, 14, '2020-01-01 11:00:00')]),
+         [(1, 1, 1, 'leader', 2, 7, '1/1/2020 10:00:00'),
+          (2, 2, 1, 'follower', 1, 14, '1/1/2020 11:00:00')]),
 
         # Events (using ISO 8601 format with T separator to match import_period_data.py)
         ('''INSERT INTO events (id, period_id, legacy_period_event_id, event_datetime, duration_minutes, status)
@@ -239,9 +220,6 @@ def empty_test_db(tmp_path):
     return str(db_path)
 
 
-# =============================================================================
-# HELPER FUNCTIONS
-# =============================================================================
 
 def run_validate_cmd(command, db_path, data_dir=None):
     """Helper to run validate.py command and return result."""
@@ -252,10 +230,8 @@ def run_validate_cmd(command, db_path, data_dir=None):
     return subprocess.run(cmd, capture_output=True, text=True, cwd=project_root)
 
 
-# =============================================================================
-# TESTS: --validate-members
-# =============================================================================
 
+@pytest.mark.integration
 class TestValidateMembersCommand:
     """Tests for --validate-members command."""
 
@@ -314,15 +290,15 @@ class TestValidateMembersCommand:
         members_data = [
             {'id': '1', 'Name': 'Alice Leader', 'Display Name': 'Alice',
              'Email Address': 'Alice@Example.com',  # Mixed case (not normalized)
-             'Role': 'Leader', 'Date Joined': '2024-01-01', 'Active': 'TRUE',
+             'Role': 'leader', 'Date Joined': '2024-01-01', 'Active': 'TRUE',
              'Priority': '5', 'Index': '0', 'Total Attended': '1'},
             {'id': '2', 'Name': 'Bob Follower', 'Display Name': 'Bob',
              'Email Address': 'BOB@EXAMPLE.COM',  # All uppercase (not normalized)
-             'Role': 'Follower', 'Date Joined': '2024-01-01', 'Active': 'TRUE',
+             'Role': 'follower', 'Date Joined': '2024-01-01', 'Active': 'TRUE',
              'Priority': '3', 'Index': '1', 'Total Attended': '2'},
             {'id': '3', 'Name': 'Carol Both', 'Display Name': 'Carol',
              'Email Address': 'carol@example.com',  # Lowercase (normalized)
-             'Role': 'Leader', 'Date Joined': '2024-01-01', 'Active': 'TRUE',
+             'Role': 'leader', 'Date Joined': '2024-01-01', 'Active': 'TRUE',
              'Priority': '2', 'Index': '2', 'Total Attended': '1'},
         ]
         with open(period_dir / 'members.csv', 'w', newline='', encoding='utf-8') as f:
@@ -360,10 +336,8 @@ class TestValidateMembersCommand:
         )
 
 
-# =============================================================================
-# TESTS: --validate-period
-# =============================================================================
 
+@pytest.mark.integration
 class TestValidatePeriodCommand:
     """Tests for --validate-period <name> command."""
 
@@ -373,32 +347,15 @@ class TestValidatePeriodCommand:
         assert result.returncode == 0, f"Validation should pass: {result.stdout}\n{result.stderr}"
         assert 'PASSED' in result.stdout
 
-    def test_validate_period_detects_response_mismatch(self, mutable_test_db, test_db):
-        """Test that validation detects when DB responses don't match CSV."""
+    @pytest.mark.parametrize("table,column,value", [
+        ("responses", "max_sessions", 999),
+        ("event_assignments", "assigned_role", "follower"),
+        ("event_attendance", "actual_role", "follower"),
+    ])
+    def test_validate_period_detects_data_mismatch(self, mutable_test_db, test_db, table, column, value):
+        """Test that validation detects mismatches in period data."""
         conn = sqlite3.connect(mutable_test_db)
-        conn.execute("UPDATE responses SET max_sessions = 999 WHERE id = 1")
-        conn.commit()
-        conn.close()
-
-        result = run_validate_cmd(['--validate-period', '2020-01'], mutable_test_db, test_db.data_dir)
-        assert result.returncode != 0
-        assert 'mismatch' in result.stdout.lower() or 'FAILED' in result.stdout
-
-    def test_validate_period_detects_assignment_mismatch(self, mutable_test_db, test_db):
-        """Test that validation detects when DB assignments don't match results.json."""
-        conn = sqlite3.connect(mutable_test_db)
-        conn.execute("UPDATE event_assignments SET assigned_role = 'follower' WHERE id = 1")
-        conn.commit()
-        conn.close()
-
-        result = run_validate_cmd(['--validate-period', '2020-01'], mutable_test_db, test_db.data_dir)
-        assert result.returncode != 0
-        assert 'mismatch' in result.stdout.lower() or 'FAILED' in result.stdout
-
-    def test_validate_period_detects_attendance_mismatch(self, mutable_test_db, test_db):
-        """Test that validation detects when DB attendance doesn't match actual_attendance.json."""
-        conn = sqlite3.connect(mutable_test_db)
-        conn.execute("UPDATE event_attendance SET actual_role = 'follower' WHERE id = 1")
+        conn.execute(f"UPDATE {table} SET {column} = ? WHERE id = 1", (value,))
         conn.commit()
         conn.close()
 
@@ -546,10 +503,10 @@ class TestValidatePeriodCommand:
         # Create responses.csv with availability for 2 events only
         # Events will be auto-derived from Availability column
         responses_data = [
-            {'Timestamp': '2020-01-01 10:00:00',
+            {'Timestamp': '1/1/2020 10:00:00',
              'Email Address': 'alice@example.com',
              'Name': 'Alice Leader',
-             'Primary Role': 'Leader',
+             'Primary Role': 'leader',
              'Max Sessions': '2',
              'Min Interval Days': '7',
              'Secondary Role': 'I only want to be scheduled in my primary role',
@@ -592,10 +549,8 @@ class TestValidatePeriodCommand:
                    for issue in issues), f"Expected extra event issue, got: {issues}"
 
 
-# =============================================================================
-# TESTS: --show-period
-# =============================================================================
 
+@pytest.mark.integration
 class TestShowPeriodCommand:
     """Tests for --show-period <name> command."""
 
@@ -620,10 +575,8 @@ class TestShowPeriodCommand:
         assert 'not found' in (result.stderr or result.stdout).lower()
 
 
-# =============================================================================
-# TESTS: --list-periods
-# =============================================================================
 
+@pytest.mark.integration
 class TestListPeriodsCommand:
     """Tests for --list-periods command."""
 
@@ -645,10 +598,8 @@ class TestListPeriodsCommand:
         assert result.returncode == 0
 
 
-# =============================================================================
-# TESTS: CLI Integration
-# =============================================================================
 
+@pytest.mark.integration
 class TestCLIIntegration:
     """Integration tests for CLI."""
 

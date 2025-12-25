@@ -6,7 +6,9 @@ from availability_report import parse_availability
 from file_io import load_cancellations
 
 
+@pytest.mark.unit
 def test_parse_availability_applies_cancellations(tmp_path):
+    """Test that cancelled events and cancelled availability are properly filtered from results."""
     members_content = """id,Name,Display Name,Email Address,Role,Index,Priority,Total Attended,Active,Date Joined
 1,Alex Leader,Alex,alex@test.com,Leader,0,4,0,TRUE,2025-01-01
 2,Dana Follower,Dana,dana@test.com,Follower,1,4,0,TRUE,2025-01-01
@@ -50,7 +52,9 @@ def test_parse_availability_applies_cancellations(tmp_path):
     assert non_responders == []
 
 
+@pytest.mark.unit
 def test_parse_availability_raises_for_unknown_cancellation_email(tmp_path):
+    """Test that unknown email in cancellation data raises ValueError."""
     members_content = """id,Name,Display Name,Email Address,Role,Index,Priority,Total Attended,Active,Date Joined
 1,Alex Leader,Alex,alex@test.com,Leader,0,4,0,TRUE,2025-01-01
 """

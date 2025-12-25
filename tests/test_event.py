@@ -13,6 +13,7 @@ import datetime
 from models import Event, Peep, Role
 import constants
 
+@pytest.mark.unit
 class TestEventAttendeeManagement:
     """Test core attendee addition, removal, and capacity management."""
     
@@ -101,6 +102,7 @@ class TestEventAttendeeManagement:
         assert len(event.alt_followers) == 0
 
 
+@pytest.mark.unit
 class TestEventAlternateManagement:
     """Test alternate tracking and promotion/demotion."""
     
@@ -162,6 +164,7 @@ class TestEventAlternateManagement:
         assert peep not in event.alt_leaders
 
 
+@pytest.mark.unit
 class TestEventValidation:
     """Test event validation methods for capacity and minimums."""
     
@@ -236,6 +239,7 @@ class TestEventValidation:
         assert event.is_full(Role.FOLLOWER)
 
 
+@pytest.mark.unit
 class TestEventRoleBalancing:
     """Test role balancing functionality."""
     
@@ -291,6 +295,7 @@ class TestEventRoleBalancing:
 
 
 
+@pytest.mark.unit
 class TestEventDurationManagement:
     """Test duration downgrade functionality."""
     
@@ -365,6 +370,7 @@ class TestEventDurationManagement:
             event.downgrade_duration()
 
 
+@pytest.mark.unit
 class TestEventConfiguration:
     """Test event configuration properties and class config integration."""
     
@@ -385,6 +391,7 @@ class TestEventConfiguration:
             Event(id=1, duration_minutes=45)  # Not in CLASS_CONFIG
 
 
+@pytest.mark.unit
 class TestEventDataConversion:
     """Test event data conversion and serialization."""
     
@@ -414,6 +421,7 @@ class TestEventDataConversion:
         assert event.duration_minutes == 120
 
 
+@pytest.mark.unit
 class TestEventAlternateValidation:
     """Test alternate validation and cleanup."""
     
@@ -456,6 +464,7 @@ class TestEventAlternateValidation:
         assert under_limit_peep in event.alt_leaders
 
 
+@pytest.mark.unit
 class TestEventPeepIntegration:
     """Test Event integration with Peep model, particularly post-event updates."""
     

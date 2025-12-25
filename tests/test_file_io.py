@@ -19,7 +19,8 @@ from file_io import (
 	save_json,
 	normalize_email,
 	load_cancellations,
-	load_partnerships
+	load_partnerships,
+	load_cancelled_events
 )
 from models import Event, EventSequence, Role, SwitchPreference, Peep
 
@@ -127,10 +128,12 @@ def sample_peeps():
 # TEST CLASSES
 # ============================================================================
 
+@pytest.mark.unit
 class TestCSVLoading:
 	"""Tests for CSV file loading and validation."""
 
 	def test_load_csv_success_with_required_columns(self):
+		"""Test that CSV loads successfully when required columns are present."""
 		content = "col1,col2,col3\na,b,c\n"
 		with tempfile.NamedTemporaryFile(mode="w", delete=False) as tmp:
 			tmp.write(content)
@@ -143,6 +146,7 @@ class TestCSVLoading:
 		os.remove(tmp_path)
 
 	def test_load_csv_raises_on_missing_required_columns(self):
+		"""Test that CSV loading raises ValueError when required columns are missing."""
 		content = "col1,col2\na,b\n"
 		with tempfile.NamedTemporaryFile(mode="w", delete=False) as tmp:
 			tmp.write(content)
@@ -153,6 +157,7 @@ class TestCSVLoading:
 		os.remove(tmp_path)
 
 	def test_load_csv_strips_whitespace_from_fields(self, tmp_path):
+		"""Test that CSV loader strips leading/trailing whitespace from field values."""
 		path = tmp_path / "trim.csv"
 		path.write_text(" Name , Role \n Alice , Follow \n Bob , Lead \n")
 		rows = load_csv(path)
@@ -191,6 +196,7 @@ class TestCSVLoading:
 		assert rows[1]["Event"] == "It's available"  # Curly ' → straight ', double space → single
 
 
+@pytest.mark.unit
 class TestJSONOperations:
 	"""Tests for JSON loading, saving, and serialization."""
 
@@ -236,6 +242,7 @@ class TestJSONOperations:
 		assert contents["example"].startswith("{") and "1" in contents["example"]
 
 
+@pytest.mark.unit
 class TestTimeDateParsing:
 	"""Tests for time range and event date parsing functions."""
 
@@ -385,6 +392,7 @@ class TestTimeDateParsing:
 		assert duration == 90
 
 
+@pytest.mark.unit
 class TestEventExtraction:
 	"""Tests for event extraction from responses (old Event rows + new auto-derive)."""
 
@@ -521,6 +529,7 @@ class TestEventExtraction:
 			extract_events(rows)
 
 
+@pytest.mark.unit
 class TestPeepLoading:
 	"""Tests for peep loading and validation."""
 
@@ -570,6 +579,7 @@ class TestPeepLoading:
 		assert peeps[1].email == "inactive@test.com"
 
 
+@pytest.mark.unit
 class TestResponseProcessing:
 	"""Tests for processing response data and updating peeps."""
 
@@ -659,6 +669,7 @@ class TestResponseProcessing:
 			process_responses(rows, peeps, {})
 
 
+@pytest.mark.unit
 class TestDataSaving:
 	"""Tests for saving peeps, sequences, and events."""
 
@@ -715,6 +726,7 @@ class TestDataSaving:
 		assert len(data["peeps"]) == 2
 
 
+@pytest.mark.integration
 class TestIntegration:
 	"""End-to-end integration tests."""
 
@@ -745,6 +757,7 @@ class TestIntegration:
 		assert bob.responded is True
 
 
+@pytest.mark.unit
 class TestEmailNormalization:
 	"""Tests for email normalization (Gmail dot handling)."""
 
@@ -792,6 +805,7 @@ class TestEmailNormalization:
 		assert updated_peeps[0].responded is True
 
 
+@pytest.mark.unit
 class TestCancellations:
 	"""Tests for loading cancellations.json (events + availability)."""
 
@@ -961,14 +975,17 @@ class TestCancellations:
 		with pytest.raises(ValueError, match="events"):
 			load_cancellations(str(cancelled_file), year=2025)
 
+@pytest.mark.unit
 class TestPartnershipRequests:
 	"""Tests for loading partnership requests from JSON."""
 
 	def test_load_partnerships_file_not_found(self, tmp_path):
+		"""Test that missing partnerships file returns empty dictionary."""
 		result = load_partnerships(str(tmp_path))
 		assert result == {}
 
 	def test_load_partnerships_with_wrapper(self, tmp_path):
+		"""Test that partnerships file with wrapper object is loaded correctly."""
 		import constants
 
 		requests_file = tmp_path / constants.PARTNERSHIPS_FILE
@@ -996,6 +1013,7 @@ class TestPartnershipRequests:
 		assert result == {1: {2, 3}, 2: {1}}
 
 	def test_load_partnerships_requires_mapping(self, tmp_path):
+		"""Test that partnerships file must contain mapping, not array."""
 		import constants
 
 		requests_file = tmp_path / constants.PARTNERSHIPS_FILE
@@ -1097,4 +1115,78 @@ class TestPartnershipRequests:
 
 		with pytest.raises(ValueError, match="partners.*required|cannot be null"):
 			load_partnerships(str(tmp_path))
+
+
+# =============================================================================
+# TESTS: load_cancelled_events()
+# =============================================================================
+
+class TestLoadCancelledEvents:
+	"""Tests for load_cancelled_events() function."""
+
+	def test_load_cancelled_events_returns_empty_set_when_file_missing(self, tmp_path):
+		"""Test that missing cancelled_events.json returns empty set (backward compatible)."""
+		result = load_cancelled_events(str(tmp_path))
+		assert result == set()
+		assert isinstance(result, set)
+
+	def test_load_cancelled_events_returns_empty_set_when_key_missing(self, tmp_path):
+		"""Test that missing 'cancelled_events' key returns empty set."""
+		cancelled_file = tmp_path / "cancelled_events.json"
+		cancelled_file.write_text(json.dumps({}))
+
+		result = load_cancelled_events(str(tmp_path))
+		assert result == set()
+
+	def test_load_cancelled_events_returns_empty_set_when_null(self, tmp_path):
+		"""Test that null 'cancelled_events' key returns empty set."""
+		cancelled_file = tmp_path / "cancelled_events.json"
+		cancelled_file.write_text(json.dumps({"cancelled_events": None}))
+
+		result = load_cancelled_events(str(tmp_path))
+		assert result == set()
+
+	def test_load_cancelled_events_parses_valid_event_strings(self, tmp_path):
+		"""Test that valid event strings are parsed into event_id format."""
+		cancelled_file = tmp_path / "cancelled_events.json"
+		cancelled_file.write_text(json.dumps({
+			"cancelled_events": [
+				"Saturday March 1 - 5pm",
+				"Sunday March 2 - 6pm"
+			]
+		}))
+
+		result = load_cancelled_events(str(tmp_path), year=2025)
+		assert isinstance(result, set)
+		assert len(result) == 2
+		# Event IDs should be in "YYYY-MM-DD HH:MM" format
+		for event_id in result:
+			assert isinstance(event_id, str)
+			assert " " in event_id  # Date and time separated by space
+
+	def test_load_cancelled_events_raises_on_invalid_json(self, tmp_path):
+		"""Test that invalid JSON raises Exception."""
+		cancelled_file = tmp_path / "cancelled_events.json"
+		cancelled_file.write_text("{invalid json")
+
+		with pytest.raises(Exception, match="invalid cancelled_events.json"):
+			load_cancelled_events(str(tmp_path))
+
+	def test_load_cancelled_events_raises_on_unparseable_event_string(self, tmp_path):
+		"""Test that unparseable event string raises ValueError."""
+		cancelled_file = tmp_path / "cancelled_events.json"
+		cancelled_file.write_text(json.dumps({
+			"cancelled_events": ["invalid event string that cannot be parsed"]
+		}))
+
+		with pytest.raises(ValueError, match="cannot parse event string"):
+			load_cancelled_events(str(tmp_path), year=2025)
+
+	def test_load_cancelled_events_with_empty_list(self, tmp_path):
+		"""Test that empty cancelled_events list returns empty set."""
+		cancelled_file = tmp_path / "cancelled_events.json"
+		cancelled_file.write_text(json.dumps({"cancelled_events": []}))
+
+		result = load_cancelled_events(str(tmp_path), year=2025)
+		assert result == set()
 

@@ -46,8 +46,8 @@ def actual_attendance_data():
                 'date': '2025-03-01 19:00',
                 'duration_minutes': 90,
                 'attendees': [
-                    {'id': 1, 'role': 'Leader'},    # John attended
-                    {'id': 2, 'role': 'Follower'}   # Jane attended
+                    {'id': 1, 'role': 'leader'},    # John attended
+                    {'id': 2, 'role': 'follower'}   # Jane attended
                 ]
             },
             {
@@ -55,7 +55,7 @@ def actual_attendance_data():
                 'date': '2025-03-08 19:00',
                 'duration_minutes': 90,
                 'attendees': [
-                    {'id': 1, 'role': 'Leader'}     # John attended
+                    {'id': 1, 'role': 'leader'}     # John attended
                 ]
             }
         ]
@@ -94,6 +94,7 @@ def temp_files(members_csv_content, responses_csv_content, actual_attendance_dat
     shutil.rmtree(temp_dir, ignore_errors=True)
 
 
+@pytest.mark.unit
 class TestApplyEventResultsErrorHandling:
     """Test error handling for missing files."""
 
@@ -183,36 +184,26 @@ class TestApplyEventResultsErrorHandling:
         assert "skipping response processing" in caplog.text
 
 
+@pytest.mark.unit
 class TestRespondedFlagSetting:
     """Test that peep.responded is set correctly based on responses file."""
 
-    def test_responded_flag_set_for_respondents(self, temp_files):
-        """Test that peeps who responded are marked as responded."""
+    @pytest.mark.parametrize("peep_id,expected_responded", [
+        (1, True),   # John responded
+        (2, False),  # Jane didn't respond
+        (3, True),   # Bob responded
+        (4, False),  # Alice didn't respond
+    ])
+    def test_responded_flag(self, peep_id, expected_responded, temp_files):
+        """Test that responded flag is set correctly based on response file."""
         result_peeps = utils.apply_event_results(
             temp_files['attendance'],
             temp_files['members'],
             temp_files['responses']
         )
 
-        john = next(p for p in result_peeps if p.id == 1)
-        bob = next(p for p in result_peeps if p.id == 3)
-
-        assert john.responded == True   # John responded
-        assert bob.responded == True    # Bob responded
-
-    def test_responded_flag_not_set_for_non_respondents(self, temp_files):
-        """Test that peeps who didn't respond are not marked as responded."""
-        result_peeps = utils.apply_event_results(
-            temp_files['attendance'],
-            temp_files['members'],
-            temp_files['responses']
-        )
-
-        jane = next(p for p in result_peeps if p.id == 2)
-        alice = next(p for p in result_peeps if p.id == 4)
-
-        assert jane.responded == False   # Jane didn't respond
-        assert alice.responded == False  # Alice didn't respond
+        peep = next(p for p in result_peeps if p.id == peep_id)
+        assert peep.responded == expected_responded
 
     def test_email_matching_case_insensitive(self, temp_files):
         """Test that email matching works regardless of case."""
@@ -237,6 +228,7 @@ Bob Wilson,BOB@EXAMPLE.COM,Leader,None,1,March 1"""
         assert bob.responded == True
 
 
+@pytest.mark.unit
 class TestAttendanceIncrementing:
     """Test that total_attended is incremented correctly."""
 
@@ -275,59 +267,29 @@ class TestAttendanceIncrementing:
         assert alice.total_attended == 1
 
 
-class TestPriorityReset:
-    """Test that priority is reset for peeps who attended at least 1 event."""
+@pytest.mark.unit
+class TestPriorityLogic:
+    """Test priority changes based on attendance and response status."""
 
-    def test_priority_reset_for_attendees(self, temp_files):
-        """Test that priority is reset to 0 for peeps who attended events."""
+    @pytest.mark.parametrize("peep_id,expected_priority,scenario", [
+        (1, 0, "attended_resets_priority"),
+        (2, 0, "attended_resets_priority"),
+        (3, 5, "responded_but_didnt_attend_increases"),
+        (4, 2, "didnt_respond_didnt_attend_unchanged"),
+    ])
+    def test_priority_changes(self, peep_id, expected_priority, scenario, temp_files):
+        """Test priority changes based on attendance and response status."""
         result_peeps = utils.apply_event_results(
             temp_files['attendance'],
             temp_files['members'],
             temp_files['responses']
         )
 
-        john = next(p for p in result_peeps if p.id == 1)
-        jane = next(p for p in result_peeps if p.id == 2)
-
-        # Both John and Jane attended events, so priority should be reset to 0
-        assert john.priority == 0
-        assert jane.priority == 0
+        peep = next(p for p in result_peeps if p.id == peep_id)
+        assert peep.priority == expected_priority
 
 
-class TestPriorityIncrease:
-    """Test that priority increases for peeps who responded but didn't attend."""
-
-    def test_priority_increased_for_respondents_who_didnt_attend(self, temp_files):
-        """Test that priority increases for peeps who responded but didn't attend."""
-        result_peeps = utils.apply_event_results(
-            temp_files['attendance'],
-            temp_files['members'],
-            temp_files['responses']
-        )
-
-        bob = next(p for p in result_peeps if p.id == 3)
-
-        # Bob responded but didn't attend, so priority should increase from 4 to 5
-        assert bob.priority == 5
-
-
-class TestPriorityUnchanged:
-    """Test that priority remains the same for peeps who didn't respond and didn't attend."""
-
-    def test_priority_unchanged_for_non_respondents_who_didnt_attend(self, temp_files):
-        """Test that priority stays the same for peeps who didn't respond and didn't attend."""
-        result_peeps = utils.apply_event_results(
-            temp_files['attendance'],
-            temp_files['members'],
-            temp_files['responses']
-        )
-
-        alice = next(p for p in result_peeps if p.id == 4)
-
-        # Alice didn't respond and didn't attend, so priority should stay at 2
-        assert alice.priority == 2
-
-
+@pytest.mark.unit
 class TestPeepIndexOrdering:
     """Test that peep index ordering is updated correctly after priority changes."""
 

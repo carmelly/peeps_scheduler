@@ -8,6 +8,7 @@ Following testing philosophy:
 - One concept per test with descriptive names
 """
 
+import pytest
 from models import EventSequence, Role, SwitchPreference
 from scheduler import Scheduler
 import constants
@@ -22,6 +23,7 @@ def create_scheduler(**kwargs):
     return Scheduler(**defaults)
 
 
+@pytest.mark.unit
 class TestSchedulerInitialization:
     """Test Scheduler creation and basic configuration."""
     
@@ -42,6 +44,7 @@ class TestSchedulerInitialization:
         assert str(scheduler.result_json).endswith('my_folder/results.json')
 
 
+@pytest.mark.unit
 class TestSchedulerEventSanitization:
     """Test Scheduler event filtering and validation logic."""
     
@@ -116,6 +119,7 @@ class TestSchedulerEventSanitization:
         assert len(valid_events) == 0
 
 
+@pytest.mark.unit
 class TestSchedulerEventTrimming:
     """Test Scheduler event overlap removal logic."""
     
@@ -174,6 +178,7 @@ class TestSchedulerEventTrimming:
         # The exact result depends on weight calculation, but should be deterministic
 
 
+@pytest.mark.unit
 class TestSchedulerSequenceEvaluation:
     """Test Scheduler sequence evaluation core logic."""
     
@@ -358,6 +363,7 @@ class TestSchedulerSequenceEvaluation:
         assert total_alternates > 0, "Should have alternates when event is full but more peeps are available"
 
 
+@pytest.mark.unit
 class TestSchedulerSequenceSelection:
     """Test Scheduler sequence selection and ranking logic."""
     
@@ -571,6 +577,7 @@ class TestSchedulerSequenceSelection:
         assert top[0] == seq_a, "Should select sequence with fulfilled partnerships"
 
 
+@pytest.mark.unit
 class TestSchedulerDualRoleAssignment:
     """Test Scheduler dual-role switching logic during sequence evaluation."""
     
@@ -954,6 +961,7 @@ class TestSchedulerDualRoleAssignment:
         assert switch_leader not in valid_event.leaders
 
 
+@pytest.mark.integration
 class TestSchedulerIntegration:
     """Test Scheduler integration scenarios with realistic data."""
     

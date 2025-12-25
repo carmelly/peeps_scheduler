@@ -1,8 +1,23 @@
-import pytest
+"""Test fixtures and configuration for peeps_scheduler test suite.
+
+For comprehensive test architecture documentation, fixture patterns, and best practices,
+see docs/test-architecture.md
+
+This module implements:
+- Session-scoped schema loading (_parse_and_reorder_schema, schema_sql)
+- Module-scoped in-memory database with transaction rollback (db_connection)
+- Function-scoped test database fixtures (test_db, test_db_path)
+- Test data factories (peep_factory, event_factory, test_period_data)
+"""
+
 import datetime
 import sqlite3
 from pathlib import Path
-from models import Peep, Event, Role, SwitchPreference
+import pytest
+from models import Event, Peep, Role, SwitchPreference
+
+# Register fixtures from tests/fixtures/ directory
+pytest_plugins = ["tests.fixtures.conftest"]
 
 
 def _parse_and_reorder_schema(schema_sql):
@@ -142,170 +157,253 @@ def event_factory():
 
 @pytest.fixture
 def test_period_data():
-    """Generate complete test period data for import testing."""
-    import json
-    import csv
-    import tempfile
-    import shutil
+	"""Generate complete test period data for import testing."""
+	import csv
+	import json
+	import shutil
+	import tempfile
 
-    def _create(period_name='2025-02', num_members=10, num_events=3):
-        """Create test CSV/JSON files for a period in a temporary directory."""
-        # Create temporary directory for period data
-        temp_dir = tempfile.mkdtemp()
-        period_dir = Path(temp_dir) / period_name
-        period_dir.mkdir(parents=True)
+	def _create(period_name="2025-02", num_members=10, num_events=3):
+		"""Create test CSV/JSON files for a period in a temporary directory."""
+		# Create temporary directory for period data
+		temp_dir = tempfile.mkdtemp()
+		period_dir = Path(temp_dir) / period_name
+		period_dir.mkdir(parents=True)
 
-        # Generate test members (match production format)
-        members = []
-        for i in range(1, num_members + 1):
-            members.append({
-                'id': i,
-                'Name': f'Test Member {i}',
-                'Display Name': f'Member{i}',
-                'Email Address': f'member{i}@test.com',
-                'Role': 'leader' if i % 2 == 1 else 'follower',
-                'Index': 0,
-                'Priority': i,
-                'Total Attended': 0,
-                'Active': 'TRUE',
-                'Date Joined': '1/1/2025'  # Production format: M/D/YYYY
-            })
+		# Generate test members (match production format)
+		members = []
+		for i in range(1, num_members + 1):
+			members.append(
+				{
+					"id": i,
+					"Name": f"Test Member {i}",
+					"Display Name": f"Member{i}",
+					"Email Address": f"member{i}@test.com",
+					"Role": "leader" if i % 2 == 1 else "follower",
+					"Index": 0,
+					"Priority": i,
+					"Total Attended": 0,
+					"Active": "TRUE",
+					"Date Joined": "1/1/2025",  # Production format: M/D/YYYY
+				}
+			)
 
-        # Write members.csv
-        with open(period_dir / 'members.csv', 'w', newline='') as f:
-            writer = csv.DictWriter(f, fieldnames=['id', 'Name', 'Display Name', 'Email Address', 'Role', 'Index', 'Priority', 'Total Attended', 'Active', 'Date Joined'])
-            writer.writeheader()
-            writer.writerows(members)
+		# Write members.csv
+		with open(period_dir / "members.csv", "w", newline="") as f:
+			writer = csv.DictWriter(
+				f,
+				fieldnames=[
+					"id",
+					"Name",
+					"Display Name",
+					"Email Address",
+					"Role",
+					"Index",
+					"Priority",
+					"Total Attended",
+					"Active",
+					"Date Joined",
+				],
+			)
+			writer.writeheader()
+			writer.writerows(members)
 
-        # Generate test responses with date strings for auto-derive event mode
-        responses = []
-        event_dates = [
-            'Friday February 7th - 5pm to 7pm',
-            'Friday February 14th - 5pm to 7pm',
-            'Friday February 21st - 5pm to 7pm'
-        ][:num_events]
+		# Generate test responses with date strings for auto-derive event mode
+		responses = []
+		event_dates = [
+			"Friday February 7th - 5pm to 7pm",
+			"Friday February 14th - 5pm to 7pm",
+			"Friday February 21st - 5pm to 7pm",
+		][:num_events]
 
-        for i in range(1, min(num_members, 8) + 1):  # First 8 members respond
-            # Use actual date strings with time ranges for auto-derive mode
-            availability_str = ', '.join(event_dates)
-            responses.append({
-                'Timestamp': '2/1/2025 10:00:00',
-                'Email Address': f'member{i}@test.com',
-                'Name': f'Test Member {i}',
-                'Primary Role': 'leader' if i % 2 == 1 else 'follower',
-                'Secondary Role': "I only want to be scheduled in my primary role",
-                'Max Sessions': 2,
-                'Availability': availability_str,
-                'Event Duration': '',
-                'Session Spacing Preference': '',
-                'Min Interval Days': 0,
-                'Partnership Preference': '',
-                'Questions or Comments': ''
-            })
+		for i in range(1, min(num_members, 8) + 1):  # First 8 members respond
+			# Use actual date strings with time ranges for auto-derive mode
+			availability_str = ", ".join(event_dates)
+			responses.append(
+				{
+					"Timestamp": "2/1/2025 10:00:00",
+					"Email Address": f"member{i}@test.com",
+					"Name": f"Test Member {i}",
+					"Primary Role": "leader" if i % 2 == 1 else "follower",
+					"Secondary Role": "I only want to be scheduled in my primary role",
+					"Max Sessions": 2,
+					"Availability": availability_str,
+					"Event Duration": "",
+					"Session Spacing Preference": "",
+					"Min Interval Days": 0,
+					"Partnership Preference": "",
+					"Questions or Comments": "",
+				}
+			)
 
-        # Write responses.csv (match production format with all columns)
-        with open(period_dir / 'responses.csv', 'w', newline='') as f:
-            writer = csv.DictWriter(f, fieldnames=['Timestamp', 'Email Address', 'Name', 'Primary Role', 'Secondary Role', 'Max Sessions', 'Availability', 'Event Duration', 'Session Spacing Preference', 'Min Interval Days', 'Partnership Preference', 'Questions or Comments'])
-            writer.writeheader()
-            writer.writerows(responses)
+		# Write responses.csv (match production format with all columns)
+		with open(period_dir / "responses.csv", "w", newline="") as f:
+			writer = csv.DictWriter(
+				f,
+				fieldnames=[
+					"Timestamp",
+					"Email Address",
+					"Name",
+					"Primary Role",
+					"Secondary Role",
+					"Max Sessions",
+					"Availability",
+					"Event Duration",
+					"Session Spacing Preference",
+					"Min Interval Days",
+					"Partnership Preference",
+					"Questions or Comments",
+				],
+			)
+			writer.writeheader()
+			writer.writerows(responses)
 
-        # Note: Events will be auto-derived from availability strings by extract_events()
+		# Note: Events will be auto-derived from availability strings by extract_events()
 
-        # Generate test assignments (results.json) - PRODUCTION FORMAT
-        results_data = {
-            'valid_events': [],
-            'peeps': [],
-            'num_unique_attendees': min(num_members, 8),
-            'priority_fulfilled': 0,
-            'system_weight': 0
-        }
+		# Generate test assignments (results.json) - PRODUCTION FORMAT
+		results_data = {
+			"valid_events": [],
+			"peeps": [],
+			"num_unique_attendees": min(num_members, 8),
+			"priority_fulfilled": 0,
+			"system_weight": 0,
+		}
 
-        base_date = datetime.datetime(2025, 2, 7, 17, 0)  # Feb 7, 5pm
-        for event_idx in range(num_events):
-            event_date = base_date + datetime.timedelta(days=7 * event_idx)
-            results_data['valid_events'].append({
-                'id': event_idx,
-                'date': event_date.strftime('%Y-%m-%d %H:%M'),
-                'duration_minutes': 120,
-                'attendees': [
-                    {'id': 1, 'name': 'Member1', 'role': 'leader'},
-                    {'id': 2, 'name': 'Member2', 'role': 'follower'}
-                ],
-                'alternates': [
-                    {'id': 3, 'name': 'Member3', 'role': 'leader'}
-                ],
-                'leaders_string': 'Leaders(2): Member1, Member3',
-                'followers_string': 'Followers(1): Member2'
-            })
+		base_date = datetime.datetime(2025, 2, 7, 17, 0)  # Feb 7, 5pm
+		for event_idx in range(num_events):
+			event_date = base_date + datetime.timedelta(days=7 * event_idx)
+			results_data["valid_events"].append(
+				{
+					"id": event_idx,
+					"date": event_date.strftime("%Y-%m-%d %H:%M"),
+					"duration_minutes": 120,
+					"attendees": [
+						{"id": 1, "name": "Member1", "role": "leader"},
+						{"id": 2, "name": "Member2", "role": "follower"},
+					],
+					"alternates": [{"id": 3, "name": "Member3", "role": "leader"}],
+					"leaders_string": "Leaders(2): Member1, Member3",
+					"followers_string": "Followers(1): Member2",
+				}
+			)
 
-        # Write results.json
-        with open(period_dir / 'results.json', 'w') as f:
-            json.dump(results_data, f, indent=2)
+		# Write results.json
+		with open(period_dir / "results.json", "w") as f:
+			json.dump(results_data, f, indent=2)
 
-        # Write output.json (scheduler's snapshot of input data)
-        # This should mirror the results structure but represents the scheduler's input state
-        output_data = {
-            'events': results_data['valid_events'],  # Same events as results
-            'peeps': results_data['peeps'],
-            'members': members  # Include member data snapshot
-        }
-        with open(period_dir / 'output.json', 'w') as f:
-            json.dump(output_data, f, indent=2)
+		# Write output.json (scheduler's snapshot of input data)
+		# This should mirror the results structure but represents the scheduler's input state
+		output_data = {
+			"events": results_data["valid_events"],  # Same events as results
+			"peeps": results_data["peeps"],
+			"members": members,  # Include member data snapshot
+		}
+		with open(period_dir / "output.json", "w") as f:
+			json.dump(output_data, f, indent=2)
 
-        # Generate test attendance (actual_attendance.json) - PRODUCTION FORMAT
-        attendance_data = {
-            'valid_events': []
-        }
+		# Generate test attendance (actual_attendance.json) - PRODUCTION FORMAT
+		attendance_data = {"valid_events": []}
 
-        for event_idx in range(num_events):
-            event_date = base_date + datetime.timedelta(days=7 * event_idx)
-            attendance_data['valid_events'].append({
-                'id': event_idx,
-                'date': event_date.strftime('%Y-%m-%d %H:%M'),
-                'duration_minutes': 120,
-                'attendees': [
-                    {'id': 1, 'name': 'Member1', 'role': 'leader'},
-                    {'id': 2, 'name': 'Member2', 'role': 'follower'}
-                ],
-                'alternates': [],
-                'leaders_string': 'Leaders(1): Member1',
-                'followers_string': 'Followers(1): Member2'
-            })
+		for event_idx in range(num_events):
+			event_date = base_date + datetime.timedelta(days=7 * event_idx)
+			attendance_data["valid_events"].append(
+				{
+					"id": event_idx,
+					"date": event_date.strftime("%Y-%m-%d %H:%M"),
+					"duration_minutes": 120,
+					"attendees": [
+						{"id": 1, "name": "Member1", "role": "leader"},
+						{"id": 2, "name": "Member2", "role": "follower"},
+					],
+					"alternates": [],
+					"leaders_string": "Leaders(1): Member1",
+					"followers_string": "Followers(1): Member2",
+				}
+			)
 
-        # Write actual_attendance.json
-        with open(period_dir / 'actual_attendance.json', 'w') as f:
-            json.dump(attendance_data, f, indent=2)
+		# Write actual_attendance.json
+		with open(period_dir / "actual_attendance.json", "w") as f:
+			json.dump(attendance_data, f, indent=2)
 
-        # Write empty notes.json
-        with open(period_dir / 'notes.json', 'w') as f:
-            json.dump([], f, indent=2)
+		# Write empty notes.json
+		with open(period_dir / "notes.json", "w") as f:
+			json.dump([], f, indent=2)
 
-        # Generate cancellations.json (optional - for cancellations feature)
-        cancellations_data = {
-            'cancelled_events': [],
-            'cancelled_availability': [],
-            'notes': 'Test cancellations data'
-        }
-        with open(period_dir / 'cancellations.json', 'w') as f:
-            json.dump(cancellations_data, f, indent=2)
+		# Generate cancellations.json (optional - for cancellations feature)
+		cancellations_data = {
+			"cancelled_events": [],
+			"cancelled_availability": [],
+			"notes": "Test cancellations data",
+		}
+		with open(period_dir / "cancellations.json", "w") as f:
+			json.dump(cancellations_data, f, indent=2)
 
-        # Generate partnerships.json (optional - for partnerships feature)
-        partnerships_data = {}
-        with open(period_dir / 'partnerships.json', 'w') as f:
-            json.dump(partnerships_data, f, indent=2)
+		# Generate partnerships.json (optional - for partnerships feature)
+		partnerships_data = {}
+		with open(period_dir / "partnerships.json", "w") as f:
+			json.dump(partnerships_data, f, indent=2)
 
-        yield {
-            'temp_dir': temp_dir,
-            'period_dir': period_dir,
-            'period_name': period_name,
-            'num_members': num_members,
-            'num_events': num_events
-        }
+		yield {
+			"temp_dir": temp_dir,
+			"period_dir": period_dir,
+			"period_name": period_name,
+			"num_members": num_members,
+			"num_events": num_events,
+		}
 
-        # Cleanup
-        shutil.rmtree(temp_dir)
+		# Cleanup
+		shutil.rmtree(temp_dir)
 
-    return _create
+	return _create
+
+
+@pytest.fixture
+def prepared_importer(test_db, test_period_data):
+	"""Fixture providing fully prepared importer with members and period already set up.
+
+	This fixture consolidates common setup code used across multiple import tests,
+	reducing duplication and improving readability.
+
+	Returns a dictionary with:
+	- 'importer': PeriodImporter instance with period created
+	- 'cursor': Database cursor for assertions
+	- 'period_data': Test period data (temp_dir, period_dir, etc.)
+	- 'peep_id_mapping': Mapping of email to peep ID
+
+	Note: Uses default period_name='2025-02'. Tests needing different periods
+	should set up their own importer instead of using this fixture.
+	"""
+	from pathlib import Path
+	from db.import_period_data import MemberCollector, PeriodImporter
+
+	# Setup test period data
+	period_data = next(test_period_data(period_name="2025-02", num_members=10))
+
+	# Get database cursor
+	cursor = test_db.cursor()
+
+	# Collect and insert members
+	collector = MemberCollector(processed_data_path=Path(period_data["temp_dir"]), verbose=False)
+	collector.scan_all_periods()
+	collector.insert_members_to_db(cursor)
+
+	# Create and initialize importer
+	importer = PeriodImporter(
+		period_name="2025-02",
+		processed_data_path=Path(period_data["temp_dir"]),
+		peep_id_mapping=collector.peep_id_mapping,
+		cursor=cursor,
+		verbose=False,
+		skip_snapshots=True,
+	)
+	importer.create_schedule_period()
+
+	return {
+		"importer": importer,
+		"cursor": cursor,
+		"period_data": period_data,
+		"peep_id_mapping": collector.peep_id_mapping,
+	}
 
 
 def pytest_sessionfinish(session, exitstatus):

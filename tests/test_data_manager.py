@@ -14,6 +14,7 @@ from pathlib import Path
 from data_manager import DataManager, get_data_manager
 
 
+@pytest.mark.unit
 class TestDataManager:
     """Test DataManager core functionality."""
     
@@ -69,6 +70,7 @@ class TestDataManager:
             assert str(dm.submodule_root) == temp_dir
 
 
+@pytest.mark.unit
 class TestGlobalDataManager:
     """Test global DataManager singleton functionality."""
     
@@ -84,6 +86,7 @@ class TestGlobalDataManager:
         assert str(dm.submodule_root) == "peeps_data"
 
 
+@pytest.mark.unit
 class TestDataManagerErrorHandling:
     """Test DataManager error handling and edge cases."""
     

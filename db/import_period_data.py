@@ -30,39 +30,36 @@ Usage:
 """
 
 import argparse
+import csv
 import json
 import logging
 import os
 import sqlite3
 import sys
-from collections import defaultdict
-from datetime import datetime, date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Set
 
 # Add project root to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-# Import existing utilities
-from file_io import (
-    load_csv,
-    load_json,
-    normalize_email,
-    parse_event_date,
-    load_responses,
-    extract_events
-)
-from models import Role, SwitchPreference
+
 import constants
 from data_manager import get_data_manager
+from db.snapshot_generator import EventAttendance, MemberSnapshot, SnapshotGenerator
+from file_io import (
+    extract_events,
+    load_csv,
+    load_json,
+    load_responses,
+    normalize_email,
+    parse_event_date,
+)
+from models import SwitchPreference
 
-# Import snapshot generator
-from db.snapshot_generator import SnapshotGenerator, MemberSnapshot, EventAttendance
-
-# Database path
-DB_PATH = constants.DEFAULT_DB_PATH
+# Database path (allow environment variable override for testing)
+DB_PATH = os.getenv('DEFAULT_DB_PATH', constants.DEFAULT_DB_PATH)
 data_manager = get_data_manager()
-PROCESSED_DATA_PATH = data_manager.get_processed_data_path()
+PROCESSED_DATA_PATH = os.getenv('PROCESSED_DATA_PATH', data_manager.get_processed_data_path())
 
 
 # ============================================================================
@@ -83,13 +80,13 @@ class MemberCollector:
         self.logger = self._setup_logging()
 
         # Member tracking: csv_id -> member data
-        self.members: Dict[str, Dict] = {}
+        self.members: dict[str, dict] = {}
 
         # First appearance tracking: csv_id -> (period_name, date)
-        self.first_appearances: Dict[str, Tuple[str, date]] = {}
+        self.first_appearances: dict[str, tuple[str, date]] = {}
 
         # Mapping after DB insertion: csv_id -> database peep_id
-        self.peep_id_mapping: Dict[str, int] = {}
+        self.peep_id_mapping: dict[str, int] = {}
 
     def _setup_logging(self) -> logging.Logger:
         """Configure logging for member collection."""
@@ -97,7 +94,7 @@ class MemberCollector:
         level = 'DEBUG' if self.verbose else 'INFO'
         return get_logger('member_collector', 'import', level=level, console_output=True)
 
-    def get_available_periods(self) -> List[str]:
+    def get_available_periods(self) -> list[str]:
         """Get all available period directories in chronological order."""
         periods = []
 
@@ -319,10 +316,10 @@ class PeriodImporter:
         self,
         period_name: str,
         processed_data_path: Path,
-        peep_id_mapping: Dict[str, int],
+        peep_id_mapping: dict[str, int],
         cursor: sqlite3.Cursor,
         verbose: bool = False,
-        skip_snapshots: bool = False
+        skip_snapshots: bool = False,
     ):
         self.period_name = period_name
         self.processed_data_path = processed_data_path
@@ -337,7 +334,7 @@ class PeriodImporter:
 
         # Tracking for this period
         self.period_id = None
-        self.event_id_mapping: Dict[str, int] = {}  # event_date_str -> db event_id
+        self.event_id_mapping: dict[str, int] = {}  # event_date_str -> db event_id
 
     def _setup_logging(self) -> logging.Logger:
         """Configure logging for period import."""
@@ -375,11 +372,14 @@ class PeriodImporter:
         num_availability = self.create_event_availability(response_mapping)
         self.logger.info(f"Created {num_availability} availability records")
 
-        # Phase 1 Features: Import cancelled events and availability
-        num_cancelled_from_json = self.import_cancelled_events_from_json()
-        num_cancelled_availability = self.import_cancelled_availability()
+        # Step 5: Import cancelled events and availability
+        self.import_cancelled_events_from_json()
+        self.import_cancelled_availability()
 
-        # Step 5: Import assignments and attendance
+        # Step 6: Import partnerships
+        self.import_partnerships()
+
+        # Step 7: Import assignments and attendance
         num_assignments = self.import_assignments()
         self.logger.info(f"Created {num_assignments} assignments")
 
@@ -390,9 +390,6 @@ class PeriodImporter:
 
         num_attendance = self.import_attendance()
         self.logger.info(f"Created {num_attendance} attendance records")
-
-        # Phase 1 Features: Import partnerships
-        num_partnerships = self.import_partnerships()
 
         # Update events from actual_attendance.json (status='completed', duration)
         num_updated_attendance = self.update_events_from_attendance()
@@ -418,7 +415,9 @@ class PeriodImporter:
             self.logger.info(f"Derived {num_changes} assignment changes")
         else:
             num_changes = 0
-            self.logger.info(f"Skipped change derivation (no attendance data for future/incomplete period)")
+            self.logger.info(
+                "Skipped change derivation (no attendance data for future/incomplete period)"
+            )
 
         # Step 6: Calculate and save snapshots (ONLY if attendance exists)
         if not self.skip_snapshots and num_attendance > 0:
@@ -465,8 +464,9 @@ class PeriodImporter:
             f"Created schedule_period {self.period_id}: {self.period_name} "
             f"({period_date} to {period_end})"
         )
+        return self.period_id
 
-    def import_responses(self) -> Dict[int, Tuple[int, str]]:
+    def import_responses(self) -> dict[int, tuple[int, str]]:
         """
         Import responses from responses.csv.
 
@@ -593,7 +593,7 @@ class PeriodImporter:
         self.logger.info(f"Imported {inserted} responses")
         return response_mapping
 
-    def create_events(self, response_mapping: Dict[int, Tuple[int, str]]) -> int:
+    def create_events(self, response_mapping: dict[int, tuple[int, str]]) -> int:
         """
         Create events from availability strings in responses.
 
@@ -652,7 +652,7 @@ class PeriodImporter:
 
         return inserted
 
-    def create_event_availability(self, response_mapping: Dict[int, Tuple[int, str]]) -> int:
+    def create_event_availability(self, response_mapping: dict[int, tuple[int, str]]) -> int:
         """
         Create event_availability many-to-many relationships.
 
@@ -1446,7 +1446,7 @@ class PeriodImporter:
 
         return inserted
 
-    def _load_prior_snapshot(self, prior_period_id: int) -> List[MemberSnapshot]:
+    def _load_prior_snapshot(self, prior_period_id: int) -> list[MemberSnapshot]:
         """Load snapshots from prior period."""
         self.cursor.execute("""
             SELECT
@@ -1485,7 +1485,7 @@ class PeriodImporter:
         self.logger.debug(f"Loaded {len(snapshots)} snapshots from prior period")
         return snapshots
 
-    def _create_baseline_snapshot(self) -> List[MemberSnapshot]:
+    def _create_baseline_snapshot(self) -> list[MemberSnapshot]:
         """Create baseline snapshot for first period from all peeps."""
         self.cursor.execute("""
             SELECT
@@ -1514,7 +1514,7 @@ class PeriodImporter:
         self.logger.debug(f"Created baseline snapshot with {len(snapshots)} members")
         return snapshots
 
-    def _load_attendance_records(self) -> List[EventAttendance]:
+    def _load_attendance_records(self) -> list[EventAttendance]:
         """Load actual attendance for this period."""
         self.cursor.execute("""
             SELECT
@@ -1553,7 +1553,7 @@ class PeriodImporter:
         self.logger.debug(f"Loaded {len(attendance_records)} attendance records")
         return attendance_records
 
-    def _get_responded_peep_ids(self) -> Set[int]:
+    def _get_responded_peep_ids(self) -> set[int]:
         """Get set of peep IDs who submitted responses this period."""
         self.cursor.execute("""
             SELECT DISTINCT peep_id
@@ -1708,7 +1708,12 @@ def import_cancelled_availability(cancellations_file: Path, period_id: int, curs
     return removed_count
 
 
-def import_partnerships(partnerships_file: Path, period_id: int, cursor: sqlite3.Cursor, peep_id_mapping: Optional[Dict[str, int]] = None) -> int:
+def import_partnerships(
+    partnerships_file: Path,
+    period_id: int,
+    cursor: sqlite3.Cursor,
+    peep_id_mapping: dict[str, int] | None = None,
+) -> int:
     """
     Module-level wrapper for importing partnerships.
 
@@ -1781,8 +1786,6 @@ def import_partnerships(partnerships_file: Path, period_id: int, cursor: sqlite3
 
 def setup_logging(verbose: bool = False):
     """Configure logging for import operations."""
-    # Import logging_config from project root
-    sys.path.insert(0, str(Path(__file__).parent.parent))
     from logging_config import get_logger
 
     # Return configured logger for import operations
@@ -1864,7 +1867,7 @@ def validate_schema(cursor: sqlite3.Cursor, logger: logging.Logger = None) -> bo
     return True
 
 
-def main():
+def main():  # pragma: no cover
     parser = argparse.ArgumentParser(
         description="Import historical CSV data directly to normalized database",
         epilog="""
@@ -1947,6 +1950,26 @@ Notes:
         action='store_true',
         help='Skip snapshot calculation (for testing import without snapshot generation)'
     )
+    parser.add_argument(
+        '--validate-cancellations',
+        metavar='PERIOD',
+        help='Validate cancellations.json for a specific period (e.g., 2025-02)'
+    )
+    parser.add_argument(
+        '--show-cancellations',
+        metavar='PERIOD',
+        help='Display cancellations data for a specific period'
+    )
+    parser.add_argument(
+        '--validate-partnerships',
+        metavar='PERIOD',
+        help='Validate partnerships.json for a specific period (e.g., 2025-02)'
+    )
+    parser.add_argument(
+        '--show-partnerships',
+        metavar='PERIOD',
+        help='Display partnerships data for a specific period'
+    )
 
     args = parser.parse_args()
 
@@ -1962,6 +1985,133 @@ Notes:
             sys.exit(0 if is_valid else 1)
         except Exception as e:
             logger.error(f"Schema validation failed: {e}")
+            sys.exit(1)
+
+    # Handle --validate-cancellations flag
+    if args.validate_cancellations:
+        period_name = args.validate_cancellations
+        period_path = Path(PROCESSED_DATA_PATH) / period_name
+        cancellations_file = period_path / 'cancellations.json'
+
+        try:
+            if not cancellations_file.exists():
+                logger.info(f"Cancellations file not found for period {period_name} (optional)")
+                sys.exit(0)
+
+            with open(cancellations_file) as f:
+                cancellations = json.load(f)
+            logger.info(f"✓ Cancellations valid for period {period_name}")
+            sys.exit(0)
+        except json.JSONDecodeError as e:
+            logger.error(f"Invalid JSON in cancellations.json: {e}")
+            sys.exit(1)
+        except Exception as e:
+            logger.error(f"Failed to validate cancellations: {e}")
+            sys.exit(1)
+
+    # Handle --show-cancellations flag
+    if args.show_cancellations:
+        period_name = args.show_cancellations
+        period_path = Path(PROCESSED_DATA_PATH) / period_name
+        cancellations_file = period_path / 'cancellations.json'
+
+        try:
+            if not cancellations_file.exists():
+                logger.info(f"Cancellations file not found for period {period_name}")
+                sys.exit(0)
+
+            with open(cancellations_file) as f:
+                cancellations = json.load(f)
+
+            logger.info(f"{'=' * 60}")
+            logger.info(f"CANCELLATIONS FOR {period_name}")
+            logger.info(f"{'=' * 60}")
+
+            if cancellations.get('cancelled_events'):
+                logger.info("Cancelled Events:")
+                for event in cancellations['cancelled_events']:
+                    logger.info(f"  - {event}")
+
+            if cancellations.get('cancelled_availability'):
+                logger.info("Cancelled Availability:")
+                for avail in cancellations['cancelled_availability']:
+                    logger.info(f"  - {avail.get('member_email', 'Unknown')}: {avail.get('event_datetime', 'Unknown')}")
+
+            if cancellations.get('notes'):
+                logger.info(f"Notes: {cancellations['notes']}")
+
+            sys.exit(0)
+        except Exception as e:
+            logger.error(f"Failed to show cancellations: {e}")
+            sys.exit(1)
+
+    # Handle --validate-partnerships flag
+    if args.validate_partnerships:
+        period_name = args.validate_partnerships
+        period_path = Path(PROCESSED_DATA_PATH) / period_name
+        partnerships_file = period_path / 'partnerships.json'
+        members_file = period_path / 'members.csv'
+
+        try:
+            if not partnerships_file.exists():
+                logger.info(f"Partnerships file not found for period {period_name} (optional)")
+                sys.exit(0)
+
+            with open(partnerships_file) as f:
+                partnerships = json.load(f)
+
+            # Load member IDs for validation
+            valid_member_ids = set()
+            if members_file.exists():
+                with open(members_file) as f:
+                    reader = csv.DictReader(f)
+                    for row in reader:
+                        valid_member_ids.add(row['id'])
+
+            # Validate all member IDs exist
+            for requester_id, partner_ids in partnerships.items():
+                if requester_id not in valid_member_ids:
+                    logger.error(f"Invalid member ID in partnerships: {requester_id}")
+                    sys.exit(1)
+
+                for partner_id in partner_ids:
+                    if partner_id not in valid_member_ids:
+                        logger.error(f"Invalid partner ID {partner_id} referenced by member {requester_id}")
+                        sys.exit(1)
+
+            logger.info(f"✓ Partnerships valid for period {period_name}")
+            sys.exit(0)
+        except json.JSONDecodeError as e:
+            logger.error(f"Invalid JSON in partnerships.json: {e}")
+            sys.exit(1)
+        except Exception as e:
+            logger.error(f"Failed to validate partnerships: {e}")
+            sys.exit(1)
+
+    # Handle --show-partnerships flag
+    if args.show_partnerships:
+        period_name = args.show_partnerships
+        period_path = Path(PROCESSED_DATA_PATH) / period_name
+        partnerships_file = period_path / 'partnerships.json'
+
+        try:
+            if not partnerships_file.exists():
+                logger.info(f"Partnerships file not found for period {period_name}")
+                sys.exit(0)
+
+            with open(partnerships_file) as f:
+                partnerships = json.load(f)
+
+            logger.info(f"{'=' * 60}")
+            logger.info(f"PARTNERSHIPS FOR {period_name}")
+            logger.info(f"{'=' * 60}")
+
+            for requester_id, partner_ids in partnerships.items():
+                logger.info(f"Member {requester_id} partners with: {', '.join(partner_ids)}")
+
+            sys.exit(0)
+        except Exception as e:
+            logger.error(f"Failed to show partnerships: {e}")
             sys.exit(1)
 
     if not args.period and not args.all and not args.validate_only:
@@ -1999,13 +2149,14 @@ Notes:
                 sys.exit(0)
 
             # Insert members to database
+            # Always insert members (even in dry-run) because Phase 2 needs them for validation
+            num_inserted = collector.insert_members_to_db(cursor)
             if not args.dry_run:
-                num_inserted = collector.insert_members_to_db(cursor)
                 conn.commit()
                 logger.info(f"Phase 1 complete: {num_inserted} members inserted")
             else:
-                logger.info(f"DRY RUN: Would insert {num_members} members")
-                conn.rollback()
+                # Don't commit yet - will rollback at the end if dry-run
+                logger.info(f"DRY RUN: Phase 1 will insert {num_inserted} members (not committed yet)")
 
         # Phase 2: Period Processing
         if args.period or args.all:

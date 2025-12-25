@@ -29,7 +29,7 @@ import csv
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Union
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -133,7 +133,7 @@ def read_partnerships_json(period_path: Path) -> Optional[Dict]:
 # Schema Validation
 # =============================================================================
 
-def validate_schema(db_path: str) -> List[str]:
+def validate_schema(conn: sqlite3.Connection) -> List[str]:
     """
     Validate database schema integrity.
 
@@ -143,35 +143,33 @@ def validate_schema(db_path: str) -> List[str]:
     - Critical indexes (7 performance-critical indexes)
 
     Args:
-        db_path: Path to SQLite database
+        conn: SQLite database connection
 
     Returns:
         List[str]: List of validation issues found (empty list = valid schema)
 
     Examples:
         Valid schema:
-        >>> issues = validate_schema('peeps_data/peeps_scheduler.db')
+        >>> conn = sqlite3.connect('peeps_data/peeps_scheduler.db')
+        >>> issues = validate_schema(conn)
         >>> len(issues)
         0
 
         Schema with missing foreign key:
-        >>> issues = validate_schema('test_broken.db')
+        >>> conn = sqlite3.connect('test_broken.db')
+        >>> issues = validate_schema(conn)
         >>> [i for i in issues if 'foreign key' in i.lower()]
         ['Missing foreign key constraint: event_assignments.event_id -> events.id']
 
         Schema with multiple issues:
-        >>> issues = validate_schema('test_catastrophic.db')
+        >>> conn = sqlite3.connect('test_catastrophic.db')
+        >>> issues = validate_schema(conn)
         >>> len(issues) >= 7
         True
     """
     issues = []
 
-    # Handle nonexistent database
-    if not Path(db_path).exists():
-        raise FileNotFoundError(f"Database file not found: {db_path}")
-
     try:
-        conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
 
         # Check foreign keys
@@ -185,8 +183,6 @@ def validate_schema(db_path: str) -> List[str]:
         # Check critical indexes
         index_issues = _validate_indexes(cursor)
         issues.extend(index_issues)
-
-        conn.close()
 
     except sqlite3.Error as e:
         raise RuntimeError(f"Database error: {e}")
@@ -550,7 +546,7 @@ def validate_period(db_path: str, period_name: str, data_dir: str = None) -> int
         all_issues.extend(snapshot_issues)
         print(f"  {'PASSED' if not snapshot_issues else f'FAILED - {len(snapshot_issues)} issues'}\n")
 
-    # Validate Phase 1 features: Cancelled events
+    # Validate cancelled events
     cancellations_json = read_cancellations_json(period_path)
     if cancellations_json:
         cancelled_events = cancellations_json.get('cancelled_events', [])
@@ -560,7 +556,7 @@ def validate_period(db_path: str, period_name: str, data_dir: str = None) -> int
             all_issues.extend(cancellation_issues)
             print(f"  {'PASSED' if not cancellation_issues else f'FAILED - {len(cancellation_issues)} issues'}\n")
 
-    # Validate Phase 1 features: Cancelled availability
+    # Validate cancelled availability
     if cancellations_json:
         cancelled_availability = cancellations_json.get('cancelled_availability', [])
         if cancelled_availability:
@@ -569,7 +565,7 @@ def validate_period(db_path: str, period_name: str, data_dir: str = None) -> int
             all_issues.extend(cancelled_avail_issues)
             print(f"  {'PASSED' if not cancelled_avail_issues else f'FAILED - {len(cancelled_avail_issues)} issues'}\n")
 
-    # Validate Phase 1 features: Partnerships
+    # Validate partnerships
     partnerships_json = read_partnerships_json(period_path)
     if partnerships_json:
         print(f"Validating partnerships ({len(partnerships_json)} entries in JSON)...")
@@ -579,15 +575,15 @@ def validate_period(db_path: str, period_name: str, data_dir: str = None) -> int
 
     # Print summary
     if all_issues:
-        print(f"=== VALIDATION FAILED ===")
+        print("=== VALIDATION FAILED ===")
         print(f"Total issues: {len(all_issues)}\n")
         for issue in all_issues:
             print(f"  - {issue}")
         conn.close()
         return 1
     else:
-        print(f"=== VALIDATION PASSED ===")
-        print(f"All period data matches source files")
+        print("=== VALIDATION PASSED ===")
+        print("All period data matches source files")
         conn.close()
         return 0
 
