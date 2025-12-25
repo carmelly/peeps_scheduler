@@ -95,6 +95,26 @@ def read_attendance_json(period_path: Path) -> Optional[Dict]:
         return json.load(f)
 
 
+def read_cancellations_json(period_path: Path) -> Optional[Dict]:
+    """Read cancellations.json and return cancellation data."""
+    cancellations_file = period_path / 'cancellations.json'
+    if not cancellations_file.exists():
+        return None
+
+    with open(cancellations_file, 'r', encoding='utf-8') as f:
+        return json.load(f)
+
+
+def read_partnerships_json(period_path: Path) -> Optional[Dict]:
+    """Read partnerships.json and return partnership data."""
+    partnerships_file = period_path / 'partnerships.json'
+    if not partnerships_file.exists():
+        return None
+
+    with open(partnerships_file, 'r', encoding='utf-8') as f:
+        return json.load(f)
+
+
 # =============================================================================
 # Validation Commands
 # =============================================================================
@@ -295,6 +315,33 @@ def validate_period(db_path: str, period_name: str, data_dir: str = None) -> int
         snapshot_issues = validate_period_snapshots(cursor, period_id, members_csv)
         all_issues.extend(snapshot_issues)
         print(f"  {'PASSED' if not snapshot_issues else f'FAILED - {len(snapshot_issues)} issues'}\n")
+
+    # Validate Phase 1 features: Cancelled events
+    cancellations_json = read_cancellations_json(period_path)
+    if cancellations_json:
+        cancelled_events = cancellations_json.get('cancelled_events', [])
+        if cancelled_events:
+            print(f"Validating cancelled events ({len(cancelled_events)} in JSON)...")
+            cancellation_issues = validate_period_cancellations(cursor, period_id, cancellations_json, period_name)
+            all_issues.extend(cancellation_issues)
+            print(f"  {'PASSED' if not cancellation_issues else f'FAILED - {len(cancellation_issues)} issues'}\n")
+
+    # Validate Phase 1 features: Cancelled availability
+    if cancellations_json:
+        cancelled_availability = cancellations_json.get('cancelled_availability', [])
+        if cancelled_availability:
+            print(f"Validating cancelled availability ({len(cancelled_availability)} entries in JSON)...")
+            cancelled_avail_issues = validate_period_cancelled_availability(cursor, period_id, cancellations_json, period_name)
+            all_issues.extend(cancelled_avail_issues)
+            print(f"  {'PASSED' if not cancelled_avail_issues else f'FAILED - {len(cancelled_avail_issues)} issues'}\n")
+
+    # Validate Phase 1 features: Partnerships
+    partnerships_json = read_partnerships_json(period_path)
+    if partnerships_json:
+        print(f"Validating partnerships ({len(partnerships_json)} entries in JSON)...")
+        partnership_issues = validate_period_partnerships(cursor, period_id, partnerships_json)
+        all_issues.extend(partnership_issues)
+        print(f"  {'PASSED' if not partnership_issues else f'FAILED - {len(partnership_issues)} issues'}\n")
 
     # Print summary
     if all_issues:
@@ -546,6 +593,156 @@ def validate_period_snapshots(cursor, period_id: int, members_csv: List[Dict]) -
     return issues
 
 
+def validate_period_cancellations(cursor, period_id: int, cancellations_json: Dict, period_name: str) -> List[str]:
+    """
+    Validate cancelled events against database.
+
+    Checks that cancelled events from cancellations.json have status='cancelled' in database.
+    """
+    issues = []
+
+    cancelled_events = cancellations_json.get('cancelled_events', [])
+    if not cancelled_events:
+        return issues
+
+    # Extract year from period_name
+    try:
+        year = int(period_name.split('-')[0])
+    except (ValueError, IndexError):
+        year = None
+
+    # Parse event strings to event_id format (YYYY-MM-DD HH:MM)
+    from file_io import parse_event_date
+
+    for event_str in cancelled_events:
+        try:
+            event_id, _, _ = parse_event_date(event_str, year=year)
+        except Exception as e:
+            issues.append(f"Cannot parse cancelled event string '{event_str}': {e}")
+            continue
+
+        # Convert to ISO 8601 format for database matching
+        event_datetime_pattern = event_id.replace(' ', 'T')
+
+        # Check if event exists and has status='cancelled'
+        cursor.execute("""
+            SELECT status FROM events
+            WHERE period_id = ? AND event_datetime LIKE ?
+        """, (period_id, f"{event_datetime_pattern}%"))
+
+        event_row = cursor.fetchone()
+        if event_row is None:
+            issues.append(f"Cancelled event not found in DB: {event_id}")
+        elif event_row['status'] != 'cancelled':
+            issues.append(f"Event {event_id} should have status='cancelled', got '{event_row['status']}'")
+
+    return issues
+
+
+def validate_period_cancelled_availability(cursor, period_id: int, cancellations_json: Dict, period_name: str) -> List[str]:
+    """
+    Validate that cancelled availability records were removed from event_availability table.
+
+    Checks that members listed in cancelled_availability don't have event_availability records
+    for the specified events.
+    """
+    issues = []
+
+    cancelled_availability = cancellations_json.get('cancelled_availability', [])
+    if not cancelled_availability:
+        return issues
+
+    # Extract year from period_name
+    try:
+        year = int(period_name.split('-')[0])
+    except (ValueError, IndexError):
+        year = None
+
+    from file_io import parse_event_date, normalize_email
+
+    for entry in cancelled_availability:
+        email = normalize_email(entry.get('email', ''))
+        if not email:
+            continue
+
+        events = entry.get('events', [])
+
+        # Find peep by email
+        cursor.execute("SELECT id FROM peeps WHERE email = ?", (email,))
+        peep_row = cursor.fetchone()
+        if peep_row is None:
+            continue
+
+        peep_id = peep_row['id']
+
+        for event_str in events:
+            try:
+                event_id, _, _ = parse_event_date(event_str, year=year)
+            except Exception:
+                continue
+
+            event_datetime_pattern = event_id.replace(' ', 'T')
+
+            # Check that event_availability doesn't exist for this peep/event combo
+            cursor.execute("""
+                SELECT COUNT(*) as count FROM event_availability ea
+                JOIN responses r ON ea.response_id = r.id
+                JOIN events e ON ea.event_id = e.id
+                WHERE r.peep_id = ? AND e.period_id = ? AND e.event_datetime LIKE ?
+            """, (peep_id, period_id, f"{event_datetime_pattern}%"))
+
+            count = cursor.fetchone()['count']
+            if count > 0:
+                issues.append(f"Cancelled availability not removed: {email} still has availability for {event_id}")
+
+    return issues
+
+
+def validate_period_partnerships(cursor, period_id: int, partnerships_json: Dict) -> List[str]:
+    """
+    Validate partnership requests against database.
+
+    Checks that partnerships from partnerships.json are correctly stored in partnership_requests table.
+    """
+    issues = []
+
+    # Handle both wrapped {"partnerships": {...}} and unwrapped {...} formats
+    raw_partnerships = partnerships_json.get("partnerships") if "partnerships" in partnerships_json else partnerships_json
+
+    if not raw_partnerships or not isinstance(raw_partnerships, dict):
+        return issues
+
+    for requester_key, partner_ids in raw_partnerships.items():
+        try:
+            requester_id = int(requester_key)
+        except (TypeError, ValueError):
+            issues.append(f"Invalid requester ID in partnerships.json: {requester_key}")
+            continue
+
+        if not isinstance(partner_ids, list):
+            issues.append(f"Partner list for requester {requester_id} should be a list")
+            continue
+
+        for partner_id in partner_ids:
+            try:
+                partner_id = int(partner_id)
+            except (TypeError, ValueError):
+                issues.append(f"Invalid partner ID for requester {requester_id}: {partner_id}")
+                continue
+
+            # Check if partnership exists in database
+            cursor.execute("""
+                SELECT COUNT(*) as count FROM partnership_requests
+                WHERE period_id = ? AND requester_peep_id = ? AND partner_peep_id = ?
+            """, (period_id, requester_id, partner_id))
+
+            count = cursor.fetchone()['count']
+            if count == 0:
+                issues.append(f"Partnership not found in DB: {requester_id} -> {partner_id}")
+
+    return issues
+
+
 def validate_events(cursor, period_id: int, period_name: str, responses_csv: List[Dict], period_path: Path = None) -> List[str]:
     """
     Validate events table against responses.csv availability data.
@@ -703,6 +900,13 @@ def show_period(db_path: str, period_name: str) -> int:
     cursor.execute("SELECT COUNT(*) as count FROM peep_order_snapshots WHERE period_id = ?", (period_id,))
     snapshot_count = cursor.fetchone()['count']
 
+    # Get Phase 1 feature counts
+    cursor.execute("SELECT COUNT(*) as count FROM events WHERE period_id = ? AND status = 'cancelled'", (period_id,))
+    cancelled_events_count = cursor.fetchone()['count']
+
+    cursor.execute("SELECT COUNT(*) as count FROM partnership_requests WHERE period_id = ?", (period_id,))
+    partnership_count = cursor.fetchone()['count']
+
     # Display
     print(f"\n=== Period Summary: {period_name} ===")
     print(f"Start Date: {period['start_date']}")
@@ -714,6 +918,8 @@ def show_period(db_path: str, period_name: str) -> int:
     print(f"  Assignments: {assignment_count}")
     print(f"  Attendance: {attendance_count}")
     print(f"  Snapshots: {snapshot_count}")
+    print(f"  Cancelled Events: {cancelled_events_count}")
+    print(f"  Partnerships: {partnership_count}")
 
     conn.close()
     return 0

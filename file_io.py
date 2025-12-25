@@ -371,7 +371,7 @@ def load_cancellations(filename, year=None):
         try:
             event_id, _, _ = parse_event_date(event_str, year=year)
         except Exception as e:
-            raise ValueError(f"cannot parse event string in cancellations.json: '{event_str}' - {e}") from e
+            raise ValueError(f"invalid cancelled_events entry: '{event_str}' does not match expected format (e.g., 'Friday February 7th - 5pm to 7pm')") from e
         cancelled_event_ids.add(event_id)
 
     cancelled_availability = {}
@@ -699,3 +699,52 @@ def parse_event_date(date_str, year=None):
 		dt = dt.replace(year=year)
 		event_id = dt.strftime("%Y-%m-%d %H:%M")
 		return (event_id, None, display_name)
+
+
+def format_event_date(dt, duration_minutes=120):
+	"""
+	Format a datetime object as an event date string (reverse of parse_event_date).
+
+	Formats datetime in new format with time range: "Friday January 9th - 5:30pm to 7pm"
+
+	Args:
+		dt: datetime object to format
+		duration_minutes: Event duration in minutes (default: 120)
+
+	Returns:
+		str: Formatted event date string
+		Example: "Friday January 9th - 5:30pm to 7pm"
+	"""
+	# Format date part: "Friday January 9th"
+	day_name = dt.strftime('%A')
+	month_name = dt.strftime('%B')
+	day = dt.day
+
+	# Add ordinal suffix (1st, 2nd, 3rd, 4th, etc.)
+	if day in (1, 21, 31):
+		day_suffix = 'st'
+	elif day in (2, 22):
+		day_suffix = 'nd'
+	elif day in (3, 23):
+		day_suffix = 'rd'
+	else:
+		day_suffix = 'th'
+
+	date_part = f"{day_name} {month_name} {day}{day_suffix}"
+
+	# Format time part: "5:30pm to 7pm"
+	start_time = dt.strftime('%I:%M%p').lstrip('0').lower()
+	# Remove leading zero from hour if present
+	if start_time and start_time[0] == '0':
+		start_time = start_time[1:]
+
+	end_dt = dt + datetime.timedelta(minutes=duration_minutes)
+	end_time = end_dt.strftime('%I:%M%p').lstrip('0').lower()
+	if end_time and end_time[0] == '0':
+		end_time = end_time[1:]
+
+	# Remove seconds if present and clean up formatting
+	start_time = start_time.replace(':00 ', ' ')
+	end_time = end_time.replace(':00 ', ' ')
+
+	return f"{date_part} - {start_time} to {end_time}"

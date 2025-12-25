@@ -276,3 +276,17 @@ CREATE TABLE schedule_periods (
     CHECK(start_date <= end_date),
     CHECK(status IN ('draft', 'scheduled', 'completed'))
 );
+CREATE TABLE partnership_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    period_id INTEGER NOT NULL,
+    requester_peep_id INTEGER NOT NULL,
+    partner_peep_id INTEGER NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (period_id) REFERENCES schedule_periods(id),
+    FOREIGN KEY (requester_peep_id) REFERENCES peeps(id),
+    FOREIGN KEY (partner_peep_id) REFERENCES peeps(id),
+
+    UNIQUE(period_id, requester_peep_id, partner_peep_id),
+    CHECK(requester_peep_id != partner_peep_id)
+);

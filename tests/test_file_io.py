@@ -841,7 +841,7 @@ class TestCancellations:
 			"notes": "Bad format"
 		}))
 
-		with pytest.raises(ValueError, match="invalid event format|cannot parse|unparseable"):
+		with pytest.raises(ValueError, match="invalid cancelled_events entry"):
 			load_cancellations(str(cancelled_file), year=2025)
 
 	def test_load_cancellations_requires_year_parameter(self, tmp_path):

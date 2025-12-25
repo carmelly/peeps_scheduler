@@ -375,6 +375,10 @@ class PeriodImporter:
         num_availability = self.create_event_availability(response_mapping)
         self.logger.info(f"Created {num_availability} availability records")
 
+        # Phase 1 Features: Import cancelled events and availability
+        num_cancelled_from_json = self.import_cancelled_events_from_json()
+        num_cancelled_availability = self.import_cancelled_availability()
+
         # Step 5: Import assignments and attendance
         num_assignments = self.import_assignments()
         self.logger.info(f"Created {num_assignments} assignments")
@@ -386,6 +390,9 @@ class PeriodImporter:
 
         num_attendance = self.import_attendance()
         self.logger.info(f"Created {num_attendance} attendance records")
+
+        # Phase 1 Features: Import partnerships
+        num_partnerships = self.import_partnerships()
 
         # Update events from actual_attendance.json (status='completed', duration)
         num_updated_attendance = self.update_events_from_attendance()
@@ -1037,6 +1044,187 @@ class PeriodImporter:
         self.logger.debug(f"Updated {updated} events from actual_attendance.json")
         return updated
 
+    def import_cancelled_events_from_json(self) -> int:
+        """
+        Mark events as cancelled based on cancellations.json.
+
+        Loads event date strings from cancellations.json "cancelled_events" section
+        and marks matching events with status='cancelled'.
+
+        Returns:
+            Number of events marked as cancelled
+        """
+        from file_io import load_cancellations
+
+        cancellations_file = Path(self.period_path) / "cancellations.json"
+        if not cancellations_file.exists():
+            self.logger.debug("cancellations.json not found (optional file)")
+            return 0
+
+        # Parse year from period_name (format: YYYY-MM)
+        try:
+            year = int(self.period_name.split('-')[0])
+        except (ValueError, IndexError):
+            year = None
+
+        cancelled_event_ids, _ = load_cancellations(cancellations_file, year=year)
+
+        if not cancelled_event_ids:
+            return 0
+
+        cancelled_count = 0
+        for event_id_str in cancelled_event_ids:
+            # event_id_str format: "YYYY-MM-DD HH:MM"
+            # Validate datetime format before using in query
+            try:
+                datetime.fromisoformat(event_id_str.replace(' ', 'T'))
+            except ValueError:
+                self.logger.warning(f"Invalid event datetime format: {event_id_str}")
+                continue
+
+            # Find matching event in database by event_datetime
+            self.cursor.execute("""
+                UPDATE events
+                SET status = 'cancelled'
+                WHERE period_id = ? AND event_datetime = ?
+            """, (self.period_id, event_id_str))
+
+            cancelled_count += self.cursor.rowcount
+
+        if cancelled_count > 0:
+            self.logger.info(f"Marked {cancelled_count} events as cancelled from cancellations.json")
+
+        return cancelled_count
+
+    def import_cancelled_availability(self) -> int:
+        """
+        Remove event_availability records for cancelled availability.
+
+        Loads member/event pairs from cancellations.json "cancelled_availability" section
+        and removes matching event_availability records.
+
+        Returns:
+            Number of event_availability records removed
+        """
+        from file_io import load_cancellations, normalize_email
+
+        cancellations_file = Path(self.period_path) / "cancellations.json"
+        if not cancellations_file.exists():
+            return 0
+
+        # Parse year from period_name
+        try:
+            year = int(self.period_name.split('-')[0])
+        except (ValueError, IndexError):
+            year = None
+
+        _, cancelled_availability = load_cancellations(cancellations_file, year=year)
+
+        if not cancelled_availability:
+            return 0
+
+        removed_count = 0
+        for email, event_ids in cancelled_availability.items():
+            # Find peep by email - normalize email first (already lowercased)
+            normalized_email = normalize_email(email)
+            self.cursor.execute("""
+                SELECT id FROM peeps WHERE email = ?
+            """, (normalized_email,))
+
+            peep_row = self.cursor.fetchone()
+            if peep_row is None:
+                self.logger.warning(f"Could not find peep for email {email} in cancelled_availability")
+                continue
+
+            peep_id = peep_row[0]
+
+            for event_id_str in event_ids:
+                # Convert event_id format from "YYYY-MM-DD HH:MM" to "YYYY-MM-DDTHH:MM" for ISO 8601 matching
+                event_datetime_pattern = event_id_str.replace(' ', 'T')
+                self.cursor.execute("""
+                    SELECT id FROM events
+                    WHERE period_id = ? AND event_datetime LIKE ?
+                """, (self.period_id, f"{event_datetime_pattern}%"))
+
+                event_row = self.cursor.fetchone()
+                if event_row is None:
+                    self.logger.warning(f"Could not find event {event_id_str} in cancelled_availability")
+                    continue
+
+                event_db_id = event_row[0]
+
+                # Find and delete event_availability for this peep/event pair
+                self.cursor.execute("""
+                    DELETE FROM event_availability
+                    WHERE event_id = ? AND response_id IN (
+                        SELECT id FROM responses
+                        WHERE peep_id = ? AND period_id = ?
+                    )
+                """, (event_db_id, peep_id, self.period_id))
+
+                removed_count += self.cursor.rowcount
+
+        if removed_count > 0:
+            self.logger.info(f"Removed {removed_count} event_availability records from cancellations.json")
+
+        return removed_count
+
+    def import_partnerships(self) -> int:
+        """
+        Import partnership requests from partnerships.json.
+
+        Loads partnership data and stores in partnership_requests table.
+        Format: {"member_id": [partner_ids]} or {"partnerships": {"member_id": [partner_ids]}}
+
+        Returns:
+            Number of partnership requests stored
+        """
+        from file_io import load_partnerships
+
+        partnerships_file = Path(self.period_path) / "partnerships.json"
+        if not partnerships_file.exists():
+            self.logger.debug("partnerships.json not found (optional file)")
+            return 0
+
+        # Get valid peep IDs for validation
+        valid_peep_ids = set(self.peep_id_mapping.values())
+
+        partnerships = load_partnerships(partnerships_file.parent, valid_peep_ids=valid_peep_ids)
+
+        if not partnerships:
+            return 0
+
+        partnership_count = 0
+        for requester_csv_id, partner_csv_ids in partnerships.items():
+            # Map CSV ID to database peep_id
+            requester_peep_id = self.peep_id_mapping.get(str(requester_csv_id))
+            if requester_peep_id is None:
+                self.logger.warning(f"Could not map requester CSV ID {requester_csv_id} to database peep_id")
+                continue
+
+            for partner_csv_id in partner_csv_ids:
+                # Map partner CSV ID to database peep_id
+                partner_peep_id = self.peep_id_mapping.get(str(partner_csv_id))
+                if partner_peep_id is None:
+                    self.logger.warning(f"Could not map partner CSV ID {partner_csv_id} to database peep_id")
+                    continue
+
+                # Insert partnership request
+                try:
+                    self.cursor.execute("""
+                        INSERT INTO partnership_requests (period_id, requester_peep_id, partner_peep_id)
+                        VALUES (?, ?, ?)
+                    """, (self.period_id, requester_peep_id, partner_peep_id))
+                    partnership_count += 1
+                except sqlite3.IntegrityError:
+                    # Duplicate partnership request - skip silently
+                    pass
+
+        if partnership_count > 0:
+            self.logger.info(f"Imported {partnership_count} partnership requests")
+
+        return partnership_count
+
     def mark_cancelled_events(self) -> int:
         """
         Mark events that were scheduled (in results.json) but didn't occur (not in actual_attendance.json).
@@ -1376,6 +1564,215 @@ class PeriodImporter:
         responded_ids = {row[0] for row in self.cursor.fetchall()}
         self.logger.debug(f"{len(responded_ids)} peeps responded this period")
         return responded_ids
+
+
+# ============================================================================
+# Module-Level Wrapper Functions for Phase 1 Features
+# ============================================================================
+# These wrappers allow the Phase 1 import functions to be called standalone
+# by tests, while the actual implementation is in PeriodImporter methods.
+
+def import_cancelled_events(cancellations_file: Path, period_id: int, cursor: sqlite3.Cursor) -> int:
+    """
+    Module-level wrapper for importing cancelled events.
+
+    Marks events as cancelled based on cancellations.json.
+
+    Args:
+        cancellations_file: Path to cancellations.json
+        period_id: Database period_id
+        cursor: Database cursor
+
+    Returns:
+        Number of events marked as cancelled
+    """
+    from file_io import load_cancellations
+
+    if not cancellations_file.exists():
+        return 0
+
+    # Extract year from period_id (need to query database)
+    cursor.execute("""
+        SELECT period_name FROM schedule_periods WHERE id = ?
+    """, (period_id,))
+    period_row = cursor.fetchone()
+    if period_row is None:
+        return 0
+
+    period_name = period_row[0]
+    try:
+        year = int(period_name.split('-')[0])
+    except (ValueError, IndexError):
+        year = None
+
+    cancelled_event_ids, _ = load_cancellations(cancellations_file, year=year)
+
+    if not cancelled_event_ids:
+        return 0
+
+    cancelled_count = 0
+    for event_id_str in cancelled_event_ids:
+        # Validate datetime format before using in query
+        try:
+            datetime.fromisoformat(event_id_str.replace(' ', 'T'))
+        except ValueError:
+            raise ValueError(f"Invalid event datetime in cancelled_events: '{event_id_str}' does not match expected format (e.g., '2025-02-07 17:00')")
+
+        cursor.execute("""
+            UPDATE events
+            SET status = 'cancelled'
+            WHERE period_id = ? AND event_datetime = ?
+        """, (period_id, event_id_str))
+
+        cancelled_count += cursor.rowcount
+
+    return cancelled_count
+
+
+def import_cancelled_availability(cancellations_file: Path, period_id: int, cursor: sqlite3.Cursor) -> int:
+    """
+    Module-level wrapper for importing cancelled availability.
+
+    Removes event_availability records for cancelled availability.
+
+    Args:
+        cancellations_file: Path to cancellations.json
+        period_id: Database period_id
+        cursor: Database cursor
+
+    Returns:
+        Number of event_availability records removed
+    """
+    from file_io import load_cancellations, normalize_email
+
+    if not cancellations_file.exists():
+        return 0
+
+    # Extract year from period
+    cursor.execute("""
+        SELECT period_name FROM schedule_periods WHERE id = ?
+    """, (period_id,))
+    period_row = cursor.fetchone()
+    if period_row is None:
+        return 0
+
+    period_name = period_row[0]
+    try:
+        year = int(period_name.split('-')[0])
+    except (ValueError, IndexError):
+        year = None
+
+    _, cancelled_availability = load_cancellations(cancellations_file, year=year)
+
+    if not cancelled_availability:
+        return 0
+
+    removed_count = 0
+    for email, event_ids in cancelled_availability.items():
+        # Find peep by normalized email (already lowercased)
+        normalized_email = normalize_email(email)
+        cursor.execute("""
+            SELECT id FROM peeps WHERE email = ?
+        """, (normalized_email,))
+
+        peep_row = cursor.fetchone()
+        if peep_row is None:
+            continue
+
+        peep_id = peep_row[0]
+
+        for event_id_str in event_ids:
+            # Convert event_id format from "YYYY-MM-DD HH:MM" to "YYYY-MM-DDTHH:MM" for ISO 8601 matching
+            event_datetime_pattern = event_id_str.replace(' ', 'T')
+            cursor.execute("""
+                SELECT id FROM events
+                WHERE period_id = ? AND event_datetime LIKE ?
+            """, (period_id, f"{event_datetime_pattern}%"))
+
+            event_row = cursor.fetchone()
+            if event_row is None:
+                continue
+
+            event_db_id = event_row[0]
+
+            cursor.execute("""
+                DELETE FROM event_availability
+                WHERE event_id = ? AND response_id IN (
+                    SELECT id FROM responses
+                    WHERE peep_id = ? AND period_id = ?
+                )
+            """, (event_db_id, peep_id, period_id))
+
+            removed_count += cursor.rowcount
+
+    return removed_count
+
+
+def import_partnerships(partnerships_file: Path, period_id: int, cursor: sqlite3.Cursor, peep_id_mapping: Optional[Dict[str, int]] = None) -> int:
+    """
+    Module-level wrapper for importing partnerships.
+
+    Stores partnership requests in partnership_requests table.
+
+    Args:
+        partnerships_file: Path to partnerships.json
+        period_id: Database period_id
+        cursor: Database cursor
+        peep_id_mapping: Optional mapping of CSV IDs to database peep_ids (used by tests)
+
+    Returns:
+        Number of partnership requests stored
+    """
+    from file_io import load_partnerships
+
+    if not partnerships_file.exists():
+        return 0
+
+    # If peep_id_mapping not provided, build from database
+    if peep_id_mapping is None:
+        cursor.execute("SELECT id FROM peeps")
+        valid_peep_ids = {row[0] for row in cursor.fetchall()}
+    else:
+        valid_peep_ids = set(peep_id_mapping.values())
+
+    partnerships = load_partnerships(partnerships_file.parent, valid_peep_ids=valid_peep_ids)
+
+    if not partnerships:
+        return 0
+
+    partnership_count = 0
+    for requester_csv_id, partner_csv_ids in partnerships.items():
+        # Map CSV ID to database peep_id
+        if peep_id_mapping is not None:
+            requester_peep_id = peep_id_mapping.get(str(requester_csv_id))
+        else:
+            # Assume CSV ID matches database peep_id (for backward compatibility)
+            requester_peep_id = requester_csv_id
+
+        if requester_peep_id is None:
+            continue
+
+        for partner_csv_id in partner_csv_ids:
+            # Map partner CSV ID
+            if peep_id_mapping is not None:
+                partner_peep_id = peep_id_mapping.get(str(partner_csv_id))
+            else:
+                partner_peep_id = partner_csv_id
+
+            if partner_peep_id is None:
+                continue
+
+            try:
+                cursor.execute("""
+                    INSERT INTO partnership_requests (period_id, requester_peep_id, partner_peep_id)
+                    VALUES (?, ?, ?)
+                """, (period_id, requester_peep_id, partner_peep_id))
+                partnership_count += 1
+            except sqlite3.IntegrityError:
+                # Duplicate - skip
+                pass
+
+    return partnership_count
 
 
 # ============================================================================
