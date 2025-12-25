@@ -6,7 +6,7 @@ This folder contains everything related to the SQLite database used in the proje
 
 ## 📦 Files & Structure
 
-```
+```text
 db/
 ├── peeps_scheduler.db       # Your SQLite database (ignored by Git)
 ├── schema.sql               # Auto-generated reference schema (do not edit manually)
@@ -42,7 +42,7 @@ python db/migrate.py
 - Tracks applied files in the `__migrations_applied__` table
 - Regenerates `schema.sql` using `sqlite3.exe` from the `db/` folder
 
-> 💡 Tip: Download the SQLite CLI from https://sqlite.org/download.html and place `sqlite3.exe` in the `db/` folder.
+> 💡 Tip: Download the SQLite CLI from [https://sqlite.org/download.html] and place `sqlite3.exe` in the `db/` folder.
 
 ---
 

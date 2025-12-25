@@ -13,6 +13,7 @@ The `db/import_period_data.py` script imports historical CSV/JSON data into the 
 **Purpose:** Build complete member roster before importing any period data.
 
 **Process:**
+
 1. Scan all period directories chronologically
 2. Extract member identity from each `members.csv`
 3. Track first appearance to determine `date_joined`
@@ -31,6 +32,7 @@ Ensures all members are registered before snapshot calculation begins, preventin
 **Requirements:** Periods MUST be imported chronologically. Each period's snapshot depends on the prior period's final state.
 
 **Per-Period Steps:**
+
 1. **Schedule Period** - Create `schedule_periods` record
 2. **Responses** - Import from `responses.csv` → `responses` table
 3. **Events** - Parse availability strings → `events` table
@@ -48,12 +50,14 @@ Snapshots capture member state at period boundaries for priority tracking and fa
 
 ### Snapshot Types
 
-**PERMANENT Snapshots (Historical)**
+**PERMANENT Snapshots (Historical)::**
+
 - Based on actual attendance only
 - Saved to database as historical record
 - Used as starting point for next period
 
-**SCHEDULING Snapshots (Active Period)**
+**SCHEDULING Snapshots (Active Period):**
+
 - Based on both actual + expected attendance
 - NOT saved to database
 - Used for active scheduling decisions
@@ -61,11 +65,13 @@ Snapshots capture member state at period boundaries for priority tracking and fa
 ### Priority Rules
 
 **Priority Logic:**
+
 1. **Attended ≥1 Event:** Priority reset to 0, moved to back of queue, `total_attended` incremented
 2. **Responded but Not Attended:** Priority += 1 (fairness bump)
 3. **Didn't Respond:** Priority unchanged
 
 **Key Points:**
+
 - Priority reset happens when attendance is applied
 - Priority increment happens at period finalization
 - `total_attended` only increments for actual attendance
@@ -78,15 +84,18 @@ Changes derive from comparing scheduled assignments to actual attendance.
 
 ### Change Types
 
-**cancel**
+**cancel:**
+
 - Trigger: Assigned but didn't attend
 - Logic: Assignment exists, no attendance record
 
-**promote_alternate**
+**promote_alternate:**
+
 - Trigger: Alternate who attended
 - Logic: `assignment_type='alternate'` + attendance exists
 
-**add**
+**add:**
+
 - Trigger: Volunteer fill (no assignment)
 - Logic: Attendance exists, no assignment record
 

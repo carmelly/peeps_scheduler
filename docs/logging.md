@@ -10,7 +10,7 @@ The project uses a centralized logging system with organized directory structure
 
 Logs are organized into subdirectories under `/logs`:
 
-```
+```text
 /logs/
 ├── import/          # Import script logs (db/import_period_data.py)
 │   └── import_YYYY-MM-DD.log
@@ -28,12 +28,13 @@ Logs are organized into subdirectories under `/logs`:
 
 All logs use a standardized format:
 
-```
+```text
 YYYY-MM-DD HH:MM:SS,mmm - logger_name - LEVEL - message
 ```
 
 Example:
-```
+
+```text
 2025-12-15 14:30:45,123 - import_csv - INFO - Processing period 2025-03
 2025-12-15 14:30:46,456 - scheduler - DEBUG - Evaluating 5040 total sequences
 ```
@@ -43,6 +44,7 @@ Example:
 ### Daily Rotation
 
 Logs automatically rotate daily at midnight. Each day's logs are stored in a separate file with the date in the filename:
+
 - `import_2025-12-15.log`
 - `import_2025-12-16.log`
 - etc.
@@ -60,6 +62,7 @@ export LOG_RETENTION_DAYS=60  # Keep logs for 60 days
 ### Size-Based Rotation
 
 For high-volume operations, size-based rotation is available (configured per logger):
+
 - Maximum file size: 10MB (configurable via `MAX_LOG_SIZE_MB` environment variable)
 - Backup count: 5 files
 - File naming: `{log_subdir}_rolling.log`, `{log_subdir}_rolling.log.1`, etc.
@@ -68,13 +71,13 @@ For high-volume operations, size-based rotation is available (configured per log
 
 The project uses standard Python logging levels:
 
-| Level    | Numeric Value | Usage |
-|----------|---------------|-------|
+| Level    | Numeric Value | Usage                                                                                    |
+| -------- | ------------- | ---------------------------------------------------------------------------------------- |
 | DEBUG    | 10            | Detailed information for debugging (e.g., permutation counts, intermediate calculations) |
-| INFO     | 20            | General informational messages (e.g., "Processing period 2025-03", "Import complete") |
-| WARNING  | 30            | Warning messages for unexpected situations that don't prevent execution |
-| ERROR    | 40            | Error messages for failures that prevent specific operations |
-| CRITICAL | 50            | Critical errors that may cause the application to abort |
+| INFO     | 20            | General informational messages (e.g., "Processing period 2025-03", "Import complete")    |
+| WARNING  | 30            | Warning messages for unexpected situations that don't prevent execution                  |
+| ERROR    | 40            | Error messages for failures that prevent specific operations                             |
+| CRITICAL | 50            | Critical errors that may cause the application to abort                                  |
 
 ### When to Use Each Level
 
@@ -95,15 +98,16 @@ The project uses standard Python logging levels:
 
 The logging system can be configured via environment variables:
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `LOG_LEVEL` | `INFO` | Default log level (DEBUG, INFO, WARNING, ERROR, CRITICAL) |
-| `LOG_RETENTION_DAYS` | `30` | Number of days to retain logs |
-| `MAX_LOG_SIZE_MB` | `10` | Maximum log file size for size-based rotation (in MB) |
+| Variable             | Default | Description                                               |
+| -------------------- | ------- | --------------------------------------------------------- |
+| `LOG_LEVEL`          | `INFO`  | Default log level (DEBUG, INFO, WARNING, ERROR, CRITICAL) |
+| `LOG_RETENTION_DAYS` | `30`    | Number of days to retain logs                             |
+| `MAX_LOG_SIZE_MB`    | `10`    | Maximum log file size for size-based rotation (in MB)     |
 
 ### Setting Environment Variables
 
 **Linux/macOS:**
+
 ```bash
 export LOG_LEVEL=DEBUG
 export LOG_RETENTION_DAYS=60
@@ -111,6 +115,7 @@ export MAX_LOG_SIZE_MB=20
 ```
 
 **Windows (Command Prompt):**
+
 ```cmd
 set LOG_LEVEL=DEBUG
 set LOG_RETENTION_DAYS=60
@@ -118,6 +123,7 @@ set MAX_LOG_SIZE_MB=20
 ```
 
 **Windows (PowerShell):**
+
 ```powershell
 $env:LOG_LEVEL="DEBUG"
 $env:LOG_RETENTION_DAYS="60"
@@ -202,6 +208,7 @@ The old logging system used a single `debug.log` file in the project root. This 
 ### Changes Required for Existing Code
 
 **Old approach:**
+
 ```python
 import logging
 
@@ -213,6 +220,7 @@ logger = logging.getLogger(__name__)
 ```
 
 **New approach:**
+
 ```python
 from logging_config import get_logger
 
@@ -222,6 +230,7 @@ logger = get_logger('my_module', 'app')
 ### Files Updated
 
 The following files have been updated to use the new logging system:
+
 - `db/import_period_data.py` - Uses `/logs/import/`
 - `scheduler.py` - Uses `/logs/scheduler/`
 - `main.py` - Uses `/logs/cli/`
@@ -237,9 +246,11 @@ The old `debug.log` file is **deprecated** and will no longer be created by new 
 
 1. **Check log directory exists**: The `/logs` directory and subdirectories are created automatically, but verify they exist.
 2. **Check log level**: If you're not seeing DEBUG messages, ensure the log level is set to DEBUG:
+
    ```bash
    python db/import_period_data.py --period 2025-02 --verbose
    ```
+
 3. **Check permissions**: Ensure the application has write permissions to the `/logs` directory.
 
 ### Log Files Growing Too Large
@@ -247,16 +258,19 @@ The old `debug.log` file is **deprecated** and will no longer be created by new 
 If individual log files are growing too large:
 
 1. **Enable size-based rotation** for high-volume loggers:
+
    ```python
    logger = get_logger('my_module', 'app', use_size_rotation=True)
    ```
 
 2. **Reduce log retention period**:
+
    ```bash
    export LOG_RETENTION_DAYS=7  # Keep only 1 week of logs
    ```
 
 3. **Increase log level** to reduce verbosity:
+
    ```bash
    export LOG_LEVEL=WARNING  # Only log warnings and errors
    ```
@@ -280,12 +294,14 @@ If you're seeing duplicate log messages, ensure you're not creating multiple log
 1. **Use appropriate log levels**: Don't log everything at INFO level. Use DEBUG for detailed diagnostics, INFO for operational events, WARNING/ERROR/CRITICAL for problems.
 
 2. **Include context in log messages**: Include relevant identifiers (period names, peep IDs, event IDs) in log messages:
+
    ```python
    logger.info(f"Processing period {period_name}")
    logger.error(f"Failed to import peep {peep_id}: {error}")
    ```
 
 3. **Log exceptions with stack traces**:
+
    ```python
    try:
        # ... code ...
@@ -296,6 +312,7 @@ If you're seeing duplicate log messages, ensure you're not creating multiple log
 4. **Don't log sensitive information**: Avoid logging passwords, API keys, or other sensitive data.
 
 5. **Use structured logging for complex data**: For complex data structures, use JSON formatting:
+
    ```python
    import json
    logger.debug(f"Event data: {json.dumps(event_dict, indent=2)}")
@@ -308,6 +325,7 @@ If you're seeing duplicate log messages, ensure you're not creating multiple log
 The `/logs` directory is excluded from version control via `.gitignore`. The directory structure is created automatically by `logging_config.py` when needed.
 
 **`.gitignore` entries:**
+
 ```gitignore
 # Logs directory (new logging infrastructure - created automatically)
 /logs/
