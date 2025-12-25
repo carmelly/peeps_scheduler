@@ -306,3 +306,9 @@ def test_period_data():
         shutil.rmtree(temp_dir)
 
     return _create
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """Clean up test logs after test session completes."""
+    from logging_config import cleanup_test_logs
+    cleanup_test_logs()

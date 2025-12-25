@@ -2,29 +2,50 @@
 Centralized Logging Configuration Module
 
 Provides standardized logging setup with:
-- Organized directory structure (/logs with subdirectories)
+- Organized directory structure (/logs with subdirectories, or temp during tests)
 - Daily log rotation with date stamps
 - Size-based rotation for high-volume operations
 - Configurable retention policy (default 30 days)
 - Consistent log format across all modules
+- Test/production environment isolation
+
+Test Environment Behavior:
+- Logs written to temp directory instead of /logs
+- Call cleanup_test_logs() in test teardown to clean up
+- Prevents log pollution during test runs
+
+Production Environment Behavior:
+- Logs written to /logs directory
+- Automatic cleanup of logs older than 30 days
+- Daily rotation with backups
 
 Usage:
     from logging_config import get_logger
 
+    # Production
     logger = get_logger('import_csv', 'import')
     logger.info('Processing period 2025-03')
+
+    # In tests (after running):
+    from logging_config import cleanup_test_logs
+    cleanup_test_logs()
 """
 
 import logging
 import os
+import sys
+import tempfile
 from datetime import datetime, timedelta
 from logging.handlers import TimedRotatingFileHandler, RotatingFileHandler
 from pathlib import Path
 from typing import Optional
 
 
+# Environment Detection
+IS_TEST_ENV = 'pytest' in sys.modules
+
 # Configuration
-LOG_BASE_DIR = Path('logs')
+LOG_BASE_DIR = Path(tempfile.gettempdir()) / 'peeps_scheduler_test_logs' if IS_TEST_ENV else Path('logs')
 DEFAULT_LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO').upper()
 LOG_RETENTION_DAYS = int(os.getenv('LOG_RETENTION_DAYS', '30'))
 MAX_LOG_SIZE_MB = int(os.getenv('MAX_LOG_SIZE_MB', '10'))
@@ -192,3 +213,24 @@ def configure_root_logger(level: Optional[str] = None, console_output: bool = Tr
         console_handler.setLevel(log_level)
         console_handler.setFormatter(formatter)
         root_logger.addHandler(console_handler)
+
+
+def cleanup_test_logs():
+    """
+    Clean up test log directory.
+
+    Call this in test teardown to remove temporary log files created during test runs.
+    Only has effect in test environment (when pytest is running).
+
+    Example:
+        def pytest_sessionfinish(session, exitstatus):
+            from logging_config import cleanup_test_logs
+            cleanup_test_logs()
+    """
+    if not IS_TEST_ENV:
+        return
+
+    test_log_dir = Path(tempfile.gettempdir()) / 'peeps_scheduler_test_logs'
+    if test_log_dir.exists():
+        import shutil
+        shutil.rmtree(test_log_dir, ignore_errors=True)

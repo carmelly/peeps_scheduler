@@ -37,6 +37,20 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import constants
 from file_io import normalize_email, extract_events
 
+# ============================================================================
+# Validation Constants
+# ============================================================================
+
+MAX_REASONABLE_PRIORITY = 20
+"""Maximum reasonable priority value for snapshot validation.
+Priorities beyond this indicate potential data integrity issues.
+Used in validate_period_snapshots() to detect out-of-range values."""
+
+MAX_INDEX_MULTIPLIER = 2
+"""Maximum index position multiplier for snapshot validation.
+Index position should not exceed (total_active_peeps * MAX_INDEX_MULTIPLIER).
+Used in validate_period_snapshots() to detect out-of-range positions."""
+
 
 def get_db_connection(db_path: str) -> sqlite3.Connection:
     """Create database connection with row factory."""
@@ -551,6 +565,10 @@ def validate_period_snapshots(cursor, period_id: int, members_csv: List[Dict]) -
     cursor.execute("SELECT id, full_name, email FROM peeps WHERE active = 1")
     active_members = cursor.fetchall()
 
+    # Get total active count once (used for all members)
+    cursor.execute("SELECT COUNT(*) as count FROM peeps WHERE active = 1")
+    total_active = cursor.fetchone()['count']
+
     for member in active_members:
         peep_id = member['id']
 
@@ -581,13 +599,10 @@ def validate_period_snapshots(cursor, period_id: int, members_csv: List[Dict]) -
             issues.append(f"Snapshot total_attended incorrect for {member['full_name']}: DB snapshot={db_snapshot['total_attended']}, actual attendance={actual_attended}")
 
         # Check priority/index are in reasonable ranges (integrity check, not comparing to CSV)
-        if db_snapshot['priority'] < 0 or db_snapshot['priority'] > 20:
+        if db_snapshot['priority'] < 0 or db_snapshot['priority'] > MAX_REASONABLE_PRIORITY:
             issues.append(f"Snapshot priority out of range for {member['full_name']}: {db_snapshot['priority']}")
 
-        cursor.execute("SELECT COUNT(*) as count FROM peeps WHERE active = 1")
-        total_active = cursor.fetchone()['count']
-
-        if db_snapshot['index_position'] < 0 or db_snapshot['index_position'] >= total_active * 2:
+        if db_snapshot['index_position'] < 0 or db_snapshot['index_position'] >= total_active * MAX_INDEX_MULTIPLIER:
             issues.append(f"Snapshot index out of range for {member['full_name']}: {db_snapshot['index_position']}")
 
     return issues
@@ -598,6 +613,21 @@ def validate_period_cancellations(cursor, period_id: int, cancellations_json: Di
     Validate cancelled events against database.
 
     Checks that cancelled events from cancellations.json have status='cancelled' in database.
+
+    Args:
+        cursor: Database cursor with row factory enabled
+        period_id: Database period ID
+        cancellations_json: Dictionary from cancellations.json containing 'cancelled_events' list
+        period_name: Period name (e.g., '2025-02') - used to extract year for event parsing
+
+    Returns:
+        List of issue strings. Empty list means validation passed.
+
+    Example:
+        >>> cancellations = {'cancelled_events': ['Friday February 7th - 5pm to 7pm'], ...}
+        >>> issues = validate_period_cancellations(cursor, 42, cancellations, '2025-02')
+        >>> if issues:
+        ...     print("Validation failed:", issues)
     """
     issues = []
 
@@ -645,6 +675,25 @@ def validate_period_cancelled_availability(cursor, period_id: int, cancellations
 
     Checks that members listed in cancelled_availability don't have event_availability records
     for the specified events.
+
+    Args:
+        cursor: Database cursor with row factory enabled
+        period_id: Database period ID
+        cancellations_json: Dictionary from cancellations.json containing 'cancelled_availability' list
+        period_name: Period name (e.g., '2025-02') - used to extract year for event parsing
+
+    Returns:
+        List of issue strings. Empty list means validation passed.
+
+    Example:
+        >>> cancellations = {
+        ...     'cancelled_availability': [
+        ...         {'email': 'alice@example.com', 'events': ['Friday February 7th - 5pm to 7pm']}
+        ...     ]
+        ... }
+        >>> issues = validate_period_cancelled_availability(cursor, 42, cancellations, '2025-02')
+        >>> if not issues:
+        ...     print("Alice's availability was successfully removed")
     """
     issues = []
 
@@ -703,6 +752,22 @@ def validate_period_partnerships(cursor, period_id: int, partnerships_json: Dict
     Validate partnership requests against database.
 
     Checks that partnerships from partnerships.json are correctly stored in partnership_requests table.
+    Supports both wrapped {"partnerships": {...}} and unwrapped {...} JSON formats.
+
+    Args:
+        cursor: Database cursor with row factory enabled
+        period_id: Database period ID
+        partnerships_json: Dictionary from partnerships.json with partnership data.
+            Formats: {'1': [2, 3]} or {'partnerships': {'1': [2, 3]}}
+
+    Returns:
+        List of issue strings. Empty list means validation passed.
+
+    Example:
+        >>> partnerships = {'1': [2], '2': [1, 3]}  # Member 1 partners with 2, etc.
+        >>> issues = validate_period_partnerships(cursor, 42, partnerships)
+        >>> if not issues:
+        ...     print("All partnerships are correctly stored")
     """
     issues = []
 
