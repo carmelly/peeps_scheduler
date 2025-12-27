@@ -16,6 +16,7 @@ from tests.db.helpers import (
     assert_response_count,
     assert_row_count,
     assert_snapshot_count,
+    get_event_id_by_datetime,
     get_single_value,
     get_table_count,
 )
@@ -192,7 +193,6 @@ class TestEventStatusDetermination:
         ctx.importer.import_period()
 
         # Query event duration
-        from tests.db.helpers import get_event_id_by_datetime
         event_id = get_event_id_by_datetime(ctx.cursor, ctx.importer.period_id, '2025-02-07')
         duration = get_single_value(
             ctx.cursor,

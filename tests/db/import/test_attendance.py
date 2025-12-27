@@ -10,8 +10,14 @@ Tests cover:
 import json
 from pathlib import Path
 import pytest
-from tests.db.helpers import assert_attendance_count
-from tests.fixtures.data_specs import AttendanceSpec
+from tests.db.helpers import (
+    assert_attendance_count,
+    assert_response_count,
+    get_attendance_participation_mode,
+    get_single_value,
+    get_table_count,
+)
+from tests.fixtures.data_specs import AttendanceSpec, ResponseSpec
 
 
 @pytest.mark.db
@@ -58,18 +64,22 @@ class TestAttendanceImport:
         response_mapping = ctx.importer.import_responses()
         ctx.importer.create_events(response_mapping)
 
-        from tests.db.helpers import get_single_value
-        event_id = get_single_value(ctx.cursor, 'events', 'id', f'period_id = {ctx.period_id}')
-        event_datetime = get_single_value(ctx.cursor, 'events', 'event_datetime', f'period_id = {ctx.period_id}')
+        event_id = get_single_value(ctx.cursor, "events", "id", f"period_id = {ctx.period_id}")
+        event_datetime = get_single_value(
+            ctx.cursor, "events", "event_datetime", f"period_id = {ctx.period_id}"
+        )
         event_datetime_str = event_datetime.replace("T", " ").rsplit(":", 1)[0]
 
         # No assignments imported - member 3 volunteers
-        attendance_json_builder(period_dir, [
-            AttendanceSpec(
-                date=event_datetime_str,
-                attendees=[(3, "Test Member 3", "leader")]  # No prior assignment
-            )
-        ])
+        attendance_json_builder(
+            period_dir,
+            [
+                AttendanceSpec(
+                    date=event_datetime_str,
+                    attendees=[(3, "Test Member 3", "leader")],  # No prior assignment
+                )
+            ],
+        )
 
         imported_count = ctx.importer.import_attendance()
 
@@ -77,37 +87,48 @@ class TestAttendanceImport:
         assert_attendance_count(ctx.cursor, event_id, expected=1)
 
         # Verify participation_mode = 'volunteer_fill'
-        from tests.db.helpers import get_attendance_participation_mode, get_single_value
         participation_mode = get_attendance_participation_mode(ctx.cursor, event_id, 3)
-        assert participation_mode == 'volunteer_fill', "Should have 'volunteer_fill' participation mode"
+        assert participation_mode == "volunteer_fill", (
+            "Should have 'volunteer_fill' participation mode"
+        )
 
-        assignment_id = get_single_value(ctx.cursor, 'event_attendance', 'event_assignment_id',
-                                        f'event_id = {event_id} AND peep_id = 3')
+        assignment_id = get_single_value(
+            ctx.cursor,
+            "event_attendance",
+            "event_assignment_id",
+            f"event_id = {event_id} AND peep_id = 3",
+        )
         assert assignment_id is None, "Should have no assignment_id"
 
-    def test_imports_attendance_for_alternate_promoted(self, importer_factory, attendance_json_builder):
+    def test_imports_attendance_for_alternate_promoted(
+        self, importer_factory, attendance_json_builder
+    ):
         """PeriodImporter marks alternates who attended with alternate_promoted mode."""
         ctx = importer_factory()
-        period_dir = Path(ctx.period_data['period_dir'])
+        period_dir = Path(ctx.period_data["period_dir"])
 
         response_mapping = ctx.importer.import_responses()
         ctx.importer.create_events(response_mapping)
 
-        from tests.db.helpers import get_single_value
-        event_id = get_single_value(ctx.cursor, 'events', 'id', f'period_id = {ctx.period_id}')
-        event_datetime = get_single_value(ctx.cursor, 'events', 'event_datetime', f'period_id = {ctx.period_id}')
+        event_id = get_single_value(ctx.cursor, "events", "id", f"period_id = {ctx.period_id}")
+        event_datetime = get_single_value(
+            ctx.cursor, "events", "event_datetime", f"period_id = {ctx.period_id}"
+        )
         event_datetime_str = event_datetime.replace("T", " ").rsplit(":", 1)[0]
 
         # Use default assignments which have member 3 as alternate
         ctx.importer.import_assignments()
 
         # Override attendance: alternate member 3 attended
-        attendance_json_builder(period_dir, [
-            AttendanceSpec(
-                date=event_datetime_str,
-                attendees=[(3, "Test Member 3", "leader")]  # Alternate attended
-            )
-        ])
+        attendance_json_builder(
+            period_dir,
+            [
+                AttendanceSpec(
+                    date=event_datetime_str,
+                    attendees=[(3, "Test Member 3", "leader")],  # Alternate attended
+                )
+            ],
+        )
 
         imported_count = ctx.importer.import_attendance()
 
@@ -115,23 +136,27 @@ class TestAttendanceImport:
         assert_attendance_count(ctx.cursor, event_id, expected=1)
 
         # Verify participation_mode = 'alternate_promoted'
-        from tests.db.helpers import get_attendance_participation_mode, get_single_value
         participation_mode = get_attendance_participation_mode(ctx.cursor, event_id, 3)
-        assert participation_mode == 'alternate_promoted', "Should have 'alternate_promoted' participation mode"
+        assert participation_mode == "alternate_promoted", (
+            "Should have 'alternate_promoted' participation mode"
+        )
 
-        expected_type = get_single_value(ctx.cursor, 'event_attendance', 'expected_type',
-                                         f'event_id = {event_id} AND peep_id = 3')
-        assert expected_type == 'alternate', "Expected type should be 'alternate'"
+        expected_type = get_single_value(
+            ctx.cursor,
+            "event_attendance",
+            "expected_type",
+            f"event_id = {event_id} AND peep_id = 3",
+        )
+        assert expected_type == "alternate", "Expected type should be 'alternate'"
 
     def test_raises_error_for_unknown_member(self, importer_factory, attendance_json_builder):
         """PeriodImporter raises ValueError when attendance references non-existent member."""
         ctx = importer_factory()
-        period_dir = Path(ctx.period_data['period_dir'])
+        period_dir = Path(ctx.period_data["period_dir"])
 
         response_mapping = ctx.importer.import_responses()
         ctx.importer.create_events(response_mapping)
 
-        from tests.db.helpers import get_single_value
         event_datetime = get_single_value(ctx.cursor, 'events', 'event_datetime', f'period_id = {ctx.period_id}')
         event_datetime_str = event_datetime.replace("T", " ").rsplit(":", 1)[0]
 
@@ -202,9 +227,6 @@ class TestAttendanceImport:
         self, importer_factory, responses_csv_builder
     ):
         """PeriodImporter skips event_availability creation when response has empty availability."""
-        from tests.db.helpers import assert_response_count, get_single_value, get_table_count
-        from tests.fixtures.data_specs import ResponseSpec
-
         ctx = importer_factory()
         period_dir = Path(ctx.period_data["period_dir"])
 

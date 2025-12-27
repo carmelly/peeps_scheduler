@@ -14,11 +14,16 @@ import datetime
 import sqlite3
 from pathlib import Path
 import pytest
-from models import Event, Peep, Role, SwitchPreference
-
-# Register fixtures from tests/fixtures/ directory
-pytest_plugins = ["tests.fixtures.conftest"]
-
+from peeps_scheduler.constants import SCHEMA_PATH
+from peeps_scheduler.models import Event, Peep, Role, SwitchPreference
+from tests.fixtures.conftest import (
+    members_csv_builder,
+    responses_csv_builder,
+    results_json_builder,
+    attendance_json_builder,
+    cancellations_json_builder,
+    partnerships_json_builder,
+)
 
 def _parse_and_reorder_schema(schema_sql):
     """Parse schema SQL and reorder statements (CREATE TABLE before CREATE INDEX).
@@ -55,7 +60,8 @@ def _parse_and_reorder_schema(schema_sql):
 @pytest.fixture(scope='session')
 def schema_sql():
     """Load schema once per test session."""
-    schema_path = Path(__file__).parent.parent / 'db' / 'schema.sql'
+
+    schema_path = Path(SCHEMA_PATH)
     return schema_path.read_text()
 
 
@@ -359,54 +365,59 @@ def test_period_data():
 
 @pytest.fixture
 def prepared_importer(test_db, test_period_data):
-	"""Fixture providing fully prepared importer with members and period already set up.
+    """Fixture providing fully prepared importer with members and period already set up.
 
-	This fixture consolidates common setup code used across multiple import tests,
-	reducing duplication and improving readability.
+    This fixture consolidates common setup code used across multiple import tests,
+    reducing duplication and improving readability.
 
-	Returns a dictionary with:
-	- 'importer': PeriodImporter instance with period created
-	- 'cursor': Database cursor for assertions
-	- 'period_data': Test period data (temp_dir, period_dir, etc.)
-	- 'peep_id_mapping': Mapping of email to peep ID
+    Returns a dictionary with:
+    - 'importer': PeriodImporter instance with period created
+    - 'cursor': Database cursor for assertions
+    - 'period_data': Test period data (temp_dir, period_dir, etc.)
+    - 'peep_id_mapping': Mapping of email to peep ID
 
-	Note: Uses default period_name='2025-02'. Tests needing different periods
-	should set up their own importer instead of using this fixture.
-	"""
-	from pathlib import Path
-	from db.import_period_data import MemberCollector, PeriodImporter
+    Note: Uses default period_name='2025-02'. Tests needing different periods
+    should set up their own importer instead of using this fixture.
+    """
+    from pathlib import Path
+    from peeps_scheduler.db.import_period_data import MemberCollector, PeriodImporter
 
-	# Setup test period data
-	period_data = next(test_period_data(period_name="2025-02", num_members=10))
+    # Setup test period data
+    period_data = next(test_period_data(period_name="2025-02", num_members=10))
 
-	# Get database cursor
-	cursor = test_db.cursor()
+    # Get database cursor
+    cursor = test_db.cursor()
 
-	# Collect and insert members
-	collector = MemberCollector(processed_data_path=Path(period_data["temp_dir"]), verbose=False)
-	collector.scan_all_periods()
-	collector.insert_members_to_db(cursor)
+    # Collect and insert members
+    collector = MemberCollector(processed_data_path=Path(period_data["temp_dir"]), verbose=False)
+    collector.scan_all_periods()
+    collector.insert_members_to_db(cursor)
 
-	# Create and initialize importer
-	importer = PeriodImporter(
-		period_name="2025-02",
-		processed_data_path=Path(period_data["temp_dir"]),
-		peep_id_mapping=collector.peep_id_mapping,
-		cursor=cursor,
-		verbose=False,
-		skip_snapshots=True,
-	)
-	importer.create_schedule_period()
+    # Create and initialize importer
+    importer = PeriodImporter(
+        period_name="2025-02",
+        processed_data_path=Path(period_data["temp_dir"]),
+        peep_id_mapping=collector.peep_id_mapping,
+        cursor=cursor,
+        verbose=False,
+        skip_snapshots=True,
+    )
+    importer.create_schedule_period()
 
-	return {
-		"importer": importer,
-		"cursor": cursor,
-		"period_data": period_data,
-		"peep_id_mapping": collector.peep_id_mapping,
-	}
+    return {
+        "importer": importer,
+        "cursor": cursor,
+        "period_data": period_data,
+        "peep_id_mapping": collector.peep_id_mapping,
+    }
 
 
 def pytest_sessionfinish(session, exitstatus):
     """Clean up test logs after test session completes."""
-    from logging_config import cleanup_test_logs
-    cleanup_test_logs()
+    try:
+        from peeps_scheduler.logging_config import cleanup_test_logs
+
+        cleanup_test_logs()
+    except ImportError:
+        # Logging config may not be available in all environments
+        pass

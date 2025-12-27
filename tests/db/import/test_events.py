@@ -11,7 +11,7 @@ Tests cover:
 import csv
 from pathlib import Path
 import pytest
-from tests.db.helpers import assert_event_count
+from tests.db.helpers import assert_event_count, get_single_value
 from tests.fixtures.data_specs import ResponseSpec
 
 
@@ -114,7 +114,6 @@ class TestEventCreation:
         assert_event_count(ctx.cursor, ctx.period_id, expected=1)
 
         # Verify duration
-        from tests.db.helpers import get_single_value
         duration = get_single_value(ctx.cursor, 'events', 'duration_minutes', f'period_id = {ctx.period_id}')
         assert duration == 120, "Old format should default to 120 minutes"
 
@@ -174,7 +173,6 @@ class TestEventCreation:
         assert_event_count(ctx.cursor, ctx.period_id, expected=1)
 
         # Verify duration precedence
-        from tests.db.helpers import get_single_value
         duration = get_single_value(ctx.cursor, 'events', 'duration_minutes', f'period_id = {ctx.period_id}')
         event_datetime = get_single_value(ctx.cursor, 'events', 'event_datetime', f'period_id = {ctx.period_id}')
 

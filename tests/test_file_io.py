@@ -1,28 +1,29 @@
-import pytest
-import tempfile
-import os
-import json
 import datetime
+import json
 import logging
-from file_io import (
-	load_data_from_json,
+import os
+import tempfile
+import pytest
+from peeps_scheduler import constants
+from peeps_scheduler.file_io import (
 	convert_to_json,
+	extract_events,
+	load_cancellations,
+	load_cancelled_events,
+	load_csv,
+	load_data_from_json,
+	load_json,
+	load_partnerships,
+	load_peeps,
+	normalize_email,
 	parse_event_date,
 	parse_time_range,
-	load_csv,
-	load_peeps,
-	extract_events,
 	process_responses,
 	save_event_sequence,
-	save_peeps_csv,
-	load_json,
 	save_json,
-	normalize_email,
-	load_cancellations,
-	load_partnerships,
-	load_cancelled_events
+	save_peeps_csv,
 )
-from models import Event, EventSequence, Role, SwitchPreference, Peep
+from peeps_scheduler.models import Event, EventSequence, Peep, Role, SwitchPreference
 
 # ============================================================================
 # SHARED FIXTURES
@@ -1001,8 +1002,6 @@ class TestPartnershipRequests:
 
 	def test_load_partnerships_all_ids_valid(self, tmp_path):
 		"""Test loading partnerships when all IDs are valid (strict validation)."""
-		import constants
-
 		requests_file = tmp_path / constants.PARTNERSHIPS_FILE
 		requests_file.write_text(json.dumps({
 			"1": [2, 3],
@@ -1013,7 +1012,6 @@ class TestPartnershipRequests:
 		assert result == {1: {2, 3}, 2: {1}}
 
 	def test_load_partnerships_requires_mapping(self, tmp_path):
-		"""Test that partnerships file must contain mapping, not array."""
 		import constants
 
 		requests_file = tmp_path / constants.PARTNERSHIPS_FILE
@@ -1024,8 +1022,6 @@ class TestPartnershipRequests:
 
 	def test_load_partnerships_malformed_json_raises(self, tmp_path):
 		"""Test that invalid JSON syntax raises an error."""
-		import constants
-
 		requests_file = tmp_path / constants.PARTNERSHIPS_FILE
 		requests_file.write_text("{invalid json")
 
@@ -1034,8 +1030,6 @@ class TestPartnershipRequests:
 
 	def test_load_partnerships_non_list_partners_raises(self, tmp_path):
 		"""Test that partner value that is not a list raises an error (strict validation)."""
-		import constants
-
 		requests_file = tmp_path / constants.PARTNERSHIPS_FILE
 		requests_file.write_text(json.dumps({
 			"1": "2"  # String instead of list
@@ -1046,8 +1040,6 @@ class TestPartnershipRequests:
 
 	def test_load_partnerships_self_partnership_raises(self, tmp_path):
 		"""Test that self-partnership requests raise an error (strict validation)."""
-		import constants
-
 		requests_file = tmp_path / constants.PARTNERSHIPS_FILE
 		requests_file.write_text(json.dumps({
 			"1": [1, 2]  # Includes self (1)
@@ -1058,8 +1050,6 @@ class TestPartnershipRequests:
 
 	def test_load_partnerships_unknown_requester_id_raises(self, tmp_path):
 		"""Test that unknown requester ID raises an error (strict validation)."""
-		import constants
-
 		requests_file = tmp_path / constants.PARTNERSHIPS_FILE
 		requests_file.write_text(json.dumps({
 			"99": [1, 2]  # 99 is not in valid peeps
@@ -1070,8 +1060,6 @@ class TestPartnershipRequests:
 
 	def test_load_partnerships_unknown_partner_id_raises(self, tmp_path):
 		"""Test that unknown partner ID raises an error (strict validation)."""
-		import constants
-
 		requests_file = tmp_path / constants.PARTNERSHIPS_FILE
 		requests_file.write_text(json.dumps({
 			"1": [2, 99]  # 99 is not in valid peeps
@@ -1082,8 +1070,6 @@ class TestPartnershipRequests:
 
 	def test_load_partnerships_invalid_id_string_raises(self, tmp_path):
 		"""Test that non-integer IDs raise an error."""
-		import constants
-
 		requests_file = tmp_path / constants.PARTNERSHIPS_FILE
 		requests_file.write_text(json.dumps({
 			"abc": [1, 2]  # Invalid requester id
@@ -1094,8 +1080,6 @@ class TestPartnershipRequests:
 
 	def test_load_partnerships_invalid_partner_id_string_raises(self, tmp_path):
 		"""Test that non-integer partner IDs raise an error."""
-		import constants
-
 		requests_file = tmp_path / constants.PARTNERSHIPS_FILE
 		requests_file.write_text(json.dumps({
 			"1": ["xyz", 2]  # Invalid partner id
@@ -1106,8 +1090,6 @@ class TestPartnershipRequests:
 
 	def test_load_partnerships_null_partners_list_raises(self, tmp_path):
 		"""Test that null partners list raises an error."""
-		import constants
-
 		requests_file = tmp_path / constants.PARTNERSHIPS_FILE
 		requests_file.write_text(json.dumps({
 			"1": None  # Null

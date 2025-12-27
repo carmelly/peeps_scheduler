@@ -12,7 +12,7 @@ from pathlib import Path
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from data_manager import DataManager
+from peeps_scheduler.data_manager import DataManager
 
 
 def create_period(period_slug: str) -> bool:

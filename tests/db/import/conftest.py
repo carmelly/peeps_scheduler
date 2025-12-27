@@ -8,7 +8,7 @@ import sqlite3
 from pathlib import Path
 from typing import NamedTuple
 import pytest
-from db.import_period_data import MemberCollector, PeriodImporter
+from peeps_scheduler.db.import_period_data import MemberCollector, PeriodImporter
 
 
 class ImporterContext(NamedTuple):

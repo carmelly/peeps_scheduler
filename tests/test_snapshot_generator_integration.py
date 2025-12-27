@@ -9,7 +9,7 @@ Tests the core snapshot generation logic with realistic data and edge cases:
 
 import pytest
 from datetime import datetime
-from db.snapshot_generator import (
+from peeps_scheduler.db.snapshot_generator import (
     SnapshotGenerator,
     MemberSnapshot,
     EventAttendance,

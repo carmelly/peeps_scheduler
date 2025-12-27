@@ -16,10 +16,10 @@ import datetime
 import shutil
 from pathlib import Path
 
-from models import Event, Peep, Role, EventSequence, SwitchPreference
-from scheduler import Scheduler
-import file_io
-import utils
+from peeps_scheduler.models import Event, Peep, Role, EventSequence, SwitchPreference
+from peeps_scheduler.scheduler import Scheduler
+from peeps_scheduler import file_io
+from peeps_scheduler import utils
 
 
 @pytest.mark.integration

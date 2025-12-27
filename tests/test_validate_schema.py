@@ -14,7 +14,7 @@ Test Coverage Areas:
 
 import pytest
 import sqlite3
-from db.validate import validate_schema
+from peeps_scheduler.db.validate import validate_schema
 
 @pytest.fixture
 def broken_schema_db():

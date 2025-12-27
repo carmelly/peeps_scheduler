@@ -2,10 +2,8 @@ import csv
 import datetime
 import json
 import logging
-import os
-import sys
-from models import EventSequence, Peep, Event, Role, SwitchPreference
-import constants
+from peeps_scheduler import constants
+from peeps_scheduler.models import Event, EventSequence, Peep, Role, SwitchPreference
 
 # -- Constants --
 

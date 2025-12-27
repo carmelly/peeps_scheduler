@@ -16,6 +16,8 @@ from tests.db.helpers import (
     assert_assignment_count,
     assert_event_count,
     assert_peep_assignment_count,
+    get_assignment_count_by_type,
+    get_single_value,
 )
 from tests.fixtures.data_specs import EventSpec
 
@@ -34,8 +36,6 @@ class TestAssignmentImport:
         ctx.importer.create_events(response_mapping)
 
         # Get actual event from database to use correct datetime
-        from tests.db.helpers import get_single_value
-
         event_id = get_single_value(ctx.cursor, "events", "id", f"period_id = {ctx.period_id}")
         event_datetime = get_single_value(
             ctx.cursor, "events", "event_datetime", f"period_id = {ctx.period_id}"
@@ -66,42 +66,40 @@ class TestAssignmentImport:
         response_mapping = ctx.importer.import_responses()
         ctx.importer.create_events(response_mapping)
 
-        from tests.db.helpers import get_single_value
-
         event_id = get_single_value(ctx.cursor, "events", "id", f"period_id = {ctx.period_id}")
         event_datetime = get_single_value(
             ctx.cursor, "events", "event_datetime", f"period_id = {ctx.period_id}"
         )
         event_datetime_str = event_datetime.replace("T", " ").rsplit(":", 1)[0]
 
-        results_json_builder(period_dir, [
-            EventSpec(
-                date=event_datetime_str,
-                attendees=[(1, "Test Member 1", "leader"), (2, "Test Member 2", "follower")],
-                alternates=[(3, "Test Member 3", "leader"), (4, "Test Member 4", "follower")]
-            )
-        ])
+        results_json_builder(
+            period_dir,
+            [
+                EventSpec(
+                    date=event_datetime_str,
+                    attendees=[(1, "Test Member 1", "leader"), (2, "Test Member 2", "follower")],
+                    alternates=[(3, "Test Member 3", "leader"), (4, "Test Member 4", "follower")],
+                )
+            ],
+        )
 
         imported_count = ctx.importer.import_assignments()
 
         assert imported_count == 4
 
         # Verify assignment types
-        from tests.db.helpers import get_assignment_count_by_type
-        attendee_count = get_assignment_count_by_type(ctx.cursor, event_id, 'attendee')
-        alternate_count = get_assignment_count_by_type(ctx.cursor, event_id, 'alternate')
+        attendee_count = get_assignment_count_by_type(ctx.cursor, event_id, "attendee")
+        alternate_count = get_assignment_count_by_type(ctx.cursor, event_id, "alternate")
         assert attendee_count == 2, "Should have 2 attendees"
         assert alternate_count == 2, "Should have 2 alternates"
 
     def test_preserves_assignment_order_within_event(self, importer_factory, results_json_builder):
         """Assignment order matches discovery order in results.json attendees array."""
         ctx = importer_factory()
-        period_dir = Path(ctx.period_data['period_dir'])
+        period_dir = Path(ctx.period_data["period_dir"])
 
         response_mapping = ctx.importer.import_responses()
         ctx.importer.create_events(response_mapping)
-
-        from tests.db.helpers import get_single_value
 
         event_id = get_single_value(ctx.cursor, "events", "id", f"period_id = {ctx.period_id}")
         event_datetime = get_single_value(
@@ -141,31 +139,39 @@ class TestAssignmentImport:
         response_mapping = ctx.importer.import_responses()
         ctx.importer.create_events(response_mapping)
 
-        from tests.db.helpers import get_single_value
-
         event_id = get_single_value(ctx.cursor, "events", "id", f"period_id = {ctx.period_id}")
         event_datetime = get_single_value(
             ctx.cursor, "events", "event_datetime", f"period_id = {ctx.period_id}"
         )
         event_datetime_str = event_datetime.replace("T", " ").rsplit(":", 1)[0]
 
-        results_json_builder(period_dir, [
-            EventSpec(
-                date=event_datetime_str,
-                attendees=[(1, "Member 1", "leader")],
-                alternates=[(3, "Member 3", "leader"), (4, "Member 4", "follower"), (5, "Member 5", "leader")]
-            )
-        ])
+        results_json_builder(
+            period_dir,
+            [
+                EventSpec(
+                    date=event_datetime_str,
+                    attendees=[(1, "Member 1", "leader")],
+                    alternates=[
+                        (3, "Member 3", "leader"),
+                        (4, "Member 4", "follower"),
+                        (5, "Member 5", "leader"),
+                    ],
+                )
+            ],
+        )
 
         ctx.importer.import_assignments()
 
         # Multi-row query for alternate position verification
-        ctx.cursor.execute("""
+        ctx.cursor.execute(
+            """
             SELECT peep_id, alternate_position
             FROM event_assignments
             WHERE event_id = ? AND assignment_type = 'alternate'
             ORDER BY alternate_position
-        """, (event_id,))
+        """,
+            (event_id,),
+        )
 
         alternates = ctx.cursor.fetchall()
         assert len(alternates) == 3
@@ -176,19 +182,17 @@ class TestAssignmentImport:
     def test_creates_event_from_results_if_not_exists(self, importer_factory, results_json_builder):
         """PeriodImporter creates event if it appears in results.json but not in database."""
         ctx = importer_factory()
-        period_dir = Path(ctx.period_data['period_dir'])
+        period_dir = Path(ctx.period_data["period_dir"])
 
         # Only import responses and create availability-derived events
         response_mapping = ctx.importer.import_responses()
         ctx.importer.create_events(response_mapping)
 
         # Create results.json with an event that doesn't exist in database yet
-        results_json_builder(period_dir, [
-            EventSpec(
-                date="2025-02-25 17:00",
-                attendees=[(1, "Test Member 1", "leader")]
-            )
-        ])
+        results_json_builder(
+            period_dir,
+            [EventSpec(date="2025-02-25 17:00", attendees=[(1, "Test Member 1", "leader")])],
+        )
 
         imported_count = ctx.importer.import_assignments()
 
@@ -200,12 +204,10 @@ class TestAssignmentImport:
     def test_raises_error_for_unknown_member(self, importer_factory, results_json_builder):
         """PeriodImporter raises ValueError when assignment references non-existent member."""
         ctx = importer_factory()
-        period_dir = Path(ctx.period_data['period_dir'])
+        period_dir = Path(ctx.period_data["period_dir"])
 
         response_mapping = ctx.importer.import_responses()
         ctx.importer.create_events(response_mapping)
-
-        from tests.db.helpers import get_single_value
 
         event_datetime = get_single_value(
             ctx.cursor, "events", "event_datetime", f"period_id = {ctx.period_id}"
@@ -230,8 +232,6 @@ class TestAssignmentImport:
 
         response_mapping = ctx.importer.import_responses()
         ctx.importer.create_events(response_mapping)
-
-        from tests.db.helpers import get_single_value
 
         event_datetime = get_single_value(
             ctx.cursor, "events", "event_datetime", f"period_id = {ctx.period_id}"

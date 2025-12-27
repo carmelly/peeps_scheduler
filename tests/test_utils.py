@@ -12,8 +12,8 @@ import pytest
 import tempfile
 import os
 import json
-import utils
-from models import Peep, Event, Role
+from peeps_scheduler import utils
+from peeps_scheduler.models import Peep, Event, Role
 
 
 # --- Fixtures ---

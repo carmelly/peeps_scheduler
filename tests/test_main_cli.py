@@ -17,15 +17,17 @@ Tests cover:
   - Error handling for missing arguments
 """
 
-import pytest
-import sys
-import os
-import json
 import csv
+import json
 import logging
-from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock, call
+import os
+import sys
 from io import StringIO
+from pathlib import Path
+from unittest.mock import MagicMock, Mock, call, patch
+import pytest
+from peeps_scheduler.data_manager import get_data_manager
+from peeps_scheduler.main import apply_results, main
 
 
 @pytest.fixture
@@ -138,20 +140,15 @@ class TestApplyResults:
         test_members_file, test_responses_file, mock_logger
     ):
         """Test successful apply_results when all files exist."""
-        from main import apply_results
-        from data_manager import get_data_manager
-
         # Mock data_manager to return our test directory
         dm = get_data_manager()
         with patch.object(dm, 'get_period_path', return_value=str(temp_period_dir)):
-            with patch('utils.apply_event_results') as mock_apply:
-                with patch('file_io.save_peeps_csv'):
+            with patch("peeps_scheduler.utils.apply_event_results") as mock_apply:
+                with patch("peeps_scheduler.file_io.save_peeps_csv"):
                     mock_apply.return_value = []
 
                     result = apply_results(
-                        "2025-02",
-                        results_filename="actual_attendance.json",
-                        logger=mock_logger
+                        "2025-02", results_filename="actual_attendance.json", logger=mock_logger
                     )
 
         assert result is True
@@ -163,15 +160,10 @@ class TestApplyResults:
         self, temp_period_dir, test_members_file, mock_logger
     ):
         """Test apply_results returns False when actual_attendance.json is missing."""
-        from main import apply_results
-        from data_manager import get_data_manager
-
         dm = get_data_manager()
         with patch.object(dm, 'get_period_path', return_value=str(temp_period_dir)):
             result = apply_results(
-                "2025-02",
-                results_filename="actual_attendance.json",
-                logger=mock_logger
+                "2025-02", results_filename="actual_attendance.json", logger=mock_logger
             )
 
         assert result is False
@@ -182,9 +174,6 @@ class TestApplyResults:
         self, temp_period_dir, test_attendance_file, mock_logger
     ):
         """Test apply_results returns False when members.csv is missing."""
-        from main import apply_results
-        from data_manager import get_data_manager
-
         dm = get_data_manager()
         with patch.object(dm, 'get_period_path', return_value=str(temp_period_dir)):
             result = apply_results(
@@ -202,13 +191,10 @@ class TestApplyResults:
         test_members_file, mock_logger
     ):
         """Test apply_results succeeds when responses.csv is missing (optional file)."""
-        from main import apply_results
-        from data_manager import get_data_manager
-
         dm = get_data_manager()
         with patch.object(dm, 'get_period_path', return_value=str(temp_period_dir)):
-            with patch('utils.apply_event_results') as mock_apply:
-                with patch('file_io.save_peeps_csv'):
+            with patch("peeps_scheduler.utils.apply_event_results") as mock_apply:
+                with patch("peeps_scheduler.file_io.save_peeps_csv"):
                     mock_apply.return_value = []
 
                     result = apply_results(
@@ -230,17 +216,14 @@ class TestApplyResults:
         self, temp_period_dir, test_members_file, test_attendance_file, mock_logger
     ):
         """Test apply_results with custom results filename."""
-        from main import apply_results
-        from data_manager import get_data_manager
-
         # Create custom results file
         custom_results = temp_period_dir / "custom_results.json"
         custom_results.write_text(json.dumps({"valid_events": []}))
 
         dm = get_data_manager()
         with patch.object(dm, 'get_period_path', return_value=str(temp_period_dir)):
-            with patch('utils.apply_event_results') as mock_apply:
-                with patch('file_io.save_peeps_csv'):
+            with patch("peeps_scheduler.utils.apply_event_results") as mock_apply:
+                with patch("peeps_scheduler.file_io.save_peeps_csv"):
                     mock_apply.return_value = []
 
                     result = apply_results(
@@ -255,15 +238,12 @@ class TestApplyResults:
         self, temp_period_dir, test_attendance_file, test_members_file
     ):
         """Test apply_results uses provided logger instance."""
-        from main import apply_results
-        from data_manager import get_data_manager
-
         custom_logger = Mock(spec=logging.Logger)
         dm = get_data_manager()
 
         with patch.object(dm, 'get_period_path', return_value=str(temp_period_dir)):
-            with patch('utils.apply_event_results') as mock_apply:
-                with patch('file_io.save_peeps_csv'):
+            with patch("peeps_scheduler.utils.apply_event_results") as mock_apply:
+                with patch("peeps_scheduler.file_io.save_peeps_csv"):
                     mock_apply.return_value = []
 
                     apply_results(
@@ -277,13 +257,10 @@ class TestApplyResults:
         self, temp_period_dir, test_attendance_file, test_members_file
     ):
         """Test apply_results creates a logger when none provided."""
-        from main import apply_results
-        from data_manager import get_data_manager
-
         dm = get_data_manager()
         with patch.object(dm, 'get_period_path', return_value=str(temp_period_dir)):
-            with patch('utils.apply_event_results') as mock_apply:
-                with patch('file_io.save_peeps_csv'):
+            with patch("peeps_scheduler.utils.apply_event_results") as mock_apply:
+                with patch("peeps_scheduler.file_io.save_peeps_csv"):
                     with patch('logging.getLogger') as mock_get_logger:
                         mock_logger = Mock()
                         mock_get_logger.return_value = mock_logger
@@ -299,13 +276,10 @@ class TestApplyResults:
         test_members_file, test_responses_file, mock_logger
     ):
         """Test apply_results calls utils.apply_event_results with correct files."""
-        from main import apply_results
-        from data_manager import get_data_manager
-
         dm = get_data_manager()
         with patch.object(dm, 'get_period_path', return_value=str(temp_period_dir)):
-            with patch('utils.apply_event_results') as mock_apply:
-                with patch('file_io.save_peeps_csv'):
+            with patch("peeps_scheduler.utils.apply_event_results") as mock_apply:
+                with patch("peeps_scheduler.file_io.save_peeps_csv"):
                     mock_apply.return_value = []
 
                     apply_results(
@@ -325,15 +299,12 @@ class TestApplyResults:
         test_members_file, test_responses_file, mock_logger
     ):
         """Test apply_results saves updated peeps to members.csv."""
-        from main import apply_results
-        from data_manager import get_data_manager
-
         dm = get_data_manager()
         updated_peeps = [{"id": 1, "name": "Updated"}]
 
         with patch.object(dm, 'get_period_path', return_value=str(temp_period_dir)):
-            with patch('utils.apply_event_results', return_value=updated_peeps):
-                with patch('file_io.save_peeps_csv') as mock_save:
+            with patch("peeps_scheduler.utils.apply_event_results", return_value=updated_peeps):
+                with patch("peeps_scheduler.file_io.save_peeps_csv") as mock_save:
                     apply_results(
                         "2025-02",
                         logger=mock_logger
@@ -351,14 +322,12 @@ class TestMainCLI:
 
     def test_main_run_command_basic(self):
         """Test main() routes 'run' command correctly."""
-        from main import main
-
         test_args = ['main.py', 'run', '--data-folder', '/tmp/test']
         with patch.object(sys, 'argv', test_args):
-            with patch('main.Scheduler') as mock_scheduler_class:
+            with patch("peeps_scheduler.main.Scheduler") as mock_scheduler_class:
                 mock_instance = Mock()
                 mock_scheduler_class.return_value = mock_instance
-                with patch('utils.setup_logging'):
+                with patch("peeps_scheduler.utils.setup_logging"):
                     main()
 
         # Verify Scheduler was instantiated
@@ -368,12 +337,10 @@ class TestMainCLI:
 
     def test_main_run_command_with_verbose_flag(self):
         """Test main() passes --verbose flag to logging setup."""
-        from main import main
-
         test_args = ['main.py', '--verbose', 'run', '--data-folder', '/tmp/test']
         with patch.object(sys, 'argv', test_args):
-            with patch('main.Scheduler'):
-                with patch('utils.setup_logging') as mock_setup_logging:
+            with patch("peeps_scheduler.main.Scheduler"):
+                with patch("peeps_scheduler.utils.setup_logging") as mock_setup_logging:
                     main()
 
         # Verify setup_logging was called with verbose=True
@@ -381,14 +348,12 @@ class TestMainCLI:
 
     def test_main_run_command_with_generate_tests_flag(self):
         """Test main() passes --generate-tests flag to scheduler.run()."""
-        from main import main
-
         test_args = ['main.py', 'run', '--data-folder', '/tmp/test', '--generate-tests']
         with patch.object(sys, 'argv', test_args):
-            with patch('main.Scheduler') as mock_scheduler_class:
+            with patch("peeps_scheduler.main.Scheduler") as mock_scheduler_class:
                 mock_instance = Mock()
                 mock_scheduler_class.return_value = mock_instance
-                with patch('utils.setup_logging'):
+                with patch("peeps_scheduler.utils.setup_logging"):
                     main()
 
         # Verify run was called with generate_test_data=True
@@ -397,14 +362,12 @@ class TestMainCLI:
 
     def test_main_run_command_with_load_from_csv_flag(self):
         """Test main() passes --load-from-csv flag to scheduler.run()."""
-        from main import main
-
         test_args = ['main.py', 'run', '--data-folder', '/tmp/test', '--load-from-csv']
         with patch.object(sys, 'argv', test_args):
-            with patch('main.Scheduler') as mock_scheduler_class:
+            with patch("peeps_scheduler.main.Scheduler") as mock_scheduler_class:
                 mock_instance = Mock()
                 mock_scheduler_class.return_value = mock_instance
-                with patch('utils.setup_logging'):
+                with patch("peeps_scheduler.utils.setup_logging"):
                     main()
 
         # Verify run was called with load_from_csv=True
@@ -413,14 +376,12 @@ class TestMainCLI:
 
     def test_main_run_command_with_max_events(self):
         """Test main() passes --max-events to Scheduler."""
-        from main import main
-
         test_args = ['main.py', 'run', '--data-folder', '/tmp/test', '--max-events', '10']
         with patch.object(sys, 'argv', test_args):
-            with patch('main.Scheduler') as mock_scheduler_class:
+            with patch("peeps_scheduler.main.Scheduler") as mock_scheduler_class:
                 mock_instance = Mock()
                 mock_scheduler_class.return_value = mock_instance
-                with patch('utils.setup_logging'):
+                with patch("peeps_scheduler.utils.setup_logging"):
                     main()
 
         # Verify Scheduler was created with max_events=10
@@ -429,18 +390,16 @@ class TestMainCLI:
 
     def test_main_run_command_with_custom_files(self):
         """Test main() passes custom cancellations and partnerships files."""
-        from main import main
-
         test_args = [
             'main.py', 'run', '--data-folder', '/tmp/test',
             '--cancellations-file', 'custom_cancellations.json',
             '--partnerships-file', 'custom_partnerships.json'
         ]
         with patch.object(sys, 'argv', test_args):
-            with patch('main.Scheduler') as mock_scheduler_class:
+            with patch("peeps_scheduler.main.Scheduler") as mock_scheduler_class:
                 mock_instance = Mock()
                 mock_scheduler_class.return_value = mock_instance
-                with patch('utils.setup_logging'):
+                with patch("peeps_scheduler.utils.setup_logging"):
                     main()
 
         # Verify Scheduler was created with custom files
@@ -450,8 +409,6 @@ class TestMainCLI:
 
     def test_main_run_command_requires_data_folder_if_env_not_set(self):
         """Test main() run command requires --data-folder if DATA_FOLDER env var not set."""
-        from main import main
-
         test_args = ['main.py', 'run']
         with patch.object(sys, 'argv', test_args):
             with patch.dict(os.environ, {}, clear=False):
@@ -459,22 +416,20 @@ class TestMainCLI:
                 if 'DATA_FOLDER' in os.environ:
                     del os.environ['DATA_FOLDER']
 
-                with patch('utils.setup_logging'):
+                with patch("peeps_scheduler.utils.setup_logging"):
                     # Should fail with SystemExit due to missing required argument
                     with pytest.raises(SystemExit):
                         main()
 
     def test_main_run_command_uses_data_folder_env_var(self):
         """Test main() uses DATA_FOLDER environment variable."""
-        from main import main
-
         test_args = ['main.py', 'run']
         with patch.object(sys, 'argv', test_args):
             with patch.dict(os.environ, {'DATA_FOLDER': '/env/data'}):
-                with patch('main.Scheduler') as mock_scheduler_class:
+                with patch("peeps_scheduler.main.Scheduler") as mock_scheduler_class:
                     mock_instance = Mock()
                     mock_scheduler_class.return_value = mock_instance
-                    with patch('utils.setup_logging'):
+                    with patch("peeps_scheduler.utils.setup_logging"):
                         main()
 
         # Verify Scheduler was created with env var data folder
@@ -483,12 +438,10 @@ class TestMainCLI:
 
     def test_main_apply_results_command(self, temp_period_dir):
         """Test main() routes 'apply-results' command correctly."""
-        from main import main
-
         test_args = ['main.py', 'apply-results', '--period-folder', str(temp_period_dir)]
         with patch.object(sys, 'argv', test_args):
-            with patch('utils.setup_logging'):
-                with patch('main.apply_results') as mock_apply:
+            with patch("peeps_scheduler.utils.setup_logging"):
+                with patch("peeps_scheduler.main.apply_results") as mock_apply:
                     mock_apply.return_value = True
                     main()
 
@@ -497,16 +450,14 @@ class TestMainCLI:
 
     def test_main_apply_results_command_with_custom_results_file(self, temp_period_dir):
         """Test main() passes custom results filename to apply_results."""
-        from main import main
-
         test_args = [
             'main.py', 'apply-results',
             '--period-folder', str(temp_period_dir),
             '--results-file', 'custom_results.json'
         ]
         with patch.object(sys, 'argv', test_args):
-            with patch('utils.setup_logging'):
-                with patch('main.apply_results') as mock_apply:
+            with patch("peeps_scheduler.utils.setup_logging"):
+                with patch("peeps_scheduler.main.apply_results") as mock_apply:
                     mock_apply.return_value = True
                     main()
 
@@ -516,23 +467,21 @@ class TestMainCLI:
 
     def test_main_apply_results_requires_period_folder(self):
         """Test main() apply-results requires --period-folder argument."""
-        from main import main
-
         test_args = ['main.py', 'apply-results']
         with patch.object(sys, 'argv', test_args):
-            with patch('utils.setup_logging'):
+            with patch("peeps_scheduler.utils.setup_logging"):
                 # Should fail with SystemExit due to missing required argument
                 with pytest.raises(SystemExit):
                     main()
 
     def test_main_availability_report_command(self):
         """Test main() routes 'availability-report' command correctly."""
-        from main import main
-
         test_args = ['main.py', 'availability-report', '--data-folder', '/tmp/test']
         with patch.object(sys, 'argv', test_args):
-            with patch('utils.setup_logging'):
-                with patch('availability_report.run_availability_report') as mock_report:
+            with patch("peeps_scheduler.utils.setup_logging"):
+                with patch(
+                    "peeps_scheduler.availability_report.run_availability_report"
+                ) as mock_report:
                     main()
 
         # Verify run_availability_report was called
@@ -540,16 +489,16 @@ class TestMainCLI:
 
     def test_main_availability_report_with_custom_cancellations_file(self):
         """Test main() passes custom cancellations file to availability_report."""
-        from main import main
-
         test_args = [
             'main.py', 'availability-report',
             '--data-folder', '/tmp/test',
             '--cancellations-file', 'custom_cancellations.json'
         ]
         with patch.object(sys, 'argv', test_args):
-            with patch('utils.setup_logging'):
-                with patch('availability_report.run_availability_report') as mock_report:
+            with patch("peeps_scheduler.utils.setup_logging"):
+                with patch(
+                    "peeps_scheduler.availability_report.run_availability_report"
+                ) as mock_report:
                     main()
 
         # Verify cancellations_file was passed
@@ -558,8 +507,6 @@ class TestMainCLI:
 
     def test_main_availability_report_requires_data_folder_if_env_not_set(self):
         """Test main() availability-report requires --data-folder if DATA_FOLDER env not set."""
-        from main import main
-
         test_args = ['main.py', 'availability-report']
         with patch.object(sys, 'argv', test_args):
             with patch.dict(os.environ, {}, clear=False):
@@ -567,20 +514,20 @@ class TestMainCLI:
                 if 'DATA_FOLDER' in os.environ:
                     del os.environ['DATA_FOLDER']
 
-                with patch('utils.setup_logging'):
+                with patch("peeps_scheduler.utils.setup_logging"):
                     # Should fail with SystemExit
                     with pytest.raises(SystemExit):
                         main()
 
     def test_main_availability_report_uses_data_folder_env_var(self):
         """Test main() availability-report uses DATA_FOLDER environment variable."""
-        from main import main
-
         test_args = ['main.py', 'availability-report']
         with patch.object(sys, 'argv', test_args):
             with patch.dict(os.environ, {'DATA_FOLDER': '/env/data'}):
-                with patch('utils.setup_logging'):
-                    with patch('availability_report.run_availability_report') as mock_report:
+                with patch("peeps_scheduler.utils.setup_logging"):
+                    with patch(
+                        "peeps_scheduler.availability_report.run_availability_report"
+                    ) as mock_report:
                         main()
 
         # Verify data_folder argument was passed
@@ -589,11 +536,9 @@ class TestMainCLI:
 
     def test_main_prints_help_when_no_command_given(self, capsys):
         """Test main() prints help text when no command is provided."""
-        from main import main
-
         test_args = ['main.py']
         with patch.object(sys, 'argv', test_args):
-            with patch('utils.setup_logging'):
+            with patch("peeps_scheduler.utils.setup_logging"):
                 main()
 
         captured = capsys.readouterr()
@@ -603,11 +548,9 @@ class TestMainCLI:
 
     def test_main_prints_help_with_help_flag(self, capsys):
         """Test main() prints help text with --help flag."""
-        from main import main
-
         test_args = ['main.py', '--help']
         with patch.object(sys, 'argv', test_args):
-            with patch('utils.setup_logging'):
+            with patch("peeps_scheduler.utils.setup_logging"):
                 # ArgumentParser exits with 0 on --help
                 with pytest.raises(SystemExit) as exc_info:
                     main()
@@ -619,11 +562,9 @@ class TestMainCLI:
 
     def test_main_verbose_flag_without_command(self):
         """Test main() --verbose flag works without specific command."""
-        from main import main
-
         test_args = ['main.py', '--verbose']
         with patch.object(sys, 'argv', test_args):
-            with patch('utils.setup_logging') as mock_setup:
+            with patch("peeps_scheduler.utils.setup_logging") as mock_setup:
                 main()
 
         # Should still set up logging with verbose=True
@@ -631,14 +572,12 @@ class TestMainCLI:
 
     def test_main_passes_logger_to_apply_results(self, temp_period_dir):
         """Test main() passes configured logger to apply_results."""
-        from main import main
-
         test_args = ['main.py', 'apply-results', '--period-folder', str(temp_period_dir)]
         mock_logger = Mock(spec=logging.Logger)
 
         with patch.object(sys, 'argv', test_args):
-            with patch('utils.setup_logging', return_value=mock_logger):
-                with patch('main.apply_results') as mock_apply:
+            with patch("peeps_scheduler.utils.setup_logging", return_value=mock_logger):
+                with patch("peeps_scheduler.main.apply_results") as mock_apply:
                     mock_apply.return_value = True
                     main()
 
@@ -648,25 +587,21 @@ class TestMainCLI:
 
     def test_main_handles_invalid_command(self):
         """Test main() handles invalid command gracefully."""
-        from main import main
-
         test_args = ['main.py', 'invalid-command']
         with patch.object(sys, 'argv', test_args):
-            with patch('utils.setup_logging'):
+            with patch("peeps_scheduler.utils.setup_logging"):
                 # Invalid command should exit with error
                 with pytest.raises(SystemExit):
                     main()
 
     def test_main_run_all_default_values(self):
         """Test main() run command with all default argument values."""
-        from main import main
-
         test_args = ['main.py', 'run', '--data-folder', '/tmp/test']
         with patch.object(sys, 'argv', test_args):
-            with patch('main.Scheduler') as mock_scheduler_class:
+            with patch("peeps_scheduler.main.Scheduler") as mock_scheduler_class:
                 mock_instance = Mock()
                 mock_scheduler_class.return_value = mock_instance
-                with patch('utils.setup_logging'):
+                with patch("peeps_scheduler.utils.setup_logging"):
                     main()
 
         # Verify defaults were used
@@ -677,12 +612,10 @@ class TestMainCLI:
 
     def test_main_apply_results_default_results_filename(self, temp_period_dir):
         """Test main() apply-results uses default results filename."""
-        from main import main
-
         test_args = ['main.py', 'apply-results', '--period-folder', str(temp_period_dir)]
         with patch.object(sys, 'argv', test_args):
-            with patch('utils.setup_logging'):
-                with patch('main.apply_results') as mock_apply:
+            with patch("peeps_scheduler.utils.setup_logging"):
+                with patch("peeps_scheduler.main.apply_results") as mock_apply:
                     mock_apply.return_value = True
                     main()
 
@@ -692,12 +625,12 @@ class TestMainCLI:
 
     def test_main_availability_report_default_cancellations_file(self):
         """Test main() availability-report uses default cancellations filename."""
-        from main import main
-
         test_args = ['main.py', 'availability-report', '--data-folder', '/tmp/test']
         with patch.object(sys, 'argv', test_args):
-            with patch('utils.setup_logging'):
-                with patch('availability_report.run_availability_report') as mock_report:
+            with patch("peeps_scheduler.utils.setup_logging"):
+                with patch(
+                    "peeps_scheduler.availability_report.run_availability_report"
+                ) as mock_report:
                     main()
 
         # Verify default filename was used
@@ -711,8 +644,6 @@ class TestMainIntegration:
 
     def test_run_command_all_flags_combined(self):
         """Test run command with all flags specified together."""
-        from main import main
-
         test_args = [
             'main.py', '--verbose', 'run',
             '--data-folder', '/tmp/test',
@@ -724,10 +655,10 @@ class TestMainIntegration:
         ]
 
         with patch.object(sys, 'argv', test_args):
-            with patch('main.Scheduler') as mock_scheduler_class:
+            with patch("peeps_scheduler.main.Scheduler") as mock_scheduler_class:
                 mock_instance = Mock()
                 mock_scheduler_class.return_value = mock_instance
-                with patch('utils.setup_logging') as mock_setup:
+                with patch("peeps_scheduler.utils.setup_logging") as mock_setup:
                     main()
 
         # Verify all parameters were passed correctly
@@ -746,8 +677,6 @@ class TestMainIntegration:
 
     def test_apply_results_all_options(self, temp_period_dir):
         """Test apply-results command with all options specified."""
-        from main import main
-
         test_args = [
             'main.py', '--verbose', 'apply-results',
             '--period-folder', str(temp_period_dir),
@@ -755,8 +684,8 @@ class TestMainIntegration:
         ]
 
         with patch.object(sys, 'argv', test_args):
-            with patch('utils.setup_logging') as mock_setup:
-                with patch('main.apply_results') as mock_apply:
+            with patch("peeps_scheduler.utils.setup_logging") as mock_setup:
+                with patch("peeps_scheduler.main.apply_results") as mock_apply:
                     mock_apply.return_value = True
                     main()
 
@@ -770,8 +699,6 @@ class TestMainIntegration:
 
     def test_availability_report_all_options(self):
         """Test availability-report command with all options."""
-        from main import main
-
         test_args = [
             'main.py', '--verbose', 'availability-report',
             '--data-folder', '/data/folder',
@@ -779,8 +706,10 @@ class TestMainIntegration:
         ]
 
         with patch.object(sys, 'argv', test_args):
-            with patch('utils.setup_logging') as mock_setup:
-                with patch('availability_report.run_availability_report') as mock_report:
+            with patch("peeps_scheduler.utils.setup_logging") as mock_setup:
+                with patch(
+                    "peeps_scheduler.availability_report.run_availability_report"
+                ) as mock_report:
                     main()
 
         # Verify parameters

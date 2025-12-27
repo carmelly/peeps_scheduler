@@ -9,17 +9,17 @@ Tests cover:
 - CLI integration: help, error handling, database paths
 """
 
-import pytest
-import subprocess
-import sys
-import sqlite3
-import tempfile
 import csv
 import json
+import sqlite3
+import subprocess
+import sys
+import tempfile
 from pathlib import Path
-from file_io import normalize_email
+import pytest
+from peeps_scheduler.constants import SCHEMA_PATH
+from peeps_scheduler.file_io import normalize_email
 from tests.conftest import _parse_and_reorder_schema
-
 
 
 @pytest.fixture(scope='module')
@@ -96,10 +96,9 @@ def test_data_dir():
 @pytest.fixture(scope='module')
 def test_db(test_data_dir, tmp_path_factory):
     """Create test database matching test CSV/JSON files."""
-    project_root = Path(__file__).parent.parent
 
     # Load and prepare schema
-    with open(project_root / 'db' / 'schema.sql', 'r') as f:
+    with open(SCHEMA_PATH) as f:
         schema_sql = f.read()
 
     # Filter out sqlite_sequence references
@@ -191,8 +190,7 @@ def mutable_test_db(test_db):
 @pytest.fixture
 def empty_test_db(tmp_path):
     """Create empty test database with schema only."""
-    project_root = Path(__file__).parent.parent
-    with open(project_root / 'db' / 'schema.sql', 'r') as f:
+    with open(SCHEMA_PATH) as f:
         schema_sql = f.read()
 
     lines = [line for line in schema_sql.split('\n') if 'sqlite_sequence' not in line.lower()]
@@ -224,7 +222,7 @@ def empty_test_db(tmp_path):
 def run_validate_cmd(command, db_path, data_dir=None):
     """Helper to run validate.py command and return result."""
     project_root = Path(__file__).parent.parent
-    cmd = [sys.executable, 'db/validate.py'] + command + ['--db', db_path]
+    cmd = [sys.executable, "-m", "peeps_scheduler.db.validate"] + command + ["--db", db_path]
     if data_dir:
         cmd += ['--data-dir', data_dir]
     return subprocess.run(cmd, capture_output=True, text=True, cwd=project_root)
@@ -494,7 +492,7 @@ class TestValidatePeriodCommand:
         3. Expects validate_events() to detect the mismatch (extra event in DB)
         4. Should FAIL because validate_events() doesn't exist yet
         """
-        from db.validate import validate_events
+        from peeps_scheduler.db.validate import validate_events
 
         # Create period directory with responses.csv containing 2 events
         period_dir = tmp_path / '2020-01'
@@ -611,9 +609,10 @@ class TestCLIIntegration:
     def test_cli_help_flag(self):
         """Test that --help works."""
         result = subprocess.run(
-            [sys.executable, 'db/validate.py', '--help'],
-            capture_output=True, text=True,
-            cwd=Path(__file__).parent.parent
+            [sys.executable, "-m", "peeps_scheduler.db.validate", "--help"],
+            capture_output=True,
+            text=True,
+            cwd=Path(__file__).parent.parent,
         )
         assert result.returncode == 0
         output = result.stdout.lower()
@@ -622,6 +621,6 @@ class TestCLIIntegration:
 
     def test_cli_handles_missing_database(self):
         """Test that CLI handles missing database gracefully."""
-        result = run_validate_cmd(['--list-periods'], 'E:\\nonexistent\\db.db')
+        result = run_validate_cmd(["--list-periods"], "/nonexistent/db.db")
         assert result.returncode != 0
         assert 'not found' in (result.stderr or result.stdout).lower()

@@ -11,7 +11,7 @@ Tests cover:
 import csv
 from pathlib import Path
 import pytest
-from tests.db.helpers import assert_response_count
+from tests.db.helpers import assert_response_count, get_single_value
 from tests.fixtures.data_specs import ResponseSpec
 
 
@@ -181,7 +181,6 @@ class TestResponseImport:
 
         ctx.importer.import_responses()
 
-        from tests.db.helpers import get_single_value
         switch_pref = get_single_value(ctx.cursor, 'responses', 'switch_preference', f'period_id = {ctx.period_id}')
         assert switch_pref is not None, "Should have imported response"
 

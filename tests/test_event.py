@@ -10,8 +10,8 @@ Following testing philosophy:
 
 import pytest
 import datetime
-from models import Event, Peep, Role
-import constants
+from peeps_scheduler.models import Event, Peep, Role
+from peeps_scheduler import constants
 
 @pytest.mark.unit
 class TestEventAttendeeManagement:

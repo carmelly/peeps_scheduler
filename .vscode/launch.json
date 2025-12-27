@@ -13,7 +13,7 @@
             "name": "Run",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/main.py",
+            "module": "peeps_scheduler.main",
             "args": [ "run", "--data-folder", "${input:dataDir}" ],
             "console": "integratedTerminal"
         },
@@ -21,7 +21,7 @@
             "name": "Run w/CSV Import",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/main.py",
+            "module": "peeps_scheduler.main",
             "args": [ "run", "--load-from-csv", "--data-folder", "${input:dataDir}" ],
             "console": "integratedTerminal"
         },
@@ -29,7 +29,7 @@
             "name": "Availability Report",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/main.py",
+            "module": "peeps_scheduler.main",
             "args": [ "availability-report", "--data-folder", "${input:dataDir}" ],
             "console": "integratedTerminal"
         },
@@ -37,7 +37,7 @@
             "name": "Apply Results",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/main.py",
+            "module": "peeps_scheduler.main",
             "args": [ "apply-results", "--period-folder", "${input:dataDir}" ],
             "console": "integratedTerminal"
         }

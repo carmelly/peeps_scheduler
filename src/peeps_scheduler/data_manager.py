@@ -4,7 +4,7 @@ Handles path management for private data submodule and period archiving.
 """
 from pathlib import Path
 from typing import List
-import constants
+from peeps_scheduler import constants
 
 class DataManager:
 	"""Manages data paths and period archiving for the scheduling system."""

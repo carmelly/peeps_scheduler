@@ -42,11 +42,10 @@ from pathlib import Path
 # Add project root to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-
-import constants
-from data_manager import get_data_manager
-from db.snapshot_generator import EventAttendance, MemberSnapshot, SnapshotGenerator
-from file_io import (
+import peeps_scheduler.constants as constants
+from peeps_scheduler.data_manager import get_data_manager
+from peeps_scheduler.db.snapshot_generator import EventAttendance, MemberSnapshot, SnapshotGenerator
+from peeps_scheduler.file_io import (
     extract_events,
     load_csv,
     load_json,
@@ -54,7 +53,7 @@ from file_io import (
     normalize_email,
     parse_event_date,
 )
-from models import SwitchPreference
+from peeps_scheduler.models import SwitchPreference
 
 # Database path (allow environment variable override for testing)
 DB_PATH = os.getenv('DEFAULT_DB_PATH', constants.DEFAULT_DB_PATH)

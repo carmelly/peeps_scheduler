@@ -11,8 +11,11 @@ import json
 from datetime import datetime
 from pathlib import Path
 import pytest
-from db.import_period_data import import_cancelled_availability, import_cancelled_events
-from file_io import format_event_date
+from peeps_scheduler.db.import_period_data import (
+    import_cancelled_availability,
+    import_cancelled_events,
+)
+from peeps_scheduler.file_io import format_event_date
 from tests.db.helpers import assert_event_count, assert_row_count, get_single_value, get_table_count
 
 
@@ -72,8 +75,6 @@ class TestEventCancellations:
         )
 
         # Import cancelled events
-        from db.import_period_data import import_cancelled_events
-
         cancellations_path = period_dir / "cancellations.json"
         import_cancelled_events(cancellations_path, ctx.period_id, ctx.cursor)
 
@@ -101,8 +102,6 @@ class TestEventCancellations:
         )
 
         # Import should raise ValueError
-        from db.import_period_data import import_cancelled_events
-
         cancellations_path = period_dir / "cancellations.json"
         with pytest.raises(ValueError, match="(?s).*cancelled_events.*does not match"):
             import_cancelled_events(cancellations_path, ctx.period_id, ctx.cursor)
@@ -148,8 +147,6 @@ class TestCancelledAvailability:
         )
 
         # Import cancelled availability should not raise
-        from db.import_period_data import import_cancelled_availability
-
         cancellations_path = period_dir / "cancellations.json"
         try:
             import_cancelled_availability(cancellations_path, ctx.period_id, ctx.cursor)
@@ -198,8 +195,6 @@ class TestCancelledAvailability:
             json.dump(cancellations_data, f)
 
         # Import should raise ValueError for duplicate emails
-        from db.import_period_data import import_cancelled_availability
-
         with pytest.raises(ValueError, match=r"duplicate cancelled_availability"):
             import_cancelled_availability(cancellations_path, ctx.period_id, ctx.cursor)
 
@@ -221,8 +216,6 @@ class TestCancelledAvailability:
             json.dump(cancellations_data, f)
 
         # Import should raise ValueError
-        from db.import_period_data import import_cancelled_availability
-
         with pytest.raises(
             ValueError, match="cancellations.json missing 'cancelled_availability'"
         ):
@@ -240,8 +233,6 @@ class TestCancelledAvailability:
         ctx.importer.create_events(response_mapping)
 
         # Get initial count
-        from db.import_period_data import import_cancelled_availability
-
         initial_count = get_table_count(ctx.cursor, 'event_availability')
 
         # Create cancellations with empty list
@@ -291,7 +282,6 @@ class TestCancelledAvailability:
 
         # Current behavior: handles gracefully (warning, no error)
         # Future behavior: should raise ValueError
-        from db.import_period_data import import_cancelled_availability
         cancellations_path = period_dir / "cancellations.json"
         removed = import_cancelled_availability(cancellations_path, ctx.importer.period_id, ctx.cursor)
 

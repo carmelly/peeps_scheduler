@@ -13,7 +13,7 @@ Tests cover:
 
 from datetime import datetime
 import pytest
-from db.snapshot_generator import EventAttendance, MemberSnapshot, SnapshotGenerator
+from peeps_scheduler.db.snapshot_generator import EventAttendance, MemberSnapshot, SnapshotGenerator
 
 
 @pytest.mark.db

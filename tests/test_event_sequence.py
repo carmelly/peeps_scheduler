@@ -10,7 +10,7 @@ Following testing philosophy:
 
 import pytest
 import datetime
-from models import EventSequence, Event, Peep, Role
+from peeps_scheduler.models import EventSequence, Event, Peep, Role
 
 
 

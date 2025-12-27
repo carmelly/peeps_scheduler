@@ -13,7 +13,7 @@ import tempfile
 import os
 from pathlib import Path
 from unittest.mock import patch
-from logging_config import (
+from peeps_scheduler.logging_config import (
     get_logger,
     configure_root_logger,
     cleanup_test_logs,
@@ -99,7 +99,7 @@ def test_get_logger_with_size_rotation():
 def test_ensure_log_directory_creates_path():
     """Test that ensure_log_directory creates the directory."""
     with tempfile.TemporaryDirectory() as temp_dir:
-        with patch("logging_config.LOG_BASE_DIR", Path(temp_dir)):
+        with patch("peeps_scheduler.logging_config.LOG_BASE_DIR", Path(temp_dir)):
             log_dir = ensure_log_directory("test_logs")
 
             assert log_dir.exists()
@@ -111,7 +111,7 @@ def test_ensure_log_directory_creates_path():
 def test_ensure_log_directory_idempotent():
     """Test that calling ensure_log_directory multiple times is safe."""
     with tempfile.TemporaryDirectory() as temp_dir:
-        with patch("logging_config.LOG_BASE_DIR", Path(temp_dir)):
+        with patch("peeps_scheduler.logging_config.LOG_BASE_DIR", Path(temp_dir)):
             log_dir1 = ensure_log_directory("test_logs")
             log_dir2 = ensure_log_directory("test_logs")
 
@@ -235,7 +235,7 @@ def test_get_logger_avoids_duplicate_handlers():
 @pytest.mark.integration
 def test_logger_writes_to_correct_directory(tmp_path):
     """Test that logger writes to the correct directory."""
-    with patch("logging_config.LOG_BASE_DIR", tmp_path):
+    with patch("peeps_scheduler.logging_config.LOG_BASE_DIR", tmp_path):
         logger = get_logger("test_write", "test_subdir", console_output=False)
 
         # Log a message
@@ -259,7 +259,7 @@ def test_cleanup_test_logs_removes_test_directory():
         (test_log_dir / "test.log").write_text("test")
 
         with patch("tempfile.gettempdir", return_value=temp_dir):
-            with patch("logging_config.IS_TEST_ENV", True):
+            with patch("peeps_scheduler.logging_config.IS_TEST_ENV", True):
                 cleanup_test_logs()
 
         # Directory should be removed
@@ -271,7 +271,7 @@ def test_cleanup_test_logs_removes_test_directory():
 @pytest.mark.integration
 def test_logger_formats_messages_correctly(tmp_path):
     """Test that logger formats messages with correct timestamp and level."""
-    with patch("logging_config.LOG_BASE_DIR", tmp_path):
+    with patch("peeps_scheduler.logging_config.LOG_BASE_DIR", tmp_path):
         logger = get_logger("test_format", "test_subdir", console_output=False)
 
         logger.info("Test message")
@@ -289,7 +289,7 @@ def test_logger_formats_messages_correctly(tmp_path):
 @pytest.mark.integration
 def test_get_logger_different_loggers_independent(tmp_path):
     """Test that different logger instances are independent."""
-    with patch("logging_config.LOG_BASE_DIR", tmp_path):
+    with patch("peeps_scheduler.logging_config.LOG_BASE_DIR", tmp_path):
         logger1 = get_logger("logger1", "subdir1", console_output=False)
         logger2 = get_logger("logger2", "subdir2", console_output=False)
 
@@ -314,7 +314,7 @@ def test_configure_root_logger_with_file_output(tmp_path):
     for handler in root_logger.handlers[:]:
         root_logger.removeHandler(handler)
 
-    with patch("logging_config.LOG_BASE_DIR", tmp_path):
+    with patch("peeps_scheduler.logging_config.LOG_BASE_DIR", tmp_path):
         configure_root_logger(level="INFO", console_output=False)
 
         root_logger.info("Root logger test message")

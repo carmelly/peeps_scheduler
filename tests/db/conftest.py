@@ -7,10 +7,10 @@ import datetime
 import json
 import pytest
 from tests.fixtures.data_specs import (
-	AttendanceSpec,
-	EventSpec,
-	MemberSpec,
-	ResponseSpec,
+    AttendanceSpec,
+    EventSpec,
+    MemberSpec,
+    ResponseSpec,
 )
 
 # Import helpers to make them available to test modules

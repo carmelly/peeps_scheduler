@@ -3,8 +3,8 @@ import itertools
 import random
 import logging
 from enum import Enum
-from constants import DATE_FORMAT, DATESTR_FORMAT
-import constants
+from peeps_scheduler.constants import DATE_FORMAT, DATESTR_FORMAT
+from peeps_scheduler import constants
 
 class Role(Enum):
 	LEADER = "leader"

@@ -28,11 +28,11 @@ ABS_MIN_ROLE = min(config["min_role"] for config in CLASS_CONFIG.values() if con
 ABS_MAX_ROLE = max(config["max_role"] for config in CLASS_CONFIG.values())
 
 # Private data submodule root - can be overridden by environment
-PRIVATE_DATA_ROOT = os.getenv("PEEPS_DATA_PATH", "peeps_data")
+PRIVATE_DATA_ROOT = os.getenv("peeps-data_PATH", "peeps-data")
 
 # Database paths
-SCHEMA_PATH = "db/schema.sql"
-DEFAULT_DB_PATH = "peeps_data/peeps_scheduler.db"
+SCHEMA_PATH = "src/peeps_scheduler/db/schema.sql"
+DEFAULT_DB_PATH = "peeps-data/peeps_scheduler.db"
 
 # Optional data files
 PARTNERSHIPS_FILE = "partnerships.json"

@@ -7,8 +7,8 @@ import sqlite3
 
 # Add parent directory for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from data_manager import get_data_manager
-import constants
+from peeps_scheduler.data_manager import get_data_manager
+from peeps_scheduler import constants
 
 # Database configuration
 data_manager = get_data_manager()

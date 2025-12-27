@@ -19,7 +19,7 @@ Inspection Commands:
     --list-periods              List all periods
 
 Options:
-    --db PATH                   Database path (default: peeps_data/peeps_scheduler.db)
+    --db PATH                   Database path (default: peeps-data/peeps_scheduler.db)
 """
 
 import argparse
@@ -34,8 +34,8 @@ from typing import Optional, Dict, List, Union
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import constants
-from file_io import normalize_email, extract_events
+from peeps_scheduler import constants
+from peeps_scheduler.file_io import normalize_email, extract_events
 
 # ============================================================================
 # Validation Constants
@@ -150,7 +150,7 @@ def validate_schema(conn: sqlite3.Connection) -> List[str]:
 
     Examples:
         Valid schema:
-        >>> conn = sqlite3.connect('peeps_data/peeps_scheduler.db')
+        >>> conn = sqlite3.connect('peeps-data/peeps_scheduler.db')
         >>> issues = validate_schema(conn)
         >>> len(issues)
         0
@@ -355,7 +355,7 @@ def validate_members(db_path: str, data_dir: str = None) -> int:
 
     Args:
         db_path: Path to database file
-        data_dir: Path to processed data directory (default: peeps_data/processed)
+        data_dir: Path to processed data directory (default: peeps-data/processed)
 
     Returns:
         0 if validation passes, 1 if issues found
@@ -366,7 +366,7 @@ def validate_members(db_path: str, data_dir: str = None) -> int:
     # Get processed data directory
     if data_dir is None:
         project_root = Path(__file__).parent.parent
-        processed_dir = project_root / 'peeps_data' / 'processed'
+        processed_dir = project_root / "peeps-data" / "processed"
     else:
         processed_dir = Path(data_dir)
 
@@ -464,7 +464,7 @@ def validate_period(db_path: str, period_name: str, data_dir: str = None) -> int
     Args:
         db_path: Path to database file
         period_name: Name of period to validate
-        data_dir: Path to processed data directory (default: peeps_data/processed)
+        data_dir: Path to processed data directory (default: peeps-data/processed)
 
     Validates:
     - Responses against responses.csv
@@ -490,7 +490,7 @@ def validate_period(db_path: str, period_name: str, data_dir: str = None) -> int
     # Get period source data path
     if data_dir is None:
         project_root = Path(__file__).parent.parent
-        period_path = project_root / 'peeps_data' / 'processed' / period_name
+        period_path = project_root / "peeps-data" / "processed" / period_name
     else:
         period_path = Path(data_dir) / period_name
 
@@ -1245,8 +1245,12 @@ def main():
                         help='Database path (default: %(default)s)')
 
     # Data directory
-    parser.add_argument('--data-dir', type=str, default=None,
-                        help='Processed data directory path (default: peeps_data/processed)')
+    parser.add_argument(
+        "--data-dir",
+        type=str,
+        default=None,
+        help="Processed data directory path (default: peeps-data/processed)",
+    )
 
     # Commands
     commands = parser.add_mutually_exclusive_group()

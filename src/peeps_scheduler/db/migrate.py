@@ -6,8 +6,8 @@ from pathlib import Path
 
 # Add parent directory for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from data_manager import get_data_manager
-import constants
+from peeps_scheduler.data_manager import get_data_manager
+from peeps_scheduler import constants
 
 # Use DataManager for database path
 DB_PATH = get_data_manager().get_database_path()

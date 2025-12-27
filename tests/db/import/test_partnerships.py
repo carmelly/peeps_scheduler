@@ -11,7 +11,7 @@ Tests cover:
 import json
 from pathlib import Path
 import pytest
-from db.import_period_data import import_partnerships
+from peeps_scheduler.db.import_period_data import import_partnerships
 from tests.db.helpers import assert_partnership_count
 
 
@@ -153,7 +153,6 @@ class TestPartnershipRequests:
         )
 
         # Import partnerships with CSV ID mapping
-        from db.import_period_data import import_partnerships
         partnerships_path = period_dir / "partnerships.json"
         count = import_partnerships(
             partnerships_path,

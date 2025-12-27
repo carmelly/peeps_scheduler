@@ -11,7 +11,7 @@ import json
 from pathlib import Path
 from typing import Any
 import pytest
-from .data_specs import AttendanceSpec, EventSpec, MemberSpec, ResponseSpec
+from tests.fixtures.data_specs import AttendanceSpec, EventSpec, MemberSpec, ResponseSpec
 
 
 @pytest.fixture

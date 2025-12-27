@@ -10,7 +10,7 @@ Tests report generation and formatting with realistic member/event data:
 import pytest
 import json
 from pathlib import Path
-from availability_report import (
+from peeps_scheduler.availability_report import (
     parse_availability,
     print_availability,
 )
@@ -64,7 +64,7 @@ def test_parse_availability_basic(
     tmp_path, realistic_members_csv, realistic_responses_csv, cancellations_json
 ):
     """Test basic availability parsing with realistic member data."""
-    from file_io import load_cancellations
+    from peeps_scheduler.file_io import load_cancellations
 
     cancelled_event_ids, cancelled_availability = load_cancellations(
         str(cancellations_json), year=2025
@@ -93,7 +93,7 @@ def test_parse_availability_member_with_multiple_dates(
     tmp_path, realistic_members_csv, realistic_responses_csv, cancellations_json
 ):
     """Test that members appear in multiple event availability lists."""
-    from file_io import load_cancellations
+    from peeps_scheduler.file_io import load_cancellations
 
     cancelled_event_ids, cancelled_availability = load_cancellations(
         str(cancellations_json), year=2025
@@ -117,7 +117,7 @@ def test_parse_availability_switch_preference_primary_only(
     tmp_path, realistic_members_csv, cancellations_json
 ):
     """Test that PRIMARY_ONLY members don't appear in fill slots."""
-    from file_io import load_cancellations
+    from peeps_scheduler.file_io import load_cancellations
 
     responses_content = """Timestamp,Email Address,Name,Primary Role,Secondary Role,Max Sessions,Availability,Event Duration,Min Interval Days
 2025-02-01 10:00:00,bob@test.com,Bob,Follower,I only want to be scheduled in my primary role,2,"Saturday March 1 - 5pm",,0
@@ -147,7 +147,7 @@ def test_parse_availability_switch_preference_can_switch(
     tmp_path, realistic_members_csv, cancellations_json
 ):
     """Test that members with switch preference appear in both roles."""
-    from file_io import load_cancellations
+    from peeps_scheduler.file_io import load_cancellations
 
     responses_content = """Timestamp,Email Address,Name,Primary Role,Secondary Role,Max Sessions,Availability,Event Duration,Min Interval Days
 2025-02-01 10:00:00,alice@test.com,Alice,Leader,I'm happy to dance my secondary role if it lets me attend when my primary is full,3,"Saturday March 1 - 5pm",,0
@@ -175,7 +175,7 @@ def test_parse_availability_switch_preference_can_switch(
 @pytest.mark.integration
 def test_parse_availability_cancelled_events_excluded(tmp_path, realistic_members_csv):
     """Test that cancelled events are excluded from availability."""
-    from file_io import load_cancellations
+    from peeps_scheduler.file_io import load_cancellations
 
     responses_content = """Timestamp,Email Address,Name,Primary Role,Secondary Role,Max Sessions,Availability,Event Duration,Min Interval Days
 2025-02-01 10:00:00,alice@test.com,Alice,Leader,I only want to be scheduled in my primary role,3,"Saturday March 1 - 5pm, Sunday March 2 - 5pm",,0
@@ -214,7 +214,7 @@ def test_parse_availability_cancelled_availability_per_person(
     tmp_path, realistic_members_csv
 ):
     """Test that cancelled availability is excluded for specific members."""
-    from file_io import load_cancellations
+    from peeps_scheduler.file_io import load_cancellations
 
     responses_content = """Timestamp,Email Address,Name,Primary Role,Secondary Role,Max Sessions,Availability,Event Duration,Min Interval Days
 2025-02-01 10:00:00,alice@test.com,Alice,Leader,I only want to be scheduled in my primary role,3,"Saturday March 1 - 5pm, Sunday March 2 - 5pm",,0
@@ -260,7 +260,7 @@ def test_parse_availability_cancelled_availability_per_person(
 @pytest.mark.integration
 def test_parse_availability_no_responders(tmp_path, realistic_members_csv):
     """Test availability parsing when no members respond."""
-    from file_io import load_cancellations
+    from peeps_scheduler.file_io import load_cancellations
 
     responses_content = """Timestamp,Email Address,Name,Primary Role,Secondary Role,Max Sessions,Availability,Event Duration,Min Interval Days
 """
@@ -297,7 +297,7 @@ def test_parse_availability_only_cancelled_events(
     tmp_path, realistic_members_csv
 ):
     """Test member unavailable when all their events are cancelled."""
-    from file_io import load_cancellations
+    from peeps_scheduler.file_io import load_cancellations
 
     responses_content = """Timestamp,Email Address,Name,Primary Role,Secondary Role,Max Sessions,Availability,Event Duration,Min Interval Days
 2025-02-01 10:00:00,alice@test.com,Alice,Leader,I only want to be scheduled in my primary role,2,"Saturday March 1 - 5pm",,0
@@ -334,7 +334,7 @@ def test_print_availability_output_format(
     capsys
 ):
     """Test that print_availability generates correctly formatted output."""
-    from file_io import load_cancellations
+    from peeps_scheduler.file_io import load_cancellations
 
     cancelled_event_ids, cancelled_availability = load_cancellations(
         str(cancellations_json), year=2025
@@ -375,7 +375,7 @@ def test_print_availability_includes_non_responders(
     capsys
 ):
     """Test that print_availability includes non-responders section."""
-    from file_io import load_cancellations
+    from peeps_scheduler.file_io import load_cancellations
 
     cancelled_event_ids, cancelled_availability = load_cancellations(
         str(cancellations_json), year=2025
@@ -411,7 +411,7 @@ def test_parse_availability_skips_unmatched_email(
     tmp_path, realistic_members_csv, cancellations_json, capsys
 ):
     """Test that unmatched emails are skipped with warning."""
-    from file_io import load_cancellations
+    from peeps_scheduler.file_io import load_cancellations
 
     responses_content = """Timestamp,Email Address,Name,Primary Role,Secondary Role,Max Sessions,Availability,Event Duration,Min Interval Days
 2025-02-01 10:00:00,unknown@test.com,Unknown,Leader,I only want to be scheduled in my primary role,3,"Saturday March 1 - 5pm",,0
@@ -442,7 +442,7 @@ def test_parse_availability_detects_duplicate_email(
     tmp_path, realistic_members_csv, cancellations_json, capsys
 ):
     """Test warning for duplicate emails in responses."""
-    from file_io import load_cancellations
+    from peeps_scheduler.file_io import load_cancellations
 
     responses_content = """Timestamp,Email Address,Name,Primary Role,Secondary Role,Max Sessions,Availability,Event Duration,Min Interval Days
 2025-02-01 10:00:00,alice@test.com,Alice,Leader,I only want to be scheduled in my primary role,3,"Saturday March 1 - 5pm",,0

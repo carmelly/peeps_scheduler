@@ -9,9 +9,9 @@ Following testing philosophy:
 """
 
 import pytest
-from models import EventSequence, Role, SwitchPreference
-from scheduler import Scheduler
-import constants
+from peeps_scheduler.models import EventSequence, Role, SwitchPreference
+from peeps_scheduler.scheduler import Scheduler
+from peeps_scheduler import constants
 
 def create_scheduler(**kwargs):
     """Factory for creating test schedulers."""

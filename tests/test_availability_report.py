@@ -2,8 +2,8 @@ import json
 
 import pytest
 
-from availability_report import parse_availability
-from file_io import load_cancellations
+from peeps_scheduler.availability_report import parse_availability
+from peeps_scheduler.file_io import load_cancellations
 
 
 @pytest.mark.unit

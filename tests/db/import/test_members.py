@@ -10,7 +10,7 @@ Tests cover:
 import csv
 from pathlib import Path
 import pytest
-from db.import_period_data import MemberCollector
+from peeps_scheduler.db.import_period_data import MemberCollector
 from tests.db.helpers import assert_row_count
 from tests.fixtures.data_specs import MemberSpec
 
