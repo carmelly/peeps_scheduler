@@ -1,9 +1,10 @@
-import os
 import argparse
 import logging
+import os
 from peeps_scheduler import utils
-from peeps_scheduler.scheduler import Scheduler
 from peeps_scheduler.data_manager import get_data_manager
+from peeps_scheduler.scheduler import Scheduler
+
 
 def apply_results(period_folder, results_filename="actual_attendance.json", logger=None):
     """
@@ -49,6 +50,7 @@ def apply_results(period_folder, results_filename="actual_attendance.json", logg
     save_peeps_csv(updated_peeps, members_file)
     logger.info("Updated members.csv ready for Google Sheets upload.")
     return True
+
 
 def main():
     # Default from environment if available
@@ -139,6 +141,7 @@ def main():
         run_availability_report(args.data_folder, cancellations_file=args.cancellations_file)
     else:
         parser.print_help()
-		
+
+
 if __name__ == "__main__":
-	main()
+    main()

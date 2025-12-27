@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "peeps-scheduler"
 version = "1.1.0"
 description = "West Coast Swing scheduling system"
-requires-python = ">=3.8"
+requires-python = ">=3.12"
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -33,27 +33,27 @@ markers = [
 
 [tool.ruff]
 # Target modern Python, adjust if needed
-target-version = "py311"
+target-version = "py312"
 src = ["src"]
 
 # Reasonable line length, plays well with VS Code
 line-length = 100
 indent-width = 4
 
-# Keep this tight at first. You can always add more later.
-lint.select = [
-  "E",   # pycodestyle errors
-  "F",   # pyflakes (real bugs)
-  "I",   # import sorting
-  "UP",  # pyupgrade (safe modernizations)
+[tool.ruff.lint]
+select = [
+    "E", "F",     # Default errors/warnings
+    "I",          # Import sorting
+    "UP",         # Python upgrade suggestions
+    "B",          # Common bug patterns
+    "SIM",        # Code simplifications
+    # "PTH",        # Suggests pathlib over os.path
 ]
-
-lint.ignore = [
+ignore = [
   "E203",  # whitespace before ':', conflicts with formatter
   "E501",  # line length (handled by formatter)
 ]
-
-lint.exclude = [
+exclude = [
   ".git",
   ".venv",
   "__pycache__",
@@ -61,14 +61,14 @@ lint.exclude = [
   "dist",
 ]
 
-[tool.ruff.format]
-quote-style = "double"
-skip-magic-trailing-comma = false
-line-ending = "auto"
-
-
 [tool.ruff.lint.isort]
 known-first-party = ["peeps_scheduler"]
 combine-as-imports = true
 lines-between-types = 0
 no-lines-before = ["third-party", "first-party", "local-folder"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"

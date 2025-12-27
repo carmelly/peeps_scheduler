@@ -1,11 +1,10 @@
 import copy
 import logging
 import time
-from peeps_scheduler import constants
-from peeps_scheduler import file_io
-from peeps_scheduler.models import Event, EventSequence, Peep, Role, SwitchPreference
-from peeps_scheduler import utils
+from peeps_scheduler import constants, file_io, utils
 from peeps_scheduler.data_manager import get_data_manager
+from peeps_scheduler.models import EventSequence, Peep, Role, SwitchPreference
+
 
 class Scheduler:
     def __init__(
@@ -227,7 +226,7 @@ class Scheduler:
             }
             event_to_remove = min(event_weights, key=event_weights.get)
 
-            self.logger.debug(f"Tie on overlap. Removing event based on lowest weight")
+            self.logger.debug("Tie on overlap. Removing event based on lowest weight")
             return event_to_remove
 
         self.logger.debug(f"Initial event count: {len(events)}. Target event count: {max_events}.")

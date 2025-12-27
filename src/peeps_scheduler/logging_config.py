@@ -35,24 +35,25 @@ import logging
 import os
 import sys
 import tempfile
+from contextlib import suppress
 from datetime import datetime, timedelta
-from logging.handlers import TimedRotatingFileHandler, RotatingFileHandler
+from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
 from pathlib import Path
-from typing import Optional
-
 
 # Environment Detection
-IS_TEST_ENV = 'pytest' in sys.modules
+IS_TEST_ENV = "pytest" in sys.modules
 
 # Configuration
-LOG_BASE_DIR = Path(tempfile.gettempdir()) / 'peeps_scheduler_test_logs' if IS_TEST_ENV else Path('logs')
-DEFAULT_LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO').upper()
-LOG_RETENTION_DAYS = int(os.getenv('LOG_RETENTION_DAYS', '30'))
-MAX_LOG_SIZE_MB = int(os.getenv('MAX_LOG_SIZE_MB', '10'))
+LOG_BASE_DIR = (
+    Path(tempfile.gettempdir()) / "peeps_scheduler_test_logs" if IS_TEST_ENV else Path("logs")
+)
+DEFAULT_LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+LOG_RETENTION_DAYS = int(os.getenv("LOG_RETENTION_DAYS", "30"))
+MAX_LOG_SIZE_MB = int(os.getenv("MAX_LOG_SIZE_MB", "10"))
 
 # Log format
-LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
+LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 
 def ensure_log_directory(log_subdir: str) -> Path:
@@ -83,20 +84,17 @@ def cleanup_old_logs(log_dir: Path, retention_days: int = LOG_RETENTION_DAYS):
 
     cutoff_date = datetime.now() - timedelta(days=retention_days)
 
-    for log_file in log_dir.glob('*.log'):
+    for log_file in log_dir.glob("*.log"):
         if log_file.stat().st_mtime < cutoff_date.timestamp():
-            try:
+            with suppress(OSError):
                 log_file.unlink()
-            except OSError:
-                pass  # Ignore errors during cleanup
-
 
 def get_logger(
     name: str,
     log_subdir: str,
-    level: Optional[str] = None,
+    level: str | None = None,
     use_size_rotation: bool = False,
-    console_output: bool = True
+    console_output: bool = True,
 ) -> logging.Logger:
     """
     Get a configured logger instance.
@@ -135,10 +133,10 @@ def get_logger(
     log_filename = log_dir / f"{log_subdir}_{datetime.now().strftime('%Y-%m-%d')}.log"
     file_handler = TimedRotatingFileHandler(
         filename=log_filename,
-        when='midnight',
+        when="midnight",
         interval=1,
         backupCount=LOG_RETENTION_DAYS,
-        encoding='utf-8'
+        encoding="utf-8",
     )
     file_handler.setLevel(log_level)
     file_handler.setFormatter(formatter)
@@ -150,7 +148,7 @@ def get_logger(
             filename=log_dir / f"{log_subdir}_rolling.log",
             maxBytes=MAX_LOG_SIZE_MB * 1024 * 1024,
             backupCount=5,
-            encoding='utf-8'
+            encoding="utf-8",
         )
         size_handler.setLevel(log_level)
         size_handler.setFormatter(formatter)
@@ -166,7 +164,7 @@ def get_logger(
     return logger
 
 
-def configure_root_logger(level: Optional[str] = None, console_output: bool = True):
+def configure_root_logger(level: str | None = None, console_output: bool = True):
     """
     Configure root logger for general application logging.
 
@@ -186,7 +184,7 @@ def configure_root_logger(level: Optional[str] = None, console_output: bool = Tr
     log_level = getattr(logging, level.upper()) if level else getattr(logging, DEFAULT_LOG_LEVEL)
 
     # Ensure log directory exists
-    log_dir = ensure_log_directory('app')
+    log_dir = ensure_log_directory("app")
 
     # Clean up old logs
     cleanup_old_logs(log_dir)
@@ -198,10 +196,10 @@ def configure_root_logger(level: Optional[str] = None, console_output: bool = Tr
     log_filename = log_dir / f"app_{datetime.now().strftime('%Y-%m-%d')}.log"
     file_handler = TimedRotatingFileHandler(
         filename=log_filename,
-        when='midnight',
+        when="midnight",
         interval=1,
         backupCount=LOG_RETENTION_DAYS,
-        encoding='utf-8'
+        encoding="utf-8",
     )
     file_handler.setLevel(log_level)
     file_handler.setFormatter(formatter)
@@ -230,7 +228,8 @@ def cleanup_test_logs():
     if not IS_TEST_ENV:
         return
 
-    test_log_dir = Path(tempfile.gettempdir()) / 'peeps_scheduler_test_logs'
+    test_log_dir = Path(tempfile.gettempdir()) / "peeps_scheduler_test_logs"
     if test_log_dir.exists():
         import shutil
+
         shutil.rmtree(test_log_dir, ignore_errors=True)

@@ -56,14 +56,15 @@ from peeps_scheduler.file_io import (
 from peeps_scheduler.models import SwitchPreference
 
 # Database path (allow environment variable override for testing)
-DB_PATH = os.getenv('DEFAULT_DB_PATH', constants.DEFAULT_DB_PATH)
+DB_PATH = os.getenv("DEFAULT_DB_PATH", constants.DEFAULT_DB_PATH)
 data_manager = get_data_manager()
-PROCESSED_DATA_PATH = os.getenv('PROCESSED_DATA_PATH', data_manager.get_processed_data_path())
+PROCESSED_DATA_PATH = os.getenv("PROCESSED_DATA_PATH", data_manager.get_processed_data_path())
 
 
 # ============================================================================
 # Phase 1: Member Identity Collection
 # ============================================================================
+
 
 class MemberCollector:
     """
@@ -90,8 +91,9 @@ class MemberCollector:
     def _setup_logging(self) -> logging.Logger:
         """Configure logging for member collection."""
         from logging_config import get_logger
-        level = 'DEBUG' if self.verbose else 'INFO'
-        return get_logger('member_collector', 'import', level=level, console_output=True)
+
+        level = "DEBUG" if self.verbose else "INFO"
+        return get_logger("member_collector", "import", level=level, console_output=True)
 
     def get_available_periods(self) -> list[str]:
         """Get all available period directories in chronological order."""
@@ -99,10 +101,13 @@ class MemberCollector:
 
         for item in os.listdir(self.processed_data_path):
             period_path = os.path.join(self.processed_data_path, item)
-            if os.path.isdir(period_path) and not item.startswith('.'):
-                # Filter to YYYY-MM format periods
-                if len(item.split('-')) == 2:
-                    periods.append(item)
+            # Filter to YYYY-MM format periods
+            if (
+                os.path.isdir(period_path)
+                and not item.startswith(".")
+                and len(item.split("-")) == 2
+            ):
+                periods.append(item)
 
         return sorted(periods)
 
@@ -122,9 +127,7 @@ class MemberCollector:
         self.logger.info(f"Phase 1: Scanning {len(periods)} periods for member identities")
 
         for period_name in periods:
-            members_csv_path = os.path.join(
-                self.processed_data_path, period_name, 'members.csv'
-            )
+            members_csv_path = os.path.join(self.processed_data_path, period_name, "members.csv")
 
             if not os.path.exists(members_csv_path):
                 raise FileNotFoundError(
@@ -137,17 +140,17 @@ class MemberCollector:
         self.logger.info(f"Found {len(self.members)} unique members across {len(periods)} periods")
 
         # Strict validation: Require email for all members
-        no_email = [csv_id for csv_id, data in self.members.items() if not data['email']]
+        no_email = [csv_id for csv_id, data in self.members.items() if not data["email"]]
         if no_email:
             member_details = [
-                f"ID {csv_id}: {self.members[csv_id]['full_name']}"
-                for csv_id in no_email
+                f"ID {csv_id}: {self.members[csv_id]['full_name']}" for csv_id in no_email
             ]
             raise ValueError(
-                f"{len(no_email)} members are missing required email addresses:\n" +
-                "\n".join(member_details) + "\n\n" +
-                "Please add email addresses to members.csv, or use placeholder format:\n" +
-                "  unknown{id}@invalid  (e.g., unknown42@invalid for member ID 42)"
+                f"{len(no_email)} members are missing required email addresses:\n"
+                + "\n".join(member_details)
+                + "\n\n"
+                + "Please add email addresses to members.csv, or use placeholder format:\n"
+                + "  unknown{id}@invalid  (e.g., unknown42@invalid for member ID 42)"
             )
 
         return len(self.members)
@@ -155,13 +158,13 @@ class MemberCollector:
     def _scan_period_members(self, period_name: str, csv_path: str):
         """Scan a single period's members.csv and track identities."""
         try:
-            rows = load_csv(csv_path, required_columns=['id', 'Name', 'Role'])
+            rows = load_csv(csv_path, required_columns=["id", "Name", "Role"])
         except Exception as e:
             self.logger.error(f"Failed to load {csv_path}: {e}")
             return
 
         for row in rows:
-            csv_id = row.get('id', '').strip()
+            csv_id = row.get("id", "").strip()
             if not csv_id:
                 raise ValueError(
                     f"Invalid member data in {period_name}/members.csv: "
@@ -169,14 +172,14 @@ class MemberCollector:
                 )
 
             # Extract identity fields
-            full_name = row.get('Name', '').strip()
-            display_name = row.get('Display Name', '').strip() or full_name
-            email = row.get('Email Address', '').strip()
-            role = row.get('Role', '').strip().lower()
-            active = row.get('Active', 'TRUE').strip().upper() in ['TRUE', 'YES', '1']
+            full_name = row.get("Name", "").strip()
+            display_name = row.get("Display Name", "").strip() or full_name
+            email = row.get("Email Address", "").strip()
+            role = row.get("Role", "").strip().lower()
+            active = row.get("Active", "TRUE").strip().upper() in ["TRUE", "YES", "1"]
 
             # Parse Date Joined from CSV (for reference, but we'll use first appearance)
-            date_joined_str = row.get('Date Joined', '').strip()
+            date_joined_str = row.get("Date Joined", "").strip()
             date_joined_from_csv = None
             if date_joined_str:
                 try:
@@ -193,41 +196,41 @@ class MemberCollector:
 
             # Calculate period date (approximate - use start of month)
             try:
-                year, month = map(int, period_name.split('-'))
+                year, month = map(int, period_name.split("-"))
                 period_date = date(year, month, 1)
-            except ValueError:
+            except ValueError as e:
                 raise ValueError(
                     f"Invalid period directory name: '{period_name}'\n"
                     f"Period directories must follow YYYY-MM format (e.g., '2025-02')"
-                )
+                ) from e
 
             # Track first appearance
             if csv_id not in self.first_appearances:
                 self.first_appearances[csv_id] = (period_name, period_date)
-                self.logger.debug(
-                    f"First appearance: {csv_id} ({full_name}) in {period_name}"
-                )
+                self.logger.debug(f"First appearance: {csv_id} ({full_name}) in {period_name}")
 
             # Update member data (latest version wins for name/email/role)
             if csv_id not in self.members:
                 self.members[csv_id] = {
-                    'csv_id': csv_id,
-                    'full_name': full_name,
-                    'display_name': display_name,
-                    'email': email,
-                    'primary_role': role,
-                    'active': active,
-                    'date_joined_csv': date_joined_from_csv
+                    "csv_id": csv_id,
+                    "full_name": full_name,
+                    "display_name": display_name,
+                    "email": email,
+                    "primary_role": role,
+                    "active": active,
+                    "date_joined_csv": date_joined_from_csv,
                 }
             else:
                 # Update with latest data (in case name/email changed)
-                self.members[csv_id].update({
-                    'full_name': full_name,
-                    'display_name': display_name,
-                    'email': email,
-                    'primary_role': role,
-                    'active': active
-                })
+                self.members[csv_id].update(
+                    {
+                        "full_name": full_name,
+                        "display_name": display_name,
+                        "email": email,
+                        "primary_role": role,
+                        "active": active,
+                    }
+                )
 
     def insert_members_to_db(self, cursor: sqlite3.Cursor) -> int:
         """
@@ -249,11 +252,10 @@ class MemberCollector:
             date_joined = period_date  # Use period date as date_joined
 
             # Use CSV date_joined if available and earlier than first appearance
-            if member_data['date_joined_csv']:
-                if member_data['date_joined_csv'] < date_joined:
-                    date_joined = member_data['date_joined_csv']
+            if member_data["date_joined_csv"] and member_data["date_joined_csv"] < date_joined:
+                date_joined = member_data["date_joined_csv"]
 
-            email = member_data['email']
+            email = member_data["email"]
 
             # Email is guaranteed to exist (validated in scan_all_periods)
             # Normalize email before inserting (removes periods from Gmail, lowercase)
@@ -261,20 +263,23 @@ class MemberCollector:
 
             try:
                 # Insert with explicit ID to preserve CSV ID
-                cursor.execute("""
+                cursor.execute(
+                    """
                     INSERT INTO peeps (
                         id, full_name, display_name, primary_role, email,
                         date_joined, active
                     ) VALUES (?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    int(csv_id),
-                    member_data['full_name'],
-                    member_data['display_name'],
-                    member_data['primary_role'],
-                    email,
-                    date_joined.isoformat(),
-                    member_data['active']
-                ))
+                """,
+                    (
+                        int(csv_id),
+                        member_data["full_name"],
+                        member_data["display_name"],
+                        member_data["primary_role"],
+                        email,
+                        date_joined.isoformat(),
+                        member_data["active"],
+                    ),
+                )
 
                 peep_id = int(csv_id)  # ID is same as CSV ID
                 self.peep_id_mapping[csv_id] = peep_id
@@ -293,9 +298,7 @@ class MemberCollector:
 
         self.logger.info(f"Successfully inserted {inserted} members into peeps table")
 
-        self.logger.info(
-            f"✓ Mapping complete: {len(self.peep_id_mapping)} members tracked"
-        )
+        self.logger.info(f"✓ Mapping complete: {len(self.peep_id_mapping)} members tracked")
 
         return inserted
 
@@ -303,6 +306,7 @@ class MemberCollector:
 # ============================================================================
 # Phase 2: Period Processing
 # ============================================================================
+
 
 class PeriodImporter:
     """
@@ -338,8 +342,11 @@ class PeriodImporter:
     def _setup_logging(self) -> logging.Logger:
         """Configure logging for period import."""
         from logging_config import get_logger
-        level = 'DEBUG' if self.verbose else 'INFO'
-        return get_logger(f'period_importer.{self.period_name}', 'import', level=level, console_output=True)
+
+        level = "DEBUG" if self.verbose else "INFO"
+        return get_logger(
+            f"period_importer.{self.period_name}", "import", level=level, console_output=True
+        )
 
     def import_period(self):
         """
@@ -423,7 +430,9 @@ class PeriodImporter:
             num_snapshots = self.calculate_snapshots()
             self.logger.info(f"Created {num_snapshots} period snapshots")
         elif num_attendance == 0:
-            self.logger.info("Snapshot calculation skipped (no attendance data - future/incomplete period)")
+            self.logger.info(
+                "Snapshot calculation skipped (no attendance data - future/incomplete period)"
+            )
         else:
             self.logger.info("Snapshot calculation skipped (--skip-snapshots flag)")
 
@@ -433,30 +442,30 @@ class PeriodImporter:
         """Create schedule_periods record from period_name."""
         # Parse period name (YYYY-MM format)
         try:
-            year, month = map(int, self.period_name.split('-'))
+            year, month = map(int, self.period_name.split("-"))
             period_date = date(year, month, 1)
         except ValueError as e:
-            raise ValueError(f"Invalid period name format '{self.period_name}': {e}")
+            raise ValueError(f"Invalid period name format '{self.period_name}'") from e
 
         # Calculate period end (last day of month)
-        if month == 12:
-            next_month = date(year + 1, 1, 1)
-        else:
-            next_month = date(year, month + 1, 1)
+        next_month = date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)
         period_end = next_month - timedelta(days=1)
 
         # Insert schedule_period with initial status='draft'
         # Status will be updated later based on attendance existence
-        self.cursor.execute("""
+        self.cursor.execute(
+            """
             INSERT INTO schedule_periods (
                 period_name, start_date, end_date, status
             ) VALUES (?, ?, ?, ?)
-        """, (
-            self.period_name,
-            period_date.isoformat(),
-            period_end.isoformat(),
-            'draft'  # Initial status, will update based on attendance
-        ))
+        """,
+            (
+                self.period_name,
+                period_date.isoformat(),
+                period_end.isoformat(),
+                "draft",  # Initial status, will update based on attendance
+            ),
+        )
 
         self.period_id = self.cursor.lastrowid
         self.logger.debug(
@@ -472,7 +481,7 @@ class PeriodImporter:
         Returns:
             Dict mapping peep_id -> (response_id, availability_string) for event_availability creation
         """
-        responses_csv_path = os.path.join(self.period_path, 'responses.csv')
+        responses_csv_path = os.path.join(self.period_path, "responses.csv")
 
         if not os.path.exists(responses_csv_path):
             self.logger.warning(f"No responses.csv found for {self.period_name}")
@@ -483,8 +492,8 @@ class PeriodImporter:
         response_mapping = {}  # peep_id -> (response_id, availability_string)
 
         for row in rows:
-            email = row.get('Email Address', '').strip()
-            name = row.get('Name', '').strip()
+            email = row.get("Email Address", "").strip()
+            name = row.get("Name", "").strip()
 
             # Skip legacy "Event:" rows (backward compatibility - events are now auto-derived or explicitly defined)
             if name.startswith("Event:"):
@@ -500,10 +509,7 @@ class PeriodImporter:
 
             # Look up peep by email
             normalized_email = normalize_email(email)
-            self.cursor.execute(
-                "SELECT id FROM peeps WHERE email = ?",
-                (normalized_email,)
-            )
+            self.cursor.execute("SELECT id FROM peeps WHERE email = ?", (normalized_email,))
             result = self.cursor.fetchone()
 
             if not result:
@@ -518,7 +524,7 @@ class PeriodImporter:
             peep_id = result[0]
 
             # Parse response fields
-            timestamp_str = row.get('Timestamp', '').strip()
+            timestamp_str = row.get("Timestamp", "").strip()
             try:
                 # Try parsing "M/D/YYYY H:MM:SS" format
                 timestamp = datetime.strptime(timestamp_str, "%m/%d/%Y %H:%M:%S")
@@ -527,15 +533,13 @@ class PeriodImporter:
                     # Try ISO format
                     timestamp = datetime.fromisoformat(timestamp_str)
                 except ValueError:
-                    self.logger.warning(
-                        f"Could not parse timestamp '{timestamp_str}' for {name}"
-                    )
+                    self.logger.warning(f"Could not parse timestamp '{timestamp_str}' for {name}")
                     timestamp = None
 
-            response_role = row.get('Primary Role', '').strip().lower()
+            response_role = row.get("Primary Role", "").strip().lower()
 
             # Map Secondary Role to switch_preference enum
-            secondary_role = row.get('Secondary Role', '').strip()
+            secondary_role = row.get("Secondary Role", "").strip()
             if not secondary_role:
                 # Default for missing value (early periods didn't collect this)
                 switch_preference = SwitchPreference.PRIMARY_ONLY.value
@@ -544,42 +548,45 @@ class PeriodImporter:
                 switch_pref_enum = SwitchPreference.from_string(secondary_role)
                 switch_preference = switch_pref_enum.value
 
-            max_sessions_str = row.get('Max Sessions', '0').strip()
+            max_sessions_str = row.get("Max Sessions", "0").strip()
             try:
                 max_sessions = int(max_sessions_str)
             except ValueError:
                 max_sessions = 0
 
-            availability_str = row.get('Availability', '').strip()
+            availability_str = row.get("Availability", "").strip()
 
-            min_interval_str = row.get('Min Interval Days', '0').strip()
+            min_interval_str = row.get("Min Interval Days", "0").strip()
             try:
                 min_interval_days = int(min_interval_str)
             except ValueError:
                 min_interval_days = 0
 
             # Comments fields (optional)
-            organizer_comments = row.get('Questions or Comments for Organizers', '').strip() or None
-            instructor_comments = row.get('Questions or Comments for Leilani', '').strip() or None
+            organizer_comments = row.get("Questions or Comments for Organizers", "").strip() or None
+            instructor_comments = row.get("Questions or Comments for Leilani", "").strip() or None
 
             # Insert response
-            self.cursor.execute("""
+            self.cursor.execute(
+                """
                 INSERT INTO responses (
                     period_id, peep_id, response_role, switch_preference,
                     max_sessions, min_interval_days, organizer_comments,
                     instructor_comments, response_timestamp
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                self.period_id,
-                peep_id,
-                response_role,
-                switch_preference,
-                max_sessions,
-                min_interval_days,
-                organizer_comments,
-                instructor_comments,
-                timestamp.isoformat() if timestamp else None
-            ))
+            """,
+                (
+                    self.period_id,
+                    peep_id,
+                    response_role,
+                    switch_preference,
+                    max_sessions,
+                    min_interval_days,
+                    organizer_comments,
+                    instructor_comments,
+                    timestamp.isoformat() if timestamp else None,
+                ),
+            )
 
             response_id = self.cursor.lastrowid
             response_mapping[peep_id] = (response_id, availability_str)
@@ -607,14 +614,14 @@ class PeriodImporter:
         """
         # Read full responses.csv to include Event: rows for duration specifications
         # Event: rows take precedence over availability string defaults
-        responses_csv_path = os.path.join(self.period_path, 'responses.csv')
+        responses_csv_path = os.path.join(self.period_path, "responses.csv")
         if not os.path.exists(responses_csv_path):
             return 0  # No responses.csv = no events to create
 
         response_rows = load_responses(responses_csv_path)
 
         # Parse period year from period_name
-        year = int(self.period_name.split('-')[0])
+        year = int(self.period_name.split("-")[0])
 
         # Use extract_events() to parse all events (includes Event: rows for durations)
         event_map = extract_events(response_rows, year=year)
@@ -630,16 +637,14 @@ class PeriodImporter:
                 continue
 
             # Insert event with status='proposed'
-            self.cursor.execute("""
+            self.cursor.execute(
+                """
                 INSERT INTO events (
                     period_id, event_datetime, duration_minutes, status
                 ) VALUES (?, ?, ?, ?)
-            """, (
-                self.period_id,
-                event_datetime.isoformat(),
-                event.duration_minutes,
-                'proposed'
-            ))
+            """,
+                (self.period_id, event_datetime.isoformat(), event.duration_minutes, "proposed"),
+            )
 
             event_db_id = self.cursor.lastrowid
             self.event_id_mapping[event_id] = event_db_id
@@ -664,16 +669,16 @@ class PeriodImporter:
             Number of availability records created
         """
         # Parse period year
-        year = int(self.period_name.split('-')[0])
+        year = int(self.period_name.split("-")[0])
 
         inserted = 0
 
-        for peep_id, (response_id, availability_str) in response_mapping.items():
+        for _peep_id, (response_id, availability_str) in response_mapping.items():
             if not availability_str:
                 continue
 
             # Parse availability string
-            date_strings = [s.strip() for s in availability_str.split(',') if s.strip()]
+            date_strings = [s.strip() for s in availability_str.split(",") if s.strip()]
 
             for date_str in date_strings:
                 try:
@@ -681,10 +686,9 @@ class PeriodImporter:
                 except Exception as e:
                     raise ValueError(
                         f"Invalid event date in response {response_id}: '{date_str}'\n"
-                        f"Error: {e}\n"
                         f"Expected format: 'DayOfWeek Month Day - StartTime to EndTime'\n"
                         f"Example: 'Friday February 7th - 5pm to 7pm'"
-                    )
+                    ) from e
 
                 # Look up event_db_id from mapping
                 event_db_id = self.event_id_mapping.get(event_id_str)
@@ -698,10 +702,13 @@ class PeriodImporter:
 
                 # Insert event_availability using response_id (not peep_id)
                 try:
-                    self.cursor.execute("""
+                    self.cursor.execute(
+                        """
                         INSERT INTO event_availability (response_id, event_id)
                         VALUES (?, ?)
-                    """, (response_id, event_db_id))
+                    """,
+                        (response_id, event_db_id),
+                    )
 
                     inserted += 1
                 except sqlite3.IntegrityError:
@@ -720,7 +727,7 @@ class PeriodImporter:
         Returns:
             Number of assignments created
         """
-        results_json_path = os.path.join(self.period_path, 'results.json')
+        results_json_path = os.path.join(self.period_path, "results.json")
 
         if not os.path.exists(results_json_path):
             self.logger.warning(f"No results.json found for {self.period_name}")
@@ -732,30 +739,33 @@ class PeriodImporter:
             self.logger.error(f"Failed to load results.json: {e}")
             raise
 
-        valid_events = results_data.get('valid_events', [])
+        valid_events = results_data.get("valid_events", [])
         inserted = 0
 
         # Create events from results.json if they don't already exist (e.g., when no responses)
         for event_data in valid_events:
-            event_date_str = event_data.get('date')  # e.g., "2025-02-15 13:00"
+            event_date_str = event_data.get("date")  # e.g., "2025-02-15 13:00"
 
             # Check if event already exists in mapping
             if event_date_str not in self.event_id_mapping:
                 # Create event from results.json
-                duration = event_data.get('duration_minutes', 120)
-                legacy_id = event_data.get('id')
+                duration = event_data.get("duration_minutes", 120)
+                legacy_id = event_data.get("id")
 
                 # Normalize datetime format to ISO 8601 (space → 'T', add seconds if missing)
                 # JSON uses "2025-12-06 16:00" but DB expects "2025-12-06T16:00:00"
-                event_datetime_iso = event_date_str.replace(' ', 'T')
-                if event_datetime_iso.count(':') == 1:
-                    event_datetime_iso += ':00'
+                event_datetime_iso = event_date_str.replace(" ", "T")
+                if event_datetime_iso.count(":") == 1:
+                    event_datetime_iso += ":00"
 
                 try:
-                    self.cursor.execute("""
+                    self.cursor.execute(
+                        """
                         INSERT INTO events (period_id, legacy_period_event_id, event_datetime, duration_minutes, status)
                         VALUES (?, ?, ?, ?, ?)
-                    """, (self.period_id, legacy_id, event_datetime_iso, duration, 'completed'))
+                    """,
+                        (self.period_id, legacy_id, event_datetime_iso, duration, "completed"),
+                    )
 
                     event_db_id = self.cursor.lastrowid
                     self.event_id_mapping[event_date_str] = event_db_id
@@ -764,9 +774,12 @@ class PeriodImporter:
                     # Event might already exist from another source
                     self.logger.warning(f"Event {event_date_str} already exists: {e}")
                     # Try to fetch it with normalized format
-                    self.cursor.execute("""
+                    self.cursor.execute(
+                        """
                         SELECT id FROM events WHERE event_datetime = ? AND period_id = ?
-                    """, (event_datetime_iso, self.period_id))
+                    """,
+                        (event_datetime_iso, self.period_id),
+                    )
                     result = self.cursor.fetchone()
                     if result:
                         event_db_id = result[0]
@@ -775,7 +788,7 @@ class PeriodImporter:
                         raise
 
         for event_data in valid_events:
-            event_date_str = event_data.get('date')  # e.g., "2025-02-15 13:00"
+            event_date_str = event_data.get("date")  # e.g., "2025-02-15 13:00"
 
             # Look up event_id from our mapping
             event_db_id = self.event_id_mapping.get(event_date_str)
@@ -788,9 +801,9 @@ class PeriodImporter:
                 )
 
             # Import attendees
-            attendees = event_data.get('attendees', [])
+            attendees = event_data.get("attendees", [])
             for idx, attendee in enumerate(attendees):
-                csv_id = str(attendee.get('id'))
+                csv_id = str(attendee.get("id"))
                 peep_id = self.peep_id_mapping.get(csv_id)
 
                 if not peep_id:
@@ -800,23 +813,28 @@ class PeriodImporter:
                         f"This member was not found in any members.csv file."
                     )
 
-                role = attendee.get('role', '').lower()
+                role = attendee.get("role", "").lower()
 
                 try:
-                    self.cursor.execute("""
+                    self.cursor.execute(
+                        """
                         INSERT INTO event_assignments (
                             event_id, peep_id, assigned_role, assignment_type, assignment_order
                         ) VALUES (?, ?, ?, ?, ?)
-                    """, (event_db_id, peep_id, role, 'attendee', idx))
+                    """,
+                        (event_db_id, peep_id, role, "attendee", idx),
+                    )
                     inserted += 1
                 except sqlite3.IntegrityError as e:
-                    self.logger.warning(f"Duplicate assignment for event {event_db_id}, peep {peep_id}: {e}")
+                    self.logger.warning(
+                        f"Duplicate assignment for event {event_db_id}, peep {peep_id}: {e}"
+                    )
                     continue
 
             # Import alternates
-            alternates = event_data.get('alternates', [])
+            alternates = event_data.get("alternates", [])
             for idx, alternate in enumerate(alternates):
-                csv_id = str(alternate.get('id'))
+                csv_id = str(alternate.get("id"))
                 peep_id = self.peep_id_mapping.get(csv_id)
 
                 if not peep_id:
@@ -826,17 +844,22 @@ class PeriodImporter:
                         f"This member was not found in any members.csv file."
                     )
 
-                role = alternate.get('role', '').lower()
+                role = alternate.get("role", "").lower()
 
                 try:
-                    self.cursor.execute("""
+                    self.cursor.execute(
+                        """
                         INSERT INTO event_assignments (
                             event_id, peep_id, assigned_role, assignment_type, alternate_position
                         ) VALUES (?, ?, ?, ?, ?)
-                    """, (event_db_id, peep_id, role, 'alternate', idx))
+                    """,
+                        (event_db_id, peep_id, role, "alternate", idx),
+                    )
                     inserted += 1
                 except sqlite3.IntegrityError as e:
-                    self.logger.warning(f"Duplicate alternate for event {event_db_id}, peep {peep_id}: {e}")
+                    self.logger.warning(
+                        f"Duplicate alternate for event {event_db_id}, peep {peep_id}: {e}"
+                    )
                     continue
 
         return inserted
@@ -853,7 +876,7 @@ class PeriodImporter:
         Returns:
             Number of events updated
         """
-        results_json_path = os.path.join(self.period_path, 'results.json')
+        results_json_path = os.path.join(self.period_path, "results.json")
 
         if not os.path.exists(results_json_path):
             return 0
@@ -864,13 +887,13 @@ class PeriodImporter:
             self.logger.error(f"Failed to load results.json: {e}")
             raise
 
-        valid_events = results_data.get('valid_events', [])
+        valid_events = results_data.get("valid_events", [])
         updated = 0
 
         for event_data in valid_events:
-            event_date_str = event_data.get('date')
-            duration = event_data.get('duration_minutes')
-            legacy_id = event_data.get('id')
+            event_date_str = event_data.get("date")
+            duration = event_data.get("duration_minutes")
+            legacy_id = event_data.get("id")
 
             # Look up event_id from mapping
             event_db_id = self.event_id_mapping.get(event_date_str)
@@ -880,13 +903,16 @@ class PeriodImporter:
                 continue
 
             # Update event with actual scheduled data
-            self.cursor.execute("""
+            self.cursor.execute(
+                """
                 UPDATE events
                 SET status = 'scheduled',
                     duration_minutes = ?,
                     legacy_period_event_id = ?
                 WHERE id = ?
-            """, (duration, legacy_id, event_db_id))
+            """,
+                (duration, legacy_id, event_db_id),
+            )
 
             updated += 1
 
@@ -900,7 +926,7 @@ class PeriodImporter:
         Returns:
             Number of attendance records created
         """
-        attendance_json_path = os.path.join(self.period_path, 'actual_attendance.json')
+        attendance_json_path = os.path.join(self.period_path, "actual_attendance.json")
 
         if not os.path.exists(attendance_json_path):
             self.logger.warning(f"No actual_attendance.json found for {self.period_name}")
@@ -912,11 +938,11 @@ class PeriodImporter:
             self.logger.error(f"Failed to load actual_attendance.json: {e}")
             raise
 
-        valid_events = attendance_data.get('valid_events', [])
+        valid_events = attendance_data.get("valid_events", [])
         inserted = 0
 
         for event_data in valid_events:
-            event_date_str = event_data.get('date')
+            event_date_str = event_data.get("date")
 
             # Look up event_id
             event_db_id = self.event_id_mapping.get(event_date_str)
@@ -929,10 +955,10 @@ class PeriodImporter:
                 )
 
             # Import actual attendees
-            attendees = event_data.get('attendees', [])
+            attendees = event_data.get("attendees", [])
 
             for attendee in attendees:
-                csv_id = str(attendee.get('id'))
+                csv_id = str(attendee.get("id"))
                 peep_id = self.peep_id_mapping.get(csv_id)
 
                 if not peep_id:
@@ -942,14 +968,17 @@ class PeriodImporter:
                         f"This member was not found in any members.csv file."
                     )
 
-                actual_role = attendee.get('role', '').lower()
+                actual_role = attendee.get("role", "").lower()
 
                 # Look up their assignment for this event (if they had one)
-                self.cursor.execute("""
+                self.cursor.execute(
+                    """
                     SELECT id, assigned_role, assignment_type
                     FROM event_assignments
                     WHERE event_id = ? AND peep_id = ?
-                """, (event_db_id, peep_id))
+                """,
+                    (event_db_id, peep_id),
+                )
 
                 assignment = self.cursor.fetchone()
 
@@ -959,37 +988,47 @@ class PeriodImporter:
                     expected_type = assignment[2]
 
                     # Determine participation mode
-                    if expected_type == 'attendee':
-                        participation_mode = 'scheduled'
-                    elif expected_type == 'alternate':
-                        participation_mode = 'alternate_promoted'
+                    if expected_type == "attendee":
+                        participation_mode = "scheduled"
+                    elif expected_type == "alternate":
+                        participation_mode = "alternate_promoted"
                     else:
-                        participation_mode = 'scheduled'  # Default
+                        participation_mode = "scheduled"  # Default
                 else:
                     # No assignment - volunteer fill
                     assignment_id = None
                     expected_role = None
                     expected_type = None
-                    participation_mode = 'volunteer_fill'
+                    participation_mode = "volunteer_fill"
 
                 # Insert attendance record
                 try:
-                    self.cursor.execute("""
+                    self.cursor.execute(
+                        """
                         INSERT INTO event_attendance (
                             event_id, peep_id, event_assignment_id,
                             expected_role, expected_type,
                             actual_role, attendance_status, participation_mode,
                             last_minute_cancel
                         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (
-                        event_db_id, peep_id, assignment_id,
-                        expected_role, expected_type,
-                        actual_role, 'attended', participation_mode,
-                        False  # They attended, so not a cancellation
-                    ))
+                    """,
+                        (
+                            event_db_id,
+                            peep_id,
+                            assignment_id,
+                            expected_role,
+                            expected_type,
+                            actual_role,
+                            "attended",
+                            participation_mode,
+                            False,  # They attended, so not a cancellation
+                        ),
+                    )
                     inserted += 1
                 except sqlite3.IntegrityError as e:
-                    self.logger.warning(f"Duplicate attendance for event {event_db_id}, peep {peep_id}: {e}")
+                    self.logger.warning(
+                        f"Duplicate attendance for event {event_db_id}, peep {peep_id}: {e}"
+                    )
                     continue
 
         return inserted
@@ -1005,7 +1044,7 @@ class PeriodImporter:
         Returns:
             Number of events updated
         """
-        attendance_json_path = os.path.join(self.period_path, 'actual_attendance.json')
+        attendance_json_path = os.path.join(self.period_path, "actual_attendance.json")
 
         if not os.path.exists(attendance_json_path):
             return 0
@@ -1016,27 +1055,32 @@ class PeriodImporter:
             self.logger.error(f"Failed to load actual_attendance.json: {e}")
             raise
 
-        valid_events = attendance_data.get('valid_events', [])
+        valid_events = attendance_data.get("valid_events", [])
         updated = 0
 
         for event_data in valid_events:
-            event_date_str = event_data.get('date')
-            duration = event_data.get('duration_minutes')
+            event_date_str = event_data.get("date")
+            duration = event_data.get("duration_minutes")
 
             # Look up event_id from mapping
             event_db_id = self.event_id_mapping.get(event_date_str)
 
             if not event_db_id:
-                self.logger.warning(f"Event {event_date_str} in actual_attendance.json not found in database")
+                self.logger.warning(
+                    f"Event {event_date_str} in actual_attendance.json not found in database"
+                )
                 continue
 
             # Update event with actual completion data
-            self.cursor.execute("""
+            self.cursor.execute(
+                """
                 UPDATE events
                 SET status = 'completed',
                     duration_minutes = ?
                 WHERE id = ?
-            """, (duration, event_db_id))
+            """,
+                (duration, event_db_id),
+            )
 
             updated += 1
 
@@ -1062,7 +1106,7 @@ class PeriodImporter:
 
         # Parse year from period_name (format: YYYY-MM)
         try:
-            year = int(self.period_name.split('-')[0])
+            year = int(self.period_name.split("-")[0])
         except (ValueError, IndexError):
             year = None
 
@@ -1076,22 +1120,27 @@ class PeriodImporter:
             # event_id_str format: "YYYY-MM-DD HH:MM"
             # Validate datetime format before using in query
             try:
-                datetime.fromisoformat(event_id_str.replace(' ', 'T'))
+                datetime.fromisoformat(event_id_str.replace(" ", "T"))
             except ValueError:
                 self.logger.warning(f"Invalid event datetime format: {event_id_str}")
                 continue
 
             # Find matching event in database by event_datetime
-            self.cursor.execute("""
+            self.cursor.execute(
+                """
                 UPDATE events
                 SET status = 'cancelled'
                 WHERE period_id = ? AND event_datetime = ?
-            """, (self.period_id, event_id_str))
+            """,
+                (self.period_id, event_id_str),
+            )
 
             cancelled_count += self.cursor.rowcount
 
         if cancelled_count > 0:
-            self.logger.info(f"Marked {cancelled_count} events as cancelled from cancellations.json")
+            self.logger.info(
+                f"Marked {cancelled_count} events as cancelled from cancellations.json"
+            )
 
         return cancelled_count
 
@@ -1113,7 +1162,7 @@ class PeriodImporter:
 
         # Parse year from period_name
         try:
-            year = int(self.period_name.split('-')[0])
+            year = int(self.period_name.split("-")[0])
         except (ValueError, IndexError):
             year = None
 
@@ -1126,45 +1175,60 @@ class PeriodImporter:
         for email, event_ids in cancelled_availability.items():
             # Find peep by email - normalize email first (already lowercased)
             normalized_email = normalize_email(email)
-            self.cursor.execute("""
+            self.cursor.execute(
+                """
                 SELECT id FROM peeps WHERE email = ?
-            """, (normalized_email,))
+            """,
+                (normalized_email,),
+            )
 
             peep_row = self.cursor.fetchone()
             if peep_row is None:
-                self.logger.warning(f"Could not find peep for email {email} in cancelled_availability")
+                self.logger.warning(
+                    f"Could not find peep for email {email} in cancelled_availability"
+                )
                 continue
 
             peep_id = peep_row[0]
 
             for event_id_str in event_ids:
                 # Convert event_id format from "YYYY-MM-DD HH:MM" to "YYYY-MM-DDTHH:MM" for ISO 8601 matching
-                event_datetime_pattern = event_id_str.replace(' ', 'T')
-                self.cursor.execute("""
+                event_datetime_pattern = event_id_str.replace(" ", "T")
+                self.cursor.execute(
+                    """
                     SELECT id FROM events
                     WHERE period_id = ? AND event_datetime LIKE ?
-                """, (self.period_id, f"{event_datetime_pattern}%"))
+                """,
+                    (self.period_id, f"{event_datetime_pattern}%"),
+                )
 
                 event_row = self.cursor.fetchone()
                 if event_row is None:
-                    self.logger.warning(f"Could not find event {event_id_str} in cancelled_availability")
+                    self.logger.warning(
+                        f"Could not find event {event_id_str} in cancelled_availability"
+                    )
                     continue
 
                 event_db_id = event_row[0]
 
                 # Find and delete event_availability for this peep/event pair
-                self.cursor.execute("""
+                self.cursor.execute(
+                    """
                     DELETE FROM event_availability
                     WHERE event_id = ? AND response_id IN (
                         SELECT id FROM responses
                         WHERE peep_id = ? AND period_id = ?
                     )
-                """, (event_db_id, peep_id, self.period_id))
+                """,
+                    (event_db_id, peep_id, self.period_id),
+                )
 
                 removed_count += self.cursor.rowcount
 
         if removed_count > 0:
-            self.logger.info(f"Removed {removed_count} event_availability records from cancellations.json")
+            self.logger.info(
+                f"Removed {removed_count} event_availability records from cancellations.json"
+            )
 
         return removed_count
 
@@ -1198,22 +1262,29 @@ class PeriodImporter:
             # Map CSV ID to database peep_id
             requester_peep_id = self.peep_id_mapping.get(str(requester_csv_id))
             if requester_peep_id is None:
-                self.logger.warning(f"Could not map requester CSV ID {requester_csv_id} to database peep_id")
+                self.logger.warning(
+                    f"Could not map requester CSV ID {requester_csv_id} to database peep_id"
+                )
                 continue
 
             for partner_csv_id in partner_csv_ids:
                 # Map partner CSV ID to database peep_id
                 partner_peep_id = self.peep_id_mapping.get(str(partner_csv_id))
                 if partner_peep_id is None:
-                    self.logger.warning(f"Could not map partner CSV ID {partner_csv_id} to database peep_id")
+                    self.logger.warning(
+                        f"Could not map partner CSV ID {partner_csv_id} to database peep_id"
+                    )
                     continue
 
                 # Insert partnership request
                 try:
-                    self.cursor.execute("""
+                    self.cursor.execute(
+                        """
                         INSERT INTO partnership_requests (period_id, requester_peep_id, partner_peep_id)
                         VALUES (?, ?, ?)
-                    """, (self.period_id, requester_peep_id, partner_peep_id))
+                    """,
+                        (self.period_id, requester_peep_id, partner_peep_id),
+                    )
                     partnership_count += 1
                 except sqlite3.IntegrityError:
                     # Duplicate partnership request - skip silently
@@ -1234,7 +1305,8 @@ class PeriodImporter:
             Number of events marked as cancelled
         """
         # Find events with status='scheduled' that have no attendance records
-        self.cursor.execute("""
+        self.cursor.execute(
+            """
             UPDATE events
             SET status = 'cancelled'
             WHERE period_id = ?
@@ -1242,7 +1314,9 @@ class PeriodImporter:
               AND id NOT IN (
                   SELECT DISTINCT event_id FROM event_attendance WHERE event_id IS NOT NULL
               )
-        """, (self.period_id,))
+        """,
+            (self.period_id,),
+        )
 
         cancelled_count = self.cursor.rowcount
         if cancelled_count > 0:
@@ -1263,17 +1337,20 @@ class PeriodImporter:
             num_assignments: Number of assignments for this period
         """
         if num_attendance > 0:
-            new_status = 'completed'
+            new_status = "completed"
         elif num_assignments > 0:
-            new_status = 'scheduled'  # Has schedule but not yet occurred
+            new_status = "scheduled"  # Has schedule but not yet occurred
         else:
-            new_status = 'draft'
+            new_status = "draft"
 
-        self.cursor.execute("""
+        self.cursor.execute(
+            """
             UPDATE schedule_periods
             SET status = ?
             WHERE id = ?
-        """, (new_status, self.period_id))
+        """,
+            (new_status, self.period_id),
+        )
 
         self.logger.debug(f"Updated period {self.period_name} status to '{new_status}'")
 
@@ -1292,23 +1369,29 @@ class PeriodImporter:
         inserted = 0
 
         # Get all assignments for this period's events
-        self.cursor.execute("""
+        self.cursor.execute(
+            """
             SELECT ea.id, ea.event_id, ea.peep_id, ea.assignment_type, p.full_name
             FROM event_assignments ea
             JOIN events e ON ea.event_id = e.id
             JOIN peeps p ON ea.peep_id = p.id
             WHERE e.period_id = ?
-        """, (self.period_id,))
+        """,
+            (self.period_id,),
+        )
 
         assignments = self.cursor.fetchall()
 
-        for assignment_id, event_id, peep_id, assignment_type, full_name in assignments:
+        for _assignment_id, event_id, peep_id, assignment_type, _full_name in assignments:
             # Check if they attended
-            self.cursor.execute("""
+            self.cursor.execute(
+                """
                 SELECT attendance_status, participation_mode
                 FROM event_attendance
                 WHERE event_id = ? AND peep_id = ?
-            """, (event_id, peep_id))
+            """,
+                (event_id, peep_id),
+            )
 
             attendance = self.cursor.fetchone()
 
@@ -1316,56 +1399,68 @@ class PeriodImporter:
                 # Assigned but didn't attend
                 # Only treat as cancellation if they were an ATTENDEE (not alternate)
                 # Alternates not attending is normal/expected - they're backups
-                if assignment_type == 'attendee':
-                    change_type = 'cancel'
-                    change_reason = 'did_not_attend'
+                if assignment_type == "attendee":
+                    change_type = "cancel"
+                    change_reason = "did_not_attend"
 
                     try:
-                        self.cursor.execute("""
+                        self.cursor.execute(
+                            """
                             INSERT INTO event_assignment_changes (
                                 event_id, peep_id, change_type, change_source, change_reason
                             ) VALUES (?, ?, ?, ?, ?)
-                        """, (event_id, peep_id, change_type, 'system', change_reason))
+                        """,
+                            (event_id, peep_id, change_type, "system", change_reason),
+                        )
                         inserted += 1
                     except sqlite3.IntegrityError:
                         continue
                 # else: alternate didn't attend - this is normal, no change record needed
 
-            elif assignment_type == 'alternate' and attendance[1] == 'alternate_promoted':
+            elif assignment_type == "alternate" and attendance[1] == "alternate_promoted":
                 # Alternate was promoted
-                change_type = 'promote_alternate'
-                change_reason = 'alternate_attended'
+                change_type = "promote_alternate"
+                change_reason = "alternate_attended"
 
                 try:
-                    self.cursor.execute("""
+                    self.cursor.execute(
+                        """
                         INSERT INTO event_assignment_changes (
                             event_id, peep_id, change_type, change_source, change_reason
                         ) VALUES (?, ?, ?, ?, ?)
-                    """, (event_id, peep_id, change_type, 'system', change_reason))
+                    """,
+                        (event_id, peep_id, change_type, "system", change_reason),
+                    )
                     inserted += 1
                 except sqlite3.IntegrityError:
                     continue
 
         # Find volunteer fills (attended without assignment)
-        self.cursor.execute("""
+        self.cursor.execute(
+            """
             SELECT ea.event_id, ea.peep_id
             FROM event_attendance ea
             JOIN events e ON ea.event_id = e.id
             WHERE e.period_id = ? AND ea.participation_mode = 'volunteer_fill'
-        """, (self.period_id,))
+        """,
+            (self.period_id,),
+        )
 
         volunteer_fills = self.cursor.fetchall()
 
         for event_id, peep_id in volunteer_fills:
-            change_type = 'add'
-            change_reason = 'volunteer_fill'
+            change_type = "add"
+            change_reason = "volunteer_fill"
 
             try:
-                self.cursor.execute("""
+                self.cursor.execute(
+                    """
                     INSERT INTO event_assignment_changes (
                         event_id, peep_id, change_type, change_source, change_reason
                     ) VALUES (?, ?, ?, ?, ?)
-                """, (event_id, peep_id, change_type, 'system', change_reason))
+                """,
+                    (event_id, peep_id, change_type, "system", change_reason),
+                )
                 inserted += 1
             except sqlite3.IntegrityError:
                 continue
@@ -1380,13 +1475,16 @@ class PeriodImporter:
             Number of snapshots created
         """
         # Get prior period to load starting snapshot
-        self.cursor.execute("""
+        self.cursor.execute(
+            """
             SELECT id, period_name
             FROM schedule_periods
             WHERE period_name < ?
             ORDER BY period_name DESC
             LIMIT 1
-        """, (self.period_name,))
+        """,
+            (self.period_name,),
+        )
 
         prior_period = self.cursor.fetchone()
 
@@ -1419,35 +1517,41 @@ class PeriodImporter:
             starting_snapshot=starting_snapshot,
             actual_attendance=actual_attendance,
             expected_attendance=[],  # PERMANENT snapshot - only actual attendance
-            responded_peep_ids=responded_peep_ids
+            responded_peep_ids=responded_peep_ids,
         )
 
         # Save snapshots to database
         inserted = 0
         for snapshot in new_snapshots:
             try:
-                self.cursor.execute("""
+                self.cursor.execute(
+                    """
                     INSERT INTO peep_order_snapshots (
                         peep_id, period_id, priority, index_position, total_attended, active
                     ) VALUES (?, ?, ?, ?, ?, ?)
-                """, (
-                    snapshot.peep_id,
-                    self.period_id,
-                    snapshot.priority,
-                    snapshot.index_position,
-                    snapshot.total_attended,
-                    snapshot.active
-                ))
+                """,
+                    (
+                        snapshot.peep_id,
+                        self.period_id,
+                        snapshot.priority,
+                        snapshot.index_position,
+                        snapshot.total_attended,
+                        snapshot.active,
+                    ),
+                )
                 inserted += 1
             except sqlite3.IntegrityError as e:
-                self.logger.warning(f"Duplicate snapshot for peep {snapshot.peep_id}, period {self.period_id}: {e}")
+                self.logger.warning(
+                    f"Duplicate snapshot for peep {snapshot.peep_id}, period {self.period_id}: {e}"
+                )
                 continue
 
         return inserted
 
     def _load_prior_snapshot(self, prior_period_id: int) -> list[MemberSnapshot]:
         """Load snapshots from prior period."""
-        self.cursor.execute("""
+        self.cursor.execute(
+            """
             SELECT
                 pos.peep_id,
                 p.email,
@@ -1462,7 +1566,9 @@ class PeriodImporter:
             JOIN peeps p ON pos.peep_id = p.id
             WHERE pos.period_id = ?
             ORDER BY pos.index_position
-        """, (prior_period_id,))
+        """,
+            (prior_period_id,),
+        )
 
         rows = self.cursor.fetchall()
 
@@ -1477,7 +1583,7 @@ class PeriodImporter:
                 priority=row[5],
                 index_position=row[6],
                 total_attended=row[7],
-                active=row[8]
+                active=row[8],
             )
             snapshots.append(snapshot)
 
@@ -1506,7 +1612,7 @@ class PeriodImporter:
                 priority=0,  # Everyone starts with 0 priority
                 index_position=idx,  # Order by peep_id
                 total_attended=0,  # No attendance yet
-                active=row[5]
+                active=row[5],
             )
             snapshots.append(snapshot)
 
@@ -1515,7 +1621,8 @@ class PeriodImporter:
 
     def _load_attendance_records(self) -> list[EventAttendance]:
         """Load actual attendance for this period."""
-        self.cursor.execute("""
+        self.cursor.execute(
+            """
             SELECT
                 ea.event_id,
                 ea.peep_id,
@@ -1526,7 +1633,9 @@ class PeriodImporter:
             JOIN events e ON ea.event_id = e.id
             WHERE e.period_id = ? AND ea.attendance_status = 'attended'
             ORDER BY e.event_datetime
-        """, (self.period_id,))
+        """,
+            (self.period_id,),
+        )
 
         rows = self.cursor.fetchall()
 
@@ -1544,8 +1653,8 @@ class PeriodImporter:
                 event_id=row[0],
                 peep_id=row[1],
                 role=row[2],
-                attendance_type='actual',  # Only actual attendance for PERMANENT snapshots
-                event_datetime=event_datetime
+                attendance_type="actual",  # Only actual attendance for PERMANENT snapshots
+                event_datetime=event_datetime,
             )
             attendance_records.append(attendance)
 
@@ -1554,11 +1663,14 @@ class PeriodImporter:
 
     def _get_responded_peep_ids(self) -> set[int]:
         """Get set of peep IDs who submitted responses this period."""
-        self.cursor.execute("""
+        self.cursor.execute(
+            """
             SELECT DISTINCT peep_id
             FROM responses
             WHERE period_id = ?
-        """, (self.period_id,))
+        """,
+            (self.period_id,),
+        )
 
         responded_ids = {row[0] for row in self.cursor.fetchall()}
         self.logger.debug(f"{len(responded_ids)} peeps responded this period")
@@ -1571,7 +1683,10 @@ class PeriodImporter:
 # These wrappers allow the Phase 1 import functions to be called standalone
 # by tests, while the actual implementation is in PeriodImporter methods.
 
-def import_cancelled_events(cancellations_file: Path, period_id: int, cursor: sqlite3.Cursor) -> int:
+
+def import_cancelled_events(
+    cancellations_file: Path, period_id: int, cursor: sqlite3.Cursor
+) -> int:
     """
     Module-level wrapper for importing cancelled events.
 
@@ -1591,16 +1706,19 @@ def import_cancelled_events(cancellations_file: Path, period_id: int, cursor: sq
         return 0
 
     # Extract year from period_id (need to query database)
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT period_name FROM schedule_periods WHERE id = ?
-    """, (period_id,))
+    """,
+        (period_id,),
+    )
     period_row = cursor.fetchone()
     if period_row is None:
         return 0
 
     period_name = period_row[0]
     try:
-        year = int(period_name.split('-')[0])
+        year = int(period_name.split("-")[0])
     except (ValueError, IndexError):
         year = None
 
@@ -1613,22 +1731,29 @@ def import_cancelled_events(cancellations_file: Path, period_id: int, cursor: sq
     for event_id_str in cancelled_event_ids:
         # Validate datetime format before using in query
         try:
-            datetime.fromisoformat(event_id_str.replace(' ', 'T'))
-        except ValueError:
-            raise ValueError(f"Invalid event datetime in cancelled_events: '{event_id_str}' does not match expected format (e.g., '2025-02-07 17:00')")
+            datetime.fromisoformat(event_id_str.replace(" ", "T"))
+        except ValueError as e:
+            raise ValueError(
+                f"Invalid event datetime in cancelled_events: '{event_id_str}' does not match expected format (e.g., '2025-02-07 17:00')"
+            ) from e
 
-        cursor.execute("""
+        cursor.execute(
+            """
             UPDATE events
             SET status = 'cancelled'
             WHERE period_id = ? AND event_datetime = ?
-        """, (period_id, event_id_str))
+        """,
+            (period_id, event_id_str),
+        )
 
         cancelled_count += cursor.rowcount
 
     return cancelled_count
 
 
-def import_cancelled_availability(cancellations_file: Path, period_id: int, cursor: sqlite3.Cursor) -> int:
+def import_cancelled_availability(
+    cancellations_file: Path, period_id: int, cursor: sqlite3.Cursor
+) -> int:
     """
     Module-level wrapper for importing cancelled availability.
 
@@ -1648,16 +1773,19 @@ def import_cancelled_availability(cancellations_file: Path, period_id: int, curs
         return 0
 
     # Extract year from period
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT period_name FROM schedule_periods WHERE id = ?
-    """, (period_id,))
+    """,
+        (period_id,),
+    )
     period_row = cursor.fetchone()
     if period_row is None:
         return 0
 
     period_name = period_row[0]
     try:
-        year = int(period_name.split('-')[0])
+        year = int(period_name.split("-")[0])
     except (ValueError, IndexError):
         year = None
 
@@ -1670,9 +1798,12 @@ def import_cancelled_availability(cancellations_file: Path, period_id: int, curs
     for email, event_ids in cancelled_availability.items():
         # Find peep by normalized email (already lowercased)
         normalized_email = normalize_email(email)
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT id FROM peeps WHERE email = ?
-        """, (normalized_email,))
+        """,
+            (normalized_email,),
+        )
 
         peep_row = cursor.fetchone()
         if peep_row is None:
@@ -1682,11 +1813,14 @@ def import_cancelled_availability(cancellations_file: Path, period_id: int, curs
 
         for event_id_str in event_ids:
             # Convert event_id format from "YYYY-MM-DD HH:MM" to "YYYY-MM-DDTHH:MM" for ISO 8601 matching
-            event_datetime_pattern = event_id_str.replace(' ', 'T')
-            cursor.execute("""
+            event_datetime_pattern = event_id_str.replace(" ", "T")
+            cursor.execute(
+                """
                 SELECT id FROM events
                 WHERE period_id = ? AND event_datetime LIKE ?
-            """, (period_id, f"{event_datetime_pattern}%"))
+            """,
+                (period_id, f"{event_datetime_pattern}%"),
+            )
 
             event_row = cursor.fetchone()
             if event_row is None:
@@ -1694,13 +1828,16 @@ def import_cancelled_availability(cancellations_file: Path, period_id: int, curs
 
             event_db_id = event_row[0]
 
-            cursor.execute("""
+            cursor.execute(
+                """
                 DELETE FROM event_availability
                 WHERE event_id = ? AND response_id IN (
                     SELECT id FROM responses
                     WHERE peep_id = ? AND period_id = ?
                 )
-            """, (event_db_id, peep_id, period_id))
+            """,
+                (event_db_id, peep_id, period_id),
+            )
 
             removed_count += cursor.rowcount
 
@@ -1767,10 +1904,13 @@ def import_partnerships(
                 continue
 
             try:
-                cursor.execute("""
+                cursor.execute(
+                    """
                     INSERT INTO partnership_requests (period_id, requester_peep_id, partner_peep_id)
                     VALUES (?, ?, ?)
-                """, (period_id, requester_peep_id, partner_peep_id))
+                """,
+                    (period_id, requester_peep_id, partner_peep_id),
+                )
                 partnership_count += 1
             except sqlite3.IntegrityError:
                 # Duplicate - skip
@@ -1783,13 +1923,14 @@ def import_partnerships(
 # Main Execution
 # ============================================================================
 
+
 def setup_logging(verbose: bool = False):
     """Configure logging for import operations."""
     from logging_config import get_logger
 
     # Return configured logger for import operations
-    level = 'DEBUG' if verbose else 'INFO'
-    return get_logger('import_csv', 'import', level=level, console_output=True)
+    level = "DEBUG" if verbose else "INFO"
+    return get_logger("import_csv", "import", level=level, console_output=True)
 
 
 def get_db_connection():
@@ -1826,12 +1967,19 @@ def validate_schema(cursor: sqlite3.Cursor, logger: logging.Logger = None) -> bo
     """
     if logger is None:
         from logging_config import get_logger
-        logger = get_logger('import_csv', 'import')
+
+        logger = get_logger("import_csv", "import")
 
     required_tables = [
-        'peeps', 'schedule_periods', 'responses', 'events',
-        'event_availability', 'event_assignments', 'event_attendance',
-        'event_assignment_changes', 'peep_order_snapshots'
+        "peeps",
+        "schedule_periods",
+        "responses",
+        "events",
+        "event_availability",
+        "event_assignments",
+        "event_attendance",
+        "event_assignment_changes",
+        "peep_order_snapshots",
     ]
 
     logger.info("Validating database schema...")
@@ -1855,7 +2003,7 @@ def validate_schema(cursor: sqlite3.Cursor, logger: logging.Logger = None) -> bo
     # Check critical columns in peeps table
     cursor.execute("PRAGMA table_info(peeps)")
     peeps_columns = {row[1] for row in cursor.fetchall()}
-    required_peeps_cols = {'id', 'full_name', 'email', 'primary_role', 'date_joined', 'active'}
+    required_peeps_cols = {"id", "full_name", "email", "primary_role", "date_joined", "active"}
 
     missing_cols = required_peeps_cols - peeps_columns
     if missing_cols:
@@ -1908,66 +2056,58 @@ Notes:
   - Phase 1 (member collection) runs once; subsequent runs skip unless --force-phase1
   - Email mismatches between members.csv and responses.csv will log warnings
         """,
-        formatter_class=argparse.RawDescriptionHelpFormatter
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
-        '--period',
-        help='Import specific period only (e.g., 2025-02). Requires prior periods already imported.'
+        "--period",
+        help="Import specific period only (e.g., 2025-02). Requires prior periods already imported.",
     )
     parser.add_argument(
-        '--all',
-        action='store_true',
-        help='Import all available periods in chronological order'
+        "--all", action="store_true", help="Import all available periods in chronological order"
     )
     parser.add_argument(
-        '--dry-run',
-        action='store_true',
-        help='Test import without committing changes to database'
+        "--dry-run", action="store_true", help="Test import without committing changes to database"
+    )
+    parser.add_argument("--verbose", action="store_true", help="Enable detailed debug logging")
+    parser.add_argument(
+        "--validate-only",
+        action="store_true",
+        help="Validate CSV data without importing to database",
     )
     parser.add_argument(
-        '--verbose',
-        action='store_true',
-        help='Enable detailed debug logging'
+        "--validate-schema",
+        action="store_true",
+        help="Validate database schema and exit (run before import)",
     )
     parser.add_argument(
-        '--validate-only',
-        action='store_true',
-        help='Validate CSV data without importing to database'
+        "--force-phase1",
+        action="store_true",
+        help="Force re-run of Phase 1 (member collection) even if peeps table populated",
     )
     parser.add_argument(
-        '--validate-schema',
-        action='store_true',
-        help='Validate database schema and exit (run before import)'
+        "--skip-snapshots",
+        action="store_true",
+        help="Skip snapshot calculation (for testing import without snapshot generation)",
     )
     parser.add_argument(
-        '--force-phase1',
-        action='store_true',
-        help='Force re-run of Phase 1 (member collection) even if peeps table populated'
+        "--validate-cancellations",
+        metavar="PERIOD",
+        help="Validate cancellations.json for a specific period (e.g., 2025-02)",
     )
     parser.add_argument(
-        '--skip-snapshots',
-        action='store_true',
-        help='Skip snapshot calculation (for testing import without snapshot generation)'
+        "--show-cancellations",
+        metavar="PERIOD",
+        help="Display cancellations data for a specific period",
     )
     parser.add_argument(
-        '--validate-cancellations',
-        metavar='PERIOD',
-        help='Validate cancellations.json for a specific period (e.g., 2025-02)'
+        "--validate-partnerships",
+        metavar="PERIOD",
+        help="Validate partnerships.json for a specific period (e.g., 2025-02)",
     )
     parser.add_argument(
-        '--show-cancellations',
-        metavar='PERIOD',
-        help='Display cancellations data for a specific period'
-    )
-    parser.add_argument(
-        '--validate-partnerships',
-        metavar='PERIOD',
-        help='Validate partnerships.json for a specific period (e.g., 2025-02)'
-    )
-    parser.add_argument(
-        '--show-partnerships',
-        metavar='PERIOD',
-        help='Display partnerships data for a specific period'
+        "--show-partnerships",
+        metavar="PERIOD",
+        help="Display partnerships data for a specific period",
     )
 
     args = parser.parse_args()
@@ -1990,7 +2130,7 @@ Notes:
     if args.validate_cancellations:
         period_name = args.validate_cancellations
         period_path = Path(PROCESSED_DATA_PATH) / period_name
-        cancellations_file = period_path / 'cancellations.json'
+        cancellations_file = period_path / "cancellations.json"
 
         try:
             if not cancellations_file.exists():
@@ -2012,7 +2152,7 @@ Notes:
     if args.show_cancellations:
         period_name = args.show_cancellations
         period_path = Path(PROCESSED_DATA_PATH) / period_name
-        cancellations_file = period_path / 'cancellations.json'
+        cancellations_file = period_path / "cancellations.json"
 
         try:
             if not cancellations_file.exists():
@@ -2026,17 +2166,19 @@ Notes:
             logger.info(f"CANCELLATIONS FOR {period_name}")
             logger.info(f"{'=' * 60}")
 
-            if cancellations.get('cancelled_events'):
+            if cancellations.get("cancelled_events"):
                 logger.info("Cancelled Events:")
-                for event in cancellations['cancelled_events']:
+                for event in cancellations["cancelled_events"]:
                     logger.info(f"  - {event}")
 
-            if cancellations.get('cancelled_availability'):
+            if cancellations.get("cancelled_availability"):
                 logger.info("Cancelled Availability:")
-                for avail in cancellations['cancelled_availability']:
-                    logger.info(f"  - {avail.get('member_email', 'Unknown')}: {avail.get('event_datetime', 'Unknown')}")
+                for avail in cancellations["cancelled_availability"]:
+                    logger.info(
+                        f"  - {avail.get('member_email', 'Unknown')}: {avail.get('event_datetime', 'Unknown')}"
+                    )
 
-            if cancellations.get('notes'):
+            if cancellations.get("notes"):
                 logger.info(f"Notes: {cancellations['notes']}")
 
             sys.exit(0)
@@ -2048,8 +2190,8 @@ Notes:
     if args.validate_partnerships:
         period_name = args.validate_partnerships
         period_path = Path(PROCESSED_DATA_PATH) / period_name
-        partnerships_file = period_path / 'partnerships.json'
-        members_file = period_path / 'members.csv'
+        partnerships_file = period_path / "partnerships.json"
+        members_file = period_path / "members.csv"
 
         try:
             if not partnerships_file.exists():
@@ -2065,7 +2207,7 @@ Notes:
                 with open(members_file) as f:
                     reader = csv.DictReader(f)
                     for row in reader:
-                        valid_member_ids.add(row['id'])
+                        valid_member_ids.add(row["id"])
 
             # Validate all member IDs exist
             for requester_id, partner_ids in partnerships.items():
@@ -2075,7 +2217,9 @@ Notes:
 
                 for partner_id in partner_ids:
                     if partner_id not in valid_member_ids:
-                        logger.error(f"Invalid partner ID {partner_id} referenced by member {requester_id}")
+                        logger.error(
+                            f"Invalid partner ID {partner_id} referenced by member {requester_id}"
+                        )
                         sys.exit(1)
 
             logger.info(f"✓ Partnerships valid for period {period_name}")
@@ -2091,7 +2235,7 @@ Notes:
     if args.show_partnerships:
         period_name = args.show_partnerships
         period_path = Path(PROCESSED_DATA_PATH) / period_name
-        partnerships_file = period_path / 'partnerships.json'
+        partnerships_file = period_path / "partnerships.json"
 
         try:
             if not partnerships_file.exists():
@@ -2125,9 +2269,7 @@ Notes:
         existing_peeps = check_peeps_table(cursor)
 
         if existing_peeps > 0 and not args.force_phase1:
-            logger.info(
-                f"Phase 1 skipped: {existing_peeps} peeps already exist in database"
-            )
+            logger.info(f"Phase 1 skipped: {existing_peeps} peeps already exist in database")
             logger.info("Use --force-phase1 to re-run member collection")
             # Mapping will be rebuilt from existing peeps before Phase 2
         else:
@@ -2155,7 +2297,9 @@ Notes:
                 logger.info(f"Phase 1 complete: {num_inserted} members inserted")
             else:
                 # Don't commit yet - will rollback at the end if dry-run
-                logger.info(f"DRY RUN: Phase 1 will insert {num_inserted} members (not committed yet)")
+                logger.info(
+                    f"DRY RUN: Phase 1 will insert {num_inserted} members (not committed yet)"
+                )
 
         # Phase 2: Period Processing
         if args.period or args.all:
@@ -2183,25 +2327,30 @@ Notes:
                 available_periods = []
                 for item in os.listdir(PROCESSED_DATA_PATH):
                     period_path = os.path.join(PROCESSED_DATA_PATH, item)
-                    if os.path.isdir(period_path) and not item.startswith('.'):
-                        # Filter to YYYY-MM format
-                        if len(item.split('-')) == 2:
+                    # Filter to YYYY-MM format
+                    if (
+                        os.path.isdir(period_path)
+                        and not item.startswith(".")
+                        and len(item.split("-")) == 2
+                    ):
                             available_periods.append(item)
 
                 periods_to_import = sorted(available_periods)
 
-            logger.info(f"Importing {len(periods_to_import)} period(s): {', '.join(periods_to_import)}")
+            logger.info(
+                f"Importing {len(periods_to_import)} period(s): {', '.join(periods_to_import)}"
+            )
 
             # Import statistics
             import_stats = {
-                'periods_imported': 0,
-                'periods_failed': 0,
-                'total_events': 0,
-                'total_responses': 0,
-                'total_assignments': 0,
-                'total_attendance': 0,
-                'total_changes': 0,
-                'total_snapshots': 0
+                "periods_imported": 0,
+                "periods_failed": 0,
+                "total_events": 0,
+                "total_responses": 0,
+                "total_assignments": 0,
+                "total_attendance": 0,
+                "total_changes": 0,
+                "total_snapshots": 0,
             }
 
             # Import each period
@@ -2217,54 +2366,72 @@ Notes:
                         peep_id_mapping=peep_id_mapping,
                         cursor=cursor,
                         verbose=args.verbose,
-                        skip_snapshots=args.skip_snapshots
+                        skip_snapshots=args.skip_snapshots,
                     )
 
                     importer.import_period()
 
                     # Gather statistics
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         SELECT COUNT(*) FROM events WHERE period_id = ?
-                    """, (importer.period_id,))
+                    """,
+                        (importer.period_id,),
+                    )
                     period_events = cursor.fetchone()[0]
-                    import_stats['total_events'] += period_events
+                    import_stats["total_events"] += period_events
 
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         SELECT COUNT(*) FROM responses WHERE period_id = ?
-                    """, (importer.period_id,))
+                    """,
+                        (importer.period_id,),
+                    )
                     period_responses = cursor.fetchone()[0]
-                    import_stats['total_responses'] += period_responses
+                    import_stats["total_responses"] += period_responses
 
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         SELECT COUNT(*) FROM event_assignments ea
                         JOIN events e ON ea.event_id = e.id
                         WHERE e.period_id = ?
-                    """, (importer.period_id,))
+                    """,
+                        (importer.period_id,),
+                    )
                     period_assignments = cursor.fetchone()[0]
-                    import_stats['total_assignments'] += period_assignments
+                    import_stats["total_assignments"] += period_assignments
 
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         SELECT COUNT(*) FROM event_attendance ea
                         JOIN events e ON ea.event_id = e.id
                         WHERE e.period_id = ?
-                    """, (importer.period_id,))
+                    """,
+                        (importer.period_id,),
+                    )
                     period_attendance = cursor.fetchone()[0]
-                    import_stats['total_attendance'] += period_attendance
+                    import_stats["total_attendance"] += period_attendance
 
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         SELECT COUNT(*) FROM event_assignment_changes eac
                         JOIN events e ON eac.event_id = e.id
                         WHERE e.period_id = ?
-                    """, (importer.period_id,))
+                    """,
+                        (importer.period_id,),
+                    )
                     period_changes = cursor.fetchone()[0]
-                    import_stats['total_changes'] += period_changes
+                    import_stats["total_changes"] += period_changes
 
                     if not args.skip_snapshots:
-                        cursor.execute("""
+                        cursor.execute(
+                            """
                             SELECT COUNT(*) FROM peep_order_snapshots WHERE period_id = ?
-                        """, (importer.period_id,))
+                        """,
+                            (importer.period_id,),
+                        )
                         period_snapshots = cursor.fetchone()[0]
-                        import_stats['total_snapshots'] += period_snapshots
+                        import_stats["total_snapshots"] += period_snapshots
                     else:
                         period_snapshots = 0
 
@@ -2274,16 +2441,18 @@ Notes:
                     else:
                         logger.info(f"DRY RUN: Period {period_name} would be committed")
 
-                    logger.info(f"Period {period_name} summary: {period_events} events, "
-                              f"{period_responses} responses, {period_assignments} assignments, "
-                              f"{period_attendance} attendance, {period_changes} changes, "
-                              f"{period_snapshots} snapshots")
+                    logger.info(
+                        f"Period {period_name} summary: {period_events} events, "
+                        f"{period_responses} responses, {period_assignments} assignments, "
+                        f"{period_attendance} attendance, {period_changes} changes, "
+                        f"{period_snapshots} snapshots"
+                    )
 
-                    import_stats['periods_imported'] += 1
+                    import_stats["periods_imported"] += 1
 
                 except Exception as e:
                     logger.error(f"Failed to import period {period_name}: {e}", exc_info=True)
-                    import_stats['periods_failed'] += 1
+                    import_stats["periods_failed"] += 1
                     conn.rollback()
                     raise
 
@@ -2313,11 +2482,11 @@ Notes:
 
     except Exception as e:
         logger.error(f"Import failed: {e}", exc_info=True)
-        if 'conn' in locals():
+        if "conn" in locals():
             conn.rollback()
         sys.exit(1)
     finally:
-        if 'conn' in locals():
+        if "conn" in locals():
             conn.close()
 
 

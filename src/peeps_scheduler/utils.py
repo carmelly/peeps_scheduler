@@ -1,25 +1,26 @@
-from collections import defaultdict
-import json
-import logging
 import datetime
 import itertools
-from peeps_scheduler.constants import DATE_FORMAT, DATESTR_FORMAT
-from peeps_scheduler.file_io import load_csv, save_json, normalize_email
-from peeps_scheduler.models import EventSequence, Peep, Event, Role, SwitchPreference
+import json
+import logging
+from peeps_scheduler.constants import DATE_FORMAT
+from peeps_scheduler.file_io import load_csv, normalize_email
+from peeps_scheduler.models import Event, EventSequence, Peep, Role
 
 # Module-level logger for utils
-logger = logging.getLogger('utils')
+logger = logging.getLogger("utils")
+
 
 def generate_event_permutations(events):
-	"""Generates all possible permutations of event sequences as a list of event ids."""
+    """Generates all possible permutations of event sequences as a list of event ids."""
 
-	if not events:
-		return []
-	event_ids = [event.id for event in events]
-	index_sequences = list(itertools.permutations(event_ids, len(event_ids)))
+    if not events:
+        return []
+    event_ids = [event.id for event in events]
+    index_sequences = list(itertools.permutations(event_ids, len(event_ids)))
 
-	logger.debug(f"Total permutations: {len(index_sequences)}")
-	return index_sequences
+    logger.debug(f"Total permutations: {len(index_sequences)}")
+    return index_sequences
+
 
 def setup_logging(verbose=False):
     """
@@ -36,8 +37,8 @@ def setup_logging(verbose=False):
     level = "DEBUG" if verbose else "INFO"
     return get_logger("cli", "cli", level=level, console_output=True)
 
-def apply_event_results( result_json, members_csv, responses_csv):
-    from peeps_scheduler.models import Peep, Event
+
+def apply_event_results(result_json, members_csv, responses_csv):
     import os
 
     peep_rows = load_csv(members_csv)
@@ -82,7 +83,7 @@ def apply_event_results( result_json, members_csv, responses_csv):
         else:
             peep.responded = False
 
-    with open(result_json, "r") as f:
+    with open(result_json) as f:
         result_data = json.load(f)
 
     event_data = result_data["valid_events"]
@@ -111,5 +112,3 @@ def apply_event_results( result_json, members_csv, responses_csv):
     sequence.finalize()
 
     return sequence.peeps
-
-

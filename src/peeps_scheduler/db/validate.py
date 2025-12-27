@@ -23,19 +23,18 @@ Options:
 """
 
 import argparse
-import sqlite3
-import sys
 import csv
 import json
+import sqlite3
+import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Dict, List, Union
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from peeps_scheduler import constants
-from peeps_scheduler.file_io import normalize_email, extract_events
+from peeps_scheduler.file_io import extract_events, normalize_email
 
 # ============================================================================
 # Validation Constants
@@ -67,65 +66,66 @@ def get_db_connection(db_path: str) -> sqlite3.Connection:
 # CSV/JSON Reading Helpers
 # =============================================================================
 
-def read_members_csv(period_path: Path) -> List[Dict]:
+
+def read_members_csv(period_path: Path) -> list[dict]:
     """Read members.csv and return list of member dictionaries."""
-    members_file = period_path / 'members.csv'
+    members_file = period_path / "members.csv"
     if not members_file.exists():
         return []
 
-    with open(members_file, 'r', encoding='utf-8') as f:
+    with open(members_file, encoding="utf-8") as f:
         reader = csv.DictReader(f)
         return list(reader)
 
 
-def read_responses_csv(period_path: Path) -> List[Dict]:
+def read_responses_csv(period_path: Path) -> list[dict]:
     """Read responses.csv and return list of response dictionaries."""
-    responses_file = period_path / 'responses.csv'
+    responses_file = period_path / "responses.csv"
     if not responses_file.exists():
         return []
 
-    with open(responses_file, 'r', encoding='utf-8') as f:
+    with open(responses_file, encoding="utf-8") as f:
         reader = csv.DictReader(f)
         return list(reader)
 
 
-def read_results_json(period_path: Path) -> Optional[Dict]:
+def read_results_json(period_path: Path) -> dict | None:
     """Read results.json and return assignment data."""
-    results_file = period_path / 'results.json'
+    results_file = period_path / "results.json"
     if not results_file.exists():
         return None
 
-    with open(results_file, 'r', encoding='utf-8') as f:
+    with open(results_file, encoding="utf-8") as f:
         return json.load(f)
 
 
-def read_attendance_json(period_path: Path) -> Optional[Dict]:
+def read_attendance_json(period_path: Path) -> dict | None:
     """Read actual_attendance.json and return attendance data."""
-    attendance_file = period_path / 'actual_attendance.json'
+    attendance_file = period_path / "actual_attendance.json"
     if not attendance_file.exists():
         return None
 
-    with open(attendance_file, 'r', encoding='utf-8') as f:
+    with open(attendance_file, encoding="utf-8") as f:
         return json.load(f)
 
 
-def read_cancellations_json(period_path: Path) -> Optional[Dict]:
+def read_cancellations_json(period_path: Path) -> dict | None:
     """Read cancellations.json and return cancellation data."""
-    cancellations_file = period_path / 'cancellations.json'
+    cancellations_file = period_path / "cancellations.json"
     if not cancellations_file.exists():
         return None
 
-    with open(cancellations_file, 'r', encoding='utf-8') as f:
+    with open(cancellations_file, encoding="utf-8") as f:
         return json.load(f)
 
 
-def read_partnerships_json(period_path: Path) -> Optional[Dict]:
+def read_partnerships_json(period_path: Path) -> dict | None:
     """Read partnerships.json and return partnership data."""
-    partnerships_file = period_path / 'partnerships.json'
+    partnerships_file = period_path / "partnerships.json"
     if not partnerships_file.exists():
         return None
 
-    with open(partnerships_file, 'r', encoding='utf-8') as f:
+    with open(partnerships_file, encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -133,7 +133,8 @@ def read_partnerships_json(period_path: Path) -> Optional[Dict]:
 # Schema Validation
 # =============================================================================
 
-def validate_schema(conn: sqlite3.Connection) -> List[str]:
+
+def validate_schema(conn: sqlite3.Connection) -> list[str]:
     """
     Validate database schema integrity.
 
@@ -185,12 +186,12 @@ def validate_schema(conn: sqlite3.Connection) -> List[str]:
         issues.extend(index_issues)
 
     except sqlite3.Error as e:
-        raise RuntimeError(f"Database error: {e}")
+        raise RuntimeError("Database error") from e
 
     return issues
 
 
-def _validate_foreign_keys(cursor) -> List[str]:
+def _validate_foreign_keys(cursor) -> list[str]:
     """
     Validate required foreign key constraints.
 
@@ -210,17 +211,17 @@ def _validate_foreign_keys(cursor) -> List[str]:
 
     # Define required foreign keys: (table, column, references_table, references_column)
     required_fks = [
-        ('event_assignments', 'event_id', 'events', 'id'),
-        ('event_assignments', 'peep_id', 'peeps', 'id'),
-        ('event_availability', 'event_id', 'events', 'id'),
-        ('peep_order_snapshots', 'peep_id', 'peeps', 'id'),
-        ('partnership_requests', 'period_id', 'schedule_periods', 'id'),
-        ('partnership_requests', 'requester_peep_id', 'peeps', 'id'),
-        ('partnership_requests', 'partner_peep_id', 'peeps', 'id'),
+        ("event_assignments", "event_id", "events", "id"),
+        ("event_assignments", "peep_id", "peeps", "id"),
+        ("event_availability", "event_id", "events", "id"),
+        ("peep_order_snapshots", "peep_id", "peeps", "id"),
+        ("partnership_requests", "period_id", "schedule_periods", "id"),
+        ("partnership_requests", "requester_peep_id", "peeps", "id"),
+        ("partnership_requests", "partner_peep_id", "peeps", "id"),
     ]
 
     # Whitelist of valid table names (prevents SQL injection)
-    valid_tables = {t[0] for t in required_fks} | {'events', 'peeps', 'schedule_periods'}
+    valid_tables = {t[0] for t in required_fks} | {"events", "peeps", "schedule_periods"}
 
     for table, column, ref_table, ref_column in required_fks:
         # Validate table name against whitelist
@@ -247,7 +248,7 @@ def _validate_foreign_keys(cursor) -> List[str]:
     return issues
 
 
-def _validate_migrations(cursor) -> List[str]:
+def _validate_migrations(cursor) -> list[str]:
     """
     Validate migration infrastructure.
 
@@ -268,9 +269,7 @@ def _validate_migrations(cursor) -> List[str]:
     migration_table = cursor.fetchone()
 
     if not migration_table:
-        issues.append(
-            "Missing migrations table: __migrations_applied__ table not found"
-        )
+        issues.append("Missing migrations table: __migrations_applied__ table not found")
         return issues  # Can't check migrations without the table
 
     # Check if migration 013 (partnership_requests) is applied
@@ -281,14 +280,12 @@ def _validate_migrations(cursor) -> List[str]:
     migration_013 = cursor.fetchone()
 
     if not migration_013:
-        issues.append(
-            "Migration 013 not found in __migrations_applied__ table"
-        )
+        issues.append("Migration 013 not found in __migrations_applied__ table")
 
     return issues
 
 
-def _validate_indexes(cursor) -> List[str]:
+def _validate_indexes(cursor) -> list[str]:
     """
     Validate critical performance indexes.
 
@@ -308,13 +305,17 @@ def _validate_indexes(cursor) -> List[str]:
 
     # Define required indexes: (index_name, table, column_description)
     required_indexes = [
-        ('idx_event_assignments_event_id', 'event_assignments', 'event_id'),
-        ('idx_event_assignments_peep_id', 'event_assignments', 'peep_id'),
-        ('idx_availability_response', 'event_availability', 'response_id'),
-        ('idx_event_availability_event_id', 'event_availability', 'event_id'),
-        ('idx_snapshots_peep_id', 'peep_order_snapshots', 'peep_id'),
-        ('idx_partnerships_period_requester', 'partnership_requests', 'period_id, requester_peep_id'),
-        ('idx_partnerships_period_partner', 'partnership_requests', 'period_id, partner_peep_id'),
+        ("idx_event_assignments_event_id", "event_assignments", "event_id"),
+        ("idx_event_assignments_peep_id", "event_assignments", "peep_id"),
+        ("idx_availability_response", "event_availability", "response_id"),
+        ("idx_event_availability_event_id", "event_availability", "event_id"),
+        ("idx_snapshots_peep_id", "peep_order_snapshots", "peep_id"),
+        (
+            "idx_partnerships_period_requester",
+            "partnership_requests",
+            "period_id, requester_peep_id",
+        ),
+        ("idx_partnerships_period_partner", "partnership_requests", "period_id, partner_peep_id"),
     ]
 
     # Whitelist of valid table names (prevents SQL injection)
@@ -338,9 +339,7 @@ def _validate_indexes(cursor) -> List[str]:
                 break
 
         if not index_found:
-            issues.append(
-                f"Missing index: {index_name} on {table}({column_desc})"
-            )
+            issues.append(f"Missing index: {index_name} on {table}({column_desc})")
 
     return issues
 
@@ -348,6 +347,7 @@ def _validate_indexes(cursor) -> List[str]:
 # =============================================================================
 # Validation Commands
 # =============================================================================
+
 
 def validate_members(db_path: str, data_dir: str = None) -> int:
     """
@@ -394,18 +394,21 @@ def validate_members(db_path: str, data_dir: str = None) -> int:
     members_checked = 0
 
     for csv_member in members_csv:
-        csv_email = normalize_email(csv_member.get('Email Address', '').strip())
-        csv_name = csv_member.get('Name', '').strip()
+        csv_email = normalize_email(csv_member.get("Email Address", "").strip())
+        csv_name = csv_member.get("Name", "").strip()
 
         if not csv_email:
             continue
 
         # Get DB member
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT id, full_name, display_name, email, primary_role, active
             FROM peeps
             WHERE email = ?
-        """, (csv_email,))
+        """,
+            (csv_email,),
+        )
         db_member = cursor.fetchone()
 
         if not db_member:
@@ -413,32 +416,40 @@ def validate_members(db_path: str, data_dir: str = None) -> int:
             continue
 
         # Compare fields
-        csv_display = csv_member.get('Display Name', '').strip()
-        csv_role = csv_member.get('Role', '').strip().lower()
-        csv_active = csv_member.get('Active', '').strip().upper() == 'TRUE'
+        csv_display = csv_member.get("Display Name", "").strip()
+        csv_role = csv_member.get("Role", "").strip().lower()
+        csv_active = csv_member.get("Active", "").strip().upper() == "TRUE"
 
-        if db_member['full_name'] != csv_name:
+        if db_member["full_name"] != csv_name:
             issues.append(f"{csv_name}: Name mismatch - DB='{db_member['full_name']}'")
 
-        if db_member['display_name'] != csv_display:
-            issues.append(f"{csv_name}: Display name mismatch - DB='{db_member['display_name']}' vs CSV='{csv_display}'")
+        if db_member["display_name"] != csv_display:
+            issues.append(
+                f"{csv_name}: Display name mismatch - DB='{db_member['display_name']}' vs CSV='{csv_display}'"
+            )
 
-        if db_member['primary_role'] != csv_role:
-            issues.append(f"{csv_name}: Role mismatch - DB='{db_member['primary_role']}' vs CSV='{csv_role}'")
+        if db_member["primary_role"] != csv_role:
+            issues.append(
+                f"{csv_name}: Role mismatch - DB='{db_member['primary_role']}' vs CSV='{csv_role}'"
+            )
 
-        if bool(db_member['active']) != csv_active:
-            issues.append(f"{csv_name}: Active status mismatch - DB={db_member['active']} vs CSV={csv_active}")
+        if bool(db_member["active"]) != csv_active:
+            issues.append(
+                f"{csv_name}: Active status mismatch - DB={db_member['active']} vs CSV={csv_active}"
+            )
 
         members_checked += 1
 
     # Check for members in DB not in CSV
     cursor.execute("SELECT full_name, email FROM peeps")
     all_db_members = cursor.fetchall()
-    csv_emails = {normalize_email(m.get('Email Address', '').strip()) for m in members_csv}
+    csv_emails = {normalize_email(m.get("Email Address", "").strip()) for m in members_csv}
 
     for db_member in all_db_members:
-        if db_member['email'] not in csv_emails:
-            issues.append(f"Member in DB but not in CSV: {db_member['full_name']} ({db_member['email']})")
+        if db_member["email"] not in csv_emails:
+            issues.append(
+                f"Member in DB but not in CSV: {db_member['full_name']} ({db_member['email']})"
+            )
 
     # Print results
     print(f"Members checked: {members_checked}")
@@ -485,7 +496,7 @@ def validate_period(db_path: str, period_name: str, data_dir: str = None) -> int
         print(f"Error: Period not found in DB: {period_name}", file=sys.stderr)
         return 1
 
-    period_id = period_row['id']
+    period_id = period_row["id"]
 
     # Get period source data path
     if data_dir is None:
@@ -508,13 +519,15 @@ def validate_period(db_path: str, period_name: str, data_dir: str = None) -> int
         print(f"Validating responses ({len(responses_csv)} in CSV)...")
         response_issues = validate_period_responses(cursor, period_id, responses_csv)
         all_issues.extend(response_issues)
-        print(f"  {'PASSED' if not response_issues else f'FAILED - {len(response_issues)} issues'}\n")
+        print(
+            f"  {'PASSED' if not response_issues else f'FAILED - {len(response_issues)} issues'}\n"
+        )
 
     # Validate events (all events from responses.csv availability)
     if responses_csv:
         # Get event count from database
         cursor.execute("SELECT COUNT(*) as count FROM events WHERE period_id = ?", (period_id,))
-        num_events = cursor.fetchone()['count']
+        num_events = cursor.fetchone()["count"]
         print(f"Validating events ({num_events} in DB)...")
         event_issues = validate_events(cursor, period_id, period_name, responses_csv, period_path)
         all_issues.extend(event_issues)
@@ -523,20 +536,30 @@ def validate_period(db_path: str, period_name: str, data_dir: str = None) -> int
     # Validate assignments
     results_json = read_results_json(period_path)
     if results_json:
-        num_events = len(results_json.get('valid_events', [])) + len(results_json.get('downgraded_events', []))
+        num_events = len(results_json.get("valid_events", [])) + len(
+            results_json.get("downgraded_events", [])
+        )
         print(f"Validating assignments ({num_events} events in JSON)...")
         assignment_issues = validate_period_assignments(cursor, period_id, results_json)
         all_issues.extend(assignment_issues)
-        print(f"  {'PASSED' if not assignment_issues else f'FAILED - {len(assignment_issues)} issues'}\n")
+        print(
+            f"  {'PASSED' if not assignment_issues else f'FAILED - {len(assignment_issues)} issues'}\n"
+        )
 
     # Validate attendance
     attendance_json = read_attendance_json(period_path)
     if attendance_json:
-        num_events = len(attendance_json) if isinstance(attendance_json, list) else len(attendance_json.get('valid_events', []))
+        num_events = (
+            len(attendance_json)
+            if isinstance(attendance_json, list)
+            else len(attendance_json.get("valid_events", []))
+        )
         print(f"Validating attendance ({num_events} events in JSON)...")
         attendance_issues = validate_period_attendance(cursor, period_id, attendance_json)
         all_issues.extend(attendance_issues)
-        print(f"  {'PASSED' if not attendance_issues else f'FAILED - {len(attendance_issues)} issues'}\n")
+        print(
+            f"  {'PASSED' if not attendance_issues else f'FAILED - {len(attendance_issues)} issues'}\n"
+        )
 
     # Validate snapshots
     members_csv = read_members_csv(period_path)
@@ -544,26 +567,38 @@ def validate_period(db_path: str, period_name: str, data_dir: str = None) -> int
         print(f"Validating snapshots ({len(members_csv)} members in CSV)...")
         snapshot_issues = validate_period_snapshots(cursor, period_id, members_csv)
         all_issues.extend(snapshot_issues)
-        print(f"  {'PASSED' if not snapshot_issues else f'FAILED - {len(snapshot_issues)} issues'}\n")
+        print(
+            f"  {'PASSED' if not snapshot_issues else f'FAILED - {len(snapshot_issues)} issues'}\n"
+        )
 
     # Validate cancelled events
     cancellations_json = read_cancellations_json(period_path)
     if cancellations_json:
-        cancelled_events = cancellations_json.get('cancelled_events', [])
+        cancelled_events = cancellations_json.get("cancelled_events", [])
         if cancelled_events:
             print(f"Validating cancelled events ({len(cancelled_events)} in JSON)...")
-            cancellation_issues = validate_period_cancellations(cursor, period_id, cancellations_json, period_name)
+            cancellation_issues = validate_period_cancellations(
+                cursor, period_id, cancellations_json, period_name
+            )
             all_issues.extend(cancellation_issues)
-            print(f"  {'PASSED' if not cancellation_issues else f'FAILED - {len(cancellation_issues)} issues'}\n")
+            print(
+                f"  {'PASSED' if not cancellation_issues else f'FAILED - {len(cancellation_issues)} issues'}\n"
+            )
 
     # Validate cancelled availability
     if cancellations_json:
-        cancelled_availability = cancellations_json.get('cancelled_availability', [])
+        cancelled_availability = cancellations_json.get("cancelled_availability", [])
         if cancelled_availability:
-            print(f"Validating cancelled availability ({len(cancelled_availability)} entries in JSON)...")
-            cancelled_avail_issues = validate_period_cancelled_availability(cursor, period_id, cancellations_json, period_name)
+            print(
+                f"Validating cancelled availability ({len(cancelled_availability)} entries in JSON)..."
+            )
+            cancelled_avail_issues = validate_period_cancelled_availability(
+                cursor, period_id, cancellations_json, period_name
+            )
             all_issues.extend(cancelled_avail_issues)
-            print(f"  {'PASSED' if not cancelled_avail_issues else f'FAILED - {len(cancelled_avail_issues)} issues'}\n")
+            print(
+                f"  {'PASSED' if not cancelled_avail_issues else f'FAILED - {len(cancelled_avail_issues)} issues'}\n"
+            )
 
     # Validate partnerships
     partnerships_json = read_partnerships_json(period_path)
@@ -571,7 +606,9 @@ def validate_period(db_path: str, period_name: str, data_dir: str = None) -> int
         print(f"Validating partnerships ({len(partnerships_json)} entries in JSON)...")
         partnership_issues = validate_period_partnerships(cursor, period_id, partnerships_json)
         all_issues.extend(partnership_issues)
-        print(f"  {'PASSED' if not partnership_issues else f'FAILED - {len(partnership_issues)} issues'}\n")
+        print(
+            f"  {'PASSED' if not partnership_issues else f'FAILED - {len(partnership_issues)} issues'}\n"
+        )
 
     # Print summary
     if all_issues:
@@ -592,22 +629,26 @@ def validate_period(db_path: str, period_name: str, data_dir: str = None) -> int
 # Period Validation Helpers
 # =============================================================================
 
-def validate_period_responses(cursor, period_id: int, responses_csv: List[Dict]) -> List[str]:
+
+def validate_period_responses(cursor, period_id: int, responses_csv: list[dict]) -> list[str]:
     """Validate responses table against responses.csv."""
     issues = []
 
     for csv_response in responses_csv:
-        csv_email = normalize_email(csv_response.get('Email Address', '').strip())
+        csv_email = normalize_email(csv_response.get("Email Address", "").strip())
         if not csv_email:
             continue
 
         # Get DB response
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT r.response_role, r.max_sessions, r.min_interval_days
             FROM responses r
             JOIN peeps p ON r.peep_id = p.id
             WHERE r.period_id = ? AND p.email = ?
-        """, (period_id, csv_email))
+        """,
+            (period_id, csv_email),
+        )
         db_response = cursor.fetchone()
 
         if not db_response:
@@ -615,142 +656,177 @@ def validate_period_responses(cursor, period_id: int, responses_csv: List[Dict])
             continue
 
         # Compare fields
-        csv_role = csv_response.get('Primary Role', '').strip().lower()
-        csv_max_sessions = int(csv_response.get('Max Sessions', 0) or 0)
-        csv_min_interval = int(csv_response.get('Min Interval Days', 0) or 0)
+        csv_role = csv_response.get("Primary Role", "").strip().lower()
+        csv_max_sessions = int(csv_response.get("Max Sessions", 0) or 0)
+        csv_min_interval = int(csv_response.get("Min Interval Days", 0) or 0)
 
-        if db_response['response_role'] != csv_role:
-            issues.append(f"Response role mismatch for {csv_email}: DB='{db_response['response_role']}' vs CSV='{csv_role}'")
+        if db_response["response_role"] != csv_role:
+            issues.append(
+                f"Response role mismatch for {csv_email}: DB='{db_response['response_role']}' vs CSV='{csv_role}'"
+            )
 
-        if db_response['max_sessions'] != csv_max_sessions:
-            issues.append(f"Max sessions mismatch for {csv_email}: DB={db_response['max_sessions']} vs CSV={csv_max_sessions}")
+        if db_response["max_sessions"] != csv_max_sessions:
+            issues.append(
+                f"Max sessions mismatch for {csv_email}: DB={db_response['max_sessions']} vs CSV={csv_max_sessions}"
+            )
 
-        if db_response['min_interval_days'] != csv_min_interval:
-            issues.append(f"Min interval mismatch for {csv_email}: DB={db_response['min_interval_days']} vs CSV={csv_min_interval}")
+        if db_response["min_interval_days"] != csv_min_interval:
+            issues.append(
+                f"Min interval mismatch for {csv_email}: DB={db_response['min_interval_days']} vs CSV={csv_min_interval}"
+            )
 
     return issues
 
 
-def validate_period_assignments(cursor, period_id: int, results_json: Dict) -> List[str]:
+def validate_period_assignments(cursor, period_id: int, results_json: dict) -> list[str]:
     """Validate assignments table against results.json."""
     issues = []
 
     # results.json structure: {"valid_events": [...], "downgraded_events": [...]}
-    all_events = results_json.get('valid_events', []) + results_json.get('downgraded_events', [])
+    all_events = results_json.get("valid_events", []) + results_json.get("downgraded_events", [])
 
     for event_data in all_events:
-        event_date = event_data.get('date', '')
+        event_date = event_data.get("date", "")
         # Convert datetime from JSON format (space separator) to ISO 8601 (T separator)
-        event_date_iso = event_date.replace(' ', 'T')
+        event_date_iso = event_date.replace(" ", "T")
 
         # Get event_id from DB
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT id FROM events
             WHERE period_id = ? AND event_datetime LIKE ?
-        """, (period_id, f"{event_date_iso}%"))
+        """,
+            (period_id, f"{event_date_iso}%"),
+        )
         db_event = cursor.fetchone()
 
         if not db_event:
             issues.append(f"Event not in DB: {event_date}")
             continue
 
-        event_id = db_event['id']
+        event_id = db_event["id"]
 
         # Check attendees
-        for attendee in event_data.get('attendees', []):
-            peep_id = attendee.get('id')
-            csv_role = attendee.get('role', '').lower()
+        for attendee in event_data.get("attendees", []):
+            peep_id = attendee.get("id")
+            csv_role = attendee.get("role", "").lower()
 
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT assigned_role, assignment_type
                 FROM event_assignments
                 WHERE event_id = ? AND peep_id = ?
-            """, (event_id, peep_id))
+            """,
+                (event_id, peep_id),
+            )
             db_assignment = cursor.fetchone()
 
             if not db_assignment:
                 issues.append(f"Assignment not in DB: event {event_date}, peep {peep_id}")
                 continue
 
-            if db_assignment['assigned_role'] != csv_role:
-                issues.append(f"Assignment role mismatch: event {event_date}, peep {peep_id} - DB='{db_assignment['assigned_role']}' vs JSON='{csv_role}'")
+            if db_assignment["assigned_role"] != csv_role:
+                issues.append(
+                    f"Assignment role mismatch: event {event_date}, peep {peep_id} - DB='{db_assignment['assigned_role']}' vs JSON='{csv_role}'"
+                )
 
-            if db_assignment['assignment_type'] != 'attendee':
-                issues.append(f"Assignment type mismatch: event {event_date}, peep {peep_id} - expected 'attendee', got '{db_assignment['assignment_type']}'")
+            if db_assignment["assignment_type"] != "attendee":
+                issues.append(
+                    f"Assignment type mismatch: event {event_date}, peep {peep_id} - expected 'attendee', got '{db_assignment['assignment_type']}'"
+                )
 
         # Check alternates
-        for alternate in event_data.get('alternates', []):
-            peep_id = alternate.get('id')
-            csv_role = alternate.get('role', '').lower()
+        for alternate in event_data.get("alternates", []):
+            peep_id = alternate.get("id")
+            csv_role = alternate.get("role", "").lower()
 
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT assigned_role, assignment_type
                 FROM event_assignments
                 WHERE event_id = ? AND peep_id = ?
-            """, (event_id, peep_id))
+            """,
+                (event_id, peep_id),
+            )
             db_assignment = cursor.fetchone()
 
             if not db_assignment:
                 issues.append(f"Alternate assignment not in DB: event {event_date}, peep {peep_id}")
                 continue
 
-            if db_assignment['assignment_type'] != 'alternate':
-                issues.append(f"Assignment type mismatch: event {event_date}, peep {peep_id} - expected 'alternate', got '{db_assignment['assignment_type']}'")
+            if db_assignment["assignment_type"] != "alternate":
+                issues.append(
+                    f"Assignment type mismatch: event {event_date}, peep {peep_id} - expected 'alternate', got '{db_assignment['assignment_type']}'"
+                )
 
     return issues
 
 
-def validate_period_attendance(cursor, period_id: int, attendance_json: Dict) -> List[str]:
+def validate_period_attendance(cursor, period_id: int, attendance_json: dict) -> list[str]:
     """Validate attendance table against actual_attendance.json."""
     issues = []
 
     # attendance_json might be array or dict - handle both
-    events = attendance_json if isinstance(attendance_json, list) else attendance_json.get('valid_events', [])
+    events = (
+        attendance_json
+        if isinstance(attendance_json, list)
+        else attendance_json.get("valid_events", [])
+    )
 
     for event_data in events:
-        event_date = event_data.get('date', '')
+        event_date = event_data.get("date", "")
         # Convert datetime from JSON format (space separator) to ISO 8601 (T separator)
-        event_date_iso = event_date.replace(' ', 'T')
+        event_date_iso = event_date.replace(" ", "T")
 
         # Get event_id from DB
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT id FROM events
             WHERE period_id = ? AND event_datetime LIKE ?
-        """, (period_id, f"{event_date_iso}%"))
+        """,
+            (period_id, f"{event_date_iso}%"),
+        )
         db_event = cursor.fetchone()
 
         if not db_event:
             issues.append(f"Event not in DB: {event_date}")
             continue
 
-        event_id = db_event['id']
+        event_id = db_event["id"]
 
         # Check each attendee
-        for attendee in event_data.get('attendees', []):
-            peep_id = attendee.get('id')
-            json_role = attendee.get('role', '').lower()
+        for attendee in event_data.get("attendees", []):
+            peep_id = attendee.get("id")
+            json_role = attendee.get("role", "").lower()
 
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT actual_role, attendance_status, participation_mode
                 FROM event_attendance
                 WHERE event_id = ? AND peep_id = ?
-            """, (event_id, peep_id))
+            """,
+                (event_id, peep_id),
+            )
             db_attendance = cursor.fetchone()
 
             if not db_attendance:
                 issues.append(f"Attendance not in DB: event {event_date}, peep {peep_id}")
                 continue
 
-            if db_attendance['actual_role'] != json_role:
-                issues.append(f"Attendance role mismatch: event {event_date}, peep {peep_id} - DB='{db_attendance['actual_role']}' vs JSON='{json_role}'")
+            if db_attendance["actual_role"] != json_role:
+                issues.append(
+                    f"Attendance role mismatch: event {event_date}, peep {peep_id} - DB='{db_attendance['actual_role']}' vs JSON='{json_role}'"
+                )
 
-            if db_attendance['attendance_status'] != 'attended':
-                issues.append(f"Attendance status mismatch: event {event_date}, peep {peep_id} - expected 'attended', got '{db_attendance['attendance_status']}'")
+            if db_attendance["attendance_status"] != "attended":
+                issues.append(
+                    f"Attendance status mismatch: event {event_date}, peep {peep_id} - expected 'attended', got '{db_attendance['attendance_status']}'"
+                )
 
     return issues
 
 
-def validate_period_snapshots(cursor, period_id: int, members_csv: List[Dict]) -> List[str]:
+def validate_period_snapshots(cursor, period_id: int, members_csv: list[dict]) -> list[str]:
     """
     Validate snapshots integrity.
 
@@ -765,13 +841,16 @@ def validate_period_snapshots(cursor, period_id: int, members_csv: List[Dict]) -
     issues = []
 
     # Check if period has any attendance records
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT COUNT(*) as count
         FROM event_attendance ea
         JOIN events e ON ea.event_id = e.id
         WHERE e.period_id = ?
-    """, (period_id,))
-    attendance_count = cursor.fetchone()['count']
+    """,
+        (period_id,),
+    )
+    attendance_count = cursor.fetchone()["count"]
 
     # Skip snapshot validation if period has no attendance
     if attendance_count == 0:
@@ -783,48 +862,67 @@ def validate_period_snapshots(cursor, period_id: int, members_csv: List[Dict]) -
 
     # Get total active count once (used for all members)
     cursor.execute("SELECT COUNT(*) as count FROM peeps WHERE active = 1")
-    total_active = cursor.fetchone()['count']
+    total_active = cursor.fetchone()["count"]
 
     for member in active_members:
-        peep_id = member['id']
+        peep_id = member["id"]
 
         # Check snapshot exists
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT priority, index_position, total_attended
             FROM peep_order_snapshots
             WHERE peep_id = ? AND period_id = ?
-        """, (peep_id, period_id))
+        """,
+            (peep_id, period_id),
+        )
         db_snapshot = cursor.fetchone()
 
         if not db_snapshot:
-            issues.append(f"Snapshot missing for active member: {member['full_name']} ({member['email']})")
+            issues.append(
+                f"Snapshot missing for active member: {member['full_name']} ({member['email']})"
+            )
             continue
 
         # Validate total_attended matches actual attendance count
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT COUNT(*) as count
             FROM event_attendance ea
             JOIN events e ON ea.event_id = e.id
             WHERE ea.peep_id = ?
             AND ea.attendance_status = 'attended'
             AND e.period_id <= ?
-        """, (peep_id, period_id))
-        actual_attended = cursor.fetchone()['count']
+        """,
+            (peep_id, period_id),
+        )
+        actual_attended = cursor.fetchone()["count"]
 
-        if db_snapshot['total_attended'] != actual_attended:
-            issues.append(f"Snapshot total_attended incorrect for {member['full_name']}: DB snapshot={db_snapshot['total_attended']}, actual attendance={actual_attended}")
+        if db_snapshot["total_attended"] != actual_attended:
+            issues.append(
+                f"Snapshot total_attended incorrect for {member['full_name']}: DB snapshot={db_snapshot['total_attended']}, actual attendance={actual_attended}"
+            )
 
         # Check priority/index are in reasonable ranges (integrity check, not comparing to CSV)
-        if db_snapshot['priority'] < 0 or db_snapshot['priority'] > MAX_REASONABLE_PRIORITY:
-            issues.append(f"Snapshot priority out of range for {member['full_name']}: {db_snapshot['priority']}")
+        if db_snapshot["priority"] < 0 or db_snapshot["priority"] > MAX_REASONABLE_PRIORITY:
+            issues.append(
+                f"Snapshot priority out of range for {member['full_name']}: {db_snapshot['priority']}"
+            )
 
-        if db_snapshot['index_position'] < 0 or db_snapshot['index_position'] >= total_active * MAX_INDEX_MULTIPLIER:
-            issues.append(f"Snapshot index out of range for {member['full_name']}: {db_snapshot['index_position']}")
+        if (
+            db_snapshot["index_position"] < 0
+            or db_snapshot["index_position"] >= total_active * MAX_INDEX_MULTIPLIER
+        ):
+            issues.append(
+                f"Snapshot index out of range for {member['full_name']}: {db_snapshot['index_position']}"
+            )
 
     return issues
 
 
-def validate_period_cancellations(cursor, period_id: int, cancellations_json: Dict, period_name: str) -> List[str]:
+def validate_period_cancellations(
+    cursor, period_id: int, cancellations_json: dict, period_name: str
+) -> list[str]:
     """
     Validate cancelled events against database.
 
@@ -847,13 +945,13 @@ def validate_period_cancellations(cursor, period_id: int, cancellations_json: Di
     """
     issues = []
 
-    cancelled_events = cancellations_json.get('cancelled_events', [])
+    cancelled_events = cancellations_json.get("cancelled_events", [])
     if not cancelled_events:
         return issues
 
     # Extract year from period_name
     try:
-        year = int(period_name.split('-')[0])
+        year = int(period_name.split("-")[0])
     except (ValueError, IndexError):
         year = None
 
@@ -868,24 +966,31 @@ def validate_period_cancellations(cursor, period_id: int, cancellations_json: Di
             continue
 
         # Convert to ISO 8601 format for database matching
-        event_datetime_pattern = event_id.replace(' ', 'T')
+        event_datetime_pattern = event_id.replace(" ", "T")
 
         # Check if event exists and has status='cancelled'
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT status FROM events
             WHERE period_id = ? AND event_datetime LIKE ?
-        """, (period_id, f"{event_datetime_pattern}%"))
+        """,
+            (period_id, f"{event_datetime_pattern}%"),
+        )
 
         event_row = cursor.fetchone()
         if event_row is None:
             issues.append(f"Cancelled event not found in DB: {event_id}")
-        elif event_row['status'] != 'cancelled':
-            issues.append(f"Event {event_id} should have status='cancelled', got '{event_row['status']}'")
+        elif event_row["status"] != "cancelled":
+            issues.append(
+                f"Event {event_id} should have status='cancelled', got '{event_row['status']}'"
+            )
 
     return issues
 
 
-def validate_period_cancelled_availability(cursor, period_id: int, cancellations_json: Dict, period_name: str) -> List[str]:
+def validate_period_cancelled_availability(
+    cursor, period_id: int, cancellations_json: dict, period_name: str
+) -> list[str]:
     """
     Validate that cancelled availability records were removed from event_availability table.
 
@@ -913,24 +1018,24 @@ def validate_period_cancelled_availability(cursor, period_id: int, cancellations
     """
     issues = []
 
-    cancelled_availability = cancellations_json.get('cancelled_availability', [])
+    cancelled_availability = cancellations_json.get("cancelled_availability", [])
     if not cancelled_availability:
         return issues
 
     # Extract year from period_name
     try:
-        year = int(period_name.split('-')[0])
+        year = int(period_name.split("-")[0])
     except (ValueError, IndexError):
         year = None
 
-    from file_io import parse_event_date, normalize_email
+    from file_io import normalize_email, parse_event_date
 
     for entry in cancelled_availability:
-        email = normalize_email(entry.get('email', ''))
+        email = normalize_email(entry.get("email", ""))
         if not email:
             continue
 
-        events = entry.get('events', [])
+        events = entry.get("events", [])
 
         # Find peep by email
         cursor.execute("SELECT id FROM peeps WHERE email = ?", (email,))
@@ -938,7 +1043,7 @@ def validate_period_cancelled_availability(cursor, period_id: int, cancellations
         if peep_row is None:
             continue
 
-        peep_id = peep_row['id']
+        peep_id = peep_row["id"]
 
         for event_str in events:
             try:
@@ -946,24 +1051,29 @@ def validate_period_cancelled_availability(cursor, period_id: int, cancellations
             except Exception:
                 continue
 
-            event_datetime_pattern = event_id.replace(' ', 'T')
+            event_datetime_pattern = event_id.replace(" ", "T")
 
             # Check that event_availability doesn't exist for this peep/event combo
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT COUNT(*) as count FROM event_availability ea
                 JOIN responses r ON ea.response_id = r.id
                 JOIN events e ON ea.event_id = e.id
                 WHERE r.peep_id = ? AND e.period_id = ? AND e.event_datetime LIKE ?
-            """, (peep_id, period_id, f"{event_datetime_pattern}%"))
+            """,
+                (peep_id, period_id, f"{event_datetime_pattern}%"),
+            )
 
-            count = cursor.fetchone()['count']
+            count = cursor.fetchone()["count"]
             if count > 0:
-                issues.append(f"Cancelled availability not removed: {email} still has availability for {event_id}")
+                issues.append(
+                    f"Cancelled availability not removed: {email} still has availability for {event_id}"
+                )
 
     return issues
 
 
-def validate_period_partnerships(cursor, period_id: int, partnerships_json: Dict) -> List[str]:
+def validate_period_partnerships(cursor, period_id: int, partnerships_json: dict) -> list[str]:
     """
     Validate partnership requests against database.
 
@@ -988,7 +1098,11 @@ def validate_period_partnerships(cursor, period_id: int, partnerships_json: Dict
     issues = []
 
     # Handle both wrapped {"partnerships": {...}} and unwrapped {...} formats
-    raw_partnerships = partnerships_json.get("partnerships") if "partnerships" in partnerships_json else partnerships_json
+    raw_partnerships = (
+        partnerships_json.get("partnerships")
+        if "partnerships" in partnerships_json
+        else partnerships_json
+    )
 
     if not raw_partnerships or not isinstance(raw_partnerships, dict):
         return issues
@@ -1012,19 +1126,24 @@ def validate_period_partnerships(cursor, period_id: int, partnerships_json: Dict
                 continue
 
             # Check if partnership exists in database
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT COUNT(*) as count FROM partnership_requests
                 WHERE period_id = ? AND requester_peep_id = ? AND partner_peep_id = ?
-            """, (period_id, requester_id, partner_id))
+            """,
+                (period_id, requester_id, partner_id),
+            )
 
-            count = cursor.fetchone()['count']
+            count = cursor.fetchone()["count"]
             if count == 0:
                 issues.append(f"Partnership not found in DB: {requester_id} -> {partner_id}")
 
     return issues
 
 
-def validate_events(cursor, period_id: int, period_name: str, responses_csv: List[Dict], period_path: Path = None) -> List[str]:
+def validate_events(
+    cursor, period_id: int, period_name: str, responses_csv: list[dict], period_path: Path = None
+) -> list[str]:
     """
     Validate events table against responses.csv availability data.
 
@@ -1049,7 +1168,7 @@ def validate_events(cursor, period_id: int, period_name: str, responses_csv: Lis
     issues = []
 
     # Extract year from period_name (format: "2025-02")
-    year = int(period_name.split('-')[0])
+    year = int(period_name.split("-")[0])
 
     # Extract expected events from responses.csv
     expected_event_map = extract_events(responses_csv, year=year)
@@ -1063,34 +1182,43 @@ def validate_events(cursor, period_id: int, period_name: str, responses_csv: Lis
         # Load results.json for scheduled event durations
         results_json = read_results_json(period_path)
         if results_json:
-            all_events = results_json.get('valid_events', []) + results_json.get('downgraded_events', [])
+            all_events = results_json.get("valid_events", []) + results_json.get(
+                "downgraded_events", []
+            )
             for event_data in all_events:
-                event_date = event_data.get('date', '')
+                event_date = event_data.get("date", "")
                 # Convert to event_id format (YYYY-MM-DD HH:MM)
-                event_id = event_date.replace(' ', ' ').strip()[:16]  # "2025-02-07 17:00"
-                duration = event_data.get('duration_minutes')
+                event_id = event_date.replace(" ", " ").strip()[:16]  # "2025-02-07 17:00"
+                duration = event_data.get("duration_minutes")
                 if duration is not None:
                     scheduled_durations[event_id] = duration
 
         # Load actual_attendance.json for completed event durations
         attendance_json = read_attendance_json(period_path)
         if attendance_json:
-            events = attendance_json if isinstance(attendance_json, list) else attendance_json.get('valid_events', [])
+            events = (
+                attendance_json
+                if isinstance(attendance_json, list)
+                else attendance_json.get("valid_events", [])
+            )
             for event_data in events:
-                event_date = event_data.get('date', '')
+                event_date = event_data.get("date", "")
                 # Convert to event_id format (YYYY-MM-DD HH:MM)
-                event_id = event_date.replace(' ', ' ').strip()[:16]  # "2025-02-07 17:00"
-                duration = event_data.get('duration_minutes')
+                event_id = event_date.replace(" ", " ").strip()[:16]  # "2025-02-07 17:00"
+                duration = event_data.get("duration_minutes")
                 if duration is not None:
                     completed_durations[event_id] = duration
 
     # Get all events from database for this period
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT event_datetime, duration_minutes, status
         FROM events
         WHERE period_id = ?
         ORDER BY event_datetime
-    """, (period_id,))
+    """,
+        (period_id,),
+    )
     db_events = cursor.fetchall()
 
     # Convert DB events to comparable format (event_id strings)
@@ -1098,12 +1226,12 @@ def validate_events(cursor, period_id: int, period_name: str, responses_csv: Lis
     db_event_details = {}
     for db_event in db_events:
         # Convert datetime to event_id format (YYYY-MM-DD HH:MM)
-        dt = datetime.fromisoformat(db_event['event_datetime'])
+        dt = datetime.fromisoformat(db_event["event_datetime"])
         event_id = dt.strftime("%Y-%m-%d %H:%M")
         db_event_ids.add(event_id)
         db_event_details[event_id] = {
-            'duration': db_event['duration_minutes'],
-            'status': db_event['status']
+            "duration": db_event["duration_minutes"],
+            "status": db_event["status"],
         }
 
     # Check for events in CSV but not in DB
@@ -1122,13 +1250,13 @@ def validate_events(cursor, period_id: int, period_name: str, responses_csv: Lis
         db_details = db_event_details[event_id]
 
         # Check duration against status-appropriate source
-        event_status = db_details['status']
+        event_status = db_details["status"]
 
-        if event_status == 'completed' and event_id in completed_durations:
+        if event_status == "completed" and event_id in completed_durations:
             # Completed events: check against actual_attendance.json
             expected_duration = completed_durations[event_id]
             source = "actual_attendance.json"
-        elif event_status == 'scheduled' and event_id in scheduled_durations:
+        elif event_status == "scheduled" and event_id in scheduled_durations:
             # Scheduled events: check against results.json
             expected_duration = scheduled_durations[event_id]
             source = "results.json"
@@ -1137,8 +1265,10 @@ def validate_events(cursor, period_id: int, period_name: str, responses_csv: Lis
             expected_duration = expected_event.duration_minutes
             source = "responses.csv"
 
-        if db_details['duration'] != expected_duration:
-            issues.append(f"Event duration mismatch for {event_id}: DB={db_details['duration']} vs {source}={expected_duration}")
+        if db_details["duration"] != expected_duration:
+            issues.append(
+                f"Event duration mismatch for {event_id}: DB={db_details['duration']} vs {source}={expected_duration}"
+            )
 
     return issues
 
@@ -1147,53 +1277,70 @@ def validate_events(cursor, period_id: int, period_name: str, responses_csv: Lis
 # Inspection Commands (simplified - just show info, no validation)
 # =============================================================================
 
+
 def show_period(db_path: str, period_name: str) -> int:
     """Display period summary with counts."""
     conn = get_db_connection(db_path)
     cursor = conn.cursor()
 
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT id, period_name, start_date, end_date, status
         FROM schedule_periods
         WHERE period_name = ?
-    """, (period_name,))
+    """,
+        (period_name,),
+    )
 
     period = cursor.fetchone()
     if not period:
         print(f"Error: Period not found: {period_name}", file=sys.stderr)
         return 1
 
-    period_id = period['id']
+    period_id = period["id"]
 
     # Get counts
     cursor.execute("SELECT COUNT(*) as count FROM events WHERE period_id = ?", (period_id,))
-    event_count = cursor.fetchone()['count']
+    event_count = cursor.fetchone()["count"]
 
     cursor.execute("SELECT COUNT(*) as count FROM responses WHERE period_id = ?", (period_id,))
-    response_count = cursor.fetchone()['count']
+    response_count = cursor.fetchone()["count"]
 
-    cursor.execute("SELECT COUNT(*) as count FROM event_assignments WHERE event_id IN (SELECT id FROM events WHERE period_id = ?)", (period_id,))
-    assignment_count = cursor.fetchone()['count']
+    cursor.execute(
+        "SELECT COUNT(*) as count FROM event_assignments WHERE event_id IN (SELECT id FROM events WHERE period_id = ?)",
+        (period_id,),
+    )
+    assignment_count = cursor.fetchone()["count"]
 
-    cursor.execute("SELECT COUNT(*) as count FROM event_attendance WHERE event_id IN (SELECT id FROM events WHERE period_id = ?)", (period_id,))
-    attendance_count = cursor.fetchone()['count']
+    cursor.execute(
+        "SELECT COUNT(*) as count FROM event_attendance WHERE event_id IN (SELECT id FROM events WHERE period_id = ?)",
+        (period_id,),
+    )
+    attendance_count = cursor.fetchone()["count"]
 
-    cursor.execute("SELECT COUNT(*) as count FROM peep_order_snapshots WHERE period_id = ?", (period_id,))
-    snapshot_count = cursor.fetchone()['count']
+    cursor.execute(
+        "SELECT COUNT(*) as count FROM peep_order_snapshots WHERE period_id = ?", (period_id,)
+    )
+    snapshot_count = cursor.fetchone()["count"]
 
     # Get Phase 1 feature counts
-    cursor.execute("SELECT COUNT(*) as count FROM events WHERE period_id = ? AND status = 'cancelled'", (period_id,))
-    cancelled_events_count = cursor.fetchone()['count']
+    cursor.execute(
+        "SELECT COUNT(*) as count FROM events WHERE period_id = ? AND status = 'cancelled'",
+        (period_id,),
+    )
+    cancelled_events_count = cursor.fetchone()["count"]
 
-    cursor.execute("SELECT COUNT(*) as count FROM partnership_requests WHERE period_id = ?", (period_id,))
-    partnership_count = cursor.fetchone()['count']
+    cursor.execute(
+        "SELECT COUNT(*) as count FROM partnership_requests WHERE period_id = ?", (period_id,)
+    )
+    partnership_count = cursor.fetchone()["count"]
 
     # Display
     print(f"\n=== Period Summary: {period_name} ===")
     print(f"Start Date: {period['start_date']}")
     print(f"End Date: {period['end_date']}")
     print(f"Status: {period['status']}")
-    print(f"\nCounts:")
+    print("\nCounts:")
     print(f"  Events: {event_count}")
     print(f"  Responses: {response_count}")
     print(f"  Assignments: {assignment_count}")
@@ -1224,7 +1371,9 @@ def list_periods(db_path: str) -> int:
     print("-" * 55)
 
     for period in periods:
-        print(f"{period['period_name']:<15} {period['start_date']:<12} {period['end_date']:<12} {period['status']:<12}")
+        print(
+            f"{period['period_name']:<15} {period['start_date']:<12} {period['end_date']:<12} {period['status']:<12}"
+        )
 
     print(f"\nTotal: {len(periods)} period(s)")
 
@@ -1237,12 +1386,16 @@ def main():
     parser = argparse.ArgumentParser(
         description="Data validation and inspection CLI",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=__doc__
+        epilog=__doc__,
     )
 
     # Database path
-    parser.add_argument('--db', type=str, default=constants.DEFAULT_DB_PATH,
-                        help='Database path (default: %(default)s)')
+    parser.add_argument(
+        "--db",
+        type=str,
+        default=constants.DEFAULT_DB_PATH,
+        help="Database path (default: %(default)s)",
+    )
 
     # Data directory
     parser.add_argument(
@@ -1254,24 +1407,22 @@ def main():
 
     # Commands
     commands = parser.add_mutually_exclusive_group()
-    commands.add_argument('--validate-members', action='store_true',
-                          help='Validate all members against CSV files')
-    commands.add_argument('--validate-period', type=str, metavar='NAME',
-                          help='Comprehensive period validation')
-    commands.add_argument('--show-period', type=str, metavar='NAME',
-                          help='Display period summary')
-    commands.add_argument('--list-periods', action='store_true',
-                          help='List all periods')
+    commands.add_argument(
+        "--validate-members", action="store_true", help="Validate all members against CSV files"
+    )
+    commands.add_argument(
+        "--validate-period", type=str, metavar="NAME", help="Comprehensive period validation"
+    )
+    commands.add_argument("--show-period", type=str, metavar="NAME", help="Display period summary")
+    commands.add_argument("--list-periods", action="store_true", help="List all periods")
 
     # Options
-    parser.add_argument('--active-only', action='store_true',
-                        help='Filter to active members only')
+    parser.add_argument("--active-only", action="store_true", help="Filter to active members only")
 
     args = parser.parse_args()
 
     # Check if at least one command was provided
-    if not any([args.validate_members, args.validate_period,
-                args.show_period, args.list_periods]):
+    if not any([args.validate_members, args.validate_period, args.show_period, args.list_periods]):
         parser.error("one of the validation/inspection commands is required")
         return 2
 
@@ -1288,11 +1439,12 @@ def main():
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         import traceback
+
         traceback.print_exc()
         return 1
 
     return 0
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())

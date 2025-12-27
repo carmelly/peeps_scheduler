@@ -34,14 +34,14 @@ Usage:
 """
 
 import logging
-from datetime import datetime
-from typing import Dict, List, Optional, Tuple, Set
 from dataclasses import dataclass, field
+from datetime import datetime
 
 
 @dataclass
 class MemberSnapshot:
     """Represents a member's state at a point in time."""
+
     peep_id: int
     email: str
     full_name: str
@@ -66,6 +66,7 @@ class MemberSnapshot:
 @dataclass
 class EventAttendance:
     """Represents attendance for a specific event."""
+
     event_id: int
     peep_id: int
     role: str  # 'leader' or 'follower'
@@ -87,18 +88,18 @@ class SnapshotGenerator:
 
     def _setup_logging(self) -> logging.Logger:
         """Configure logging for snapshot operations."""
-        logger = logging.getLogger('snapshot_generator')
+        logger = logging.getLogger("snapshot_generator")
         logger.setLevel(logging.DEBUG if self.verbose else logging.INFO)
         # Don't add handlers - use root logger's handler to avoid duplicates
         return logger
 
     def generate_snapshot_from_attendance(
         self,
-        starting_snapshot: List[MemberSnapshot],
-        actual_attendance: List[EventAttendance],
-        expected_attendance: List[EventAttendance],
-        responded_peep_ids: Optional[Set[int]] = None
-    ) -> List[MemberSnapshot]:
+        starting_snapshot: list[MemberSnapshot],
+        actual_attendance: list[EventAttendance],
+        expected_attendance: list[EventAttendance],
+        responded_peep_ids: set[int] | None = None,
+    ) -> list[MemberSnapshot]:
         """
         Generate a new member state snapshot by applying attendance to a starting snapshot.
 
@@ -134,7 +135,9 @@ class SnapshotGenerator:
         """
         try:
             self.logger.info(f"Generating snapshot from {len(starting_snapshot)} members")
-            self.logger.info(f"Applying {len(actual_attendance)} actual + {len(expected_attendance)} expected attendance records")
+            self.logger.info(
+                f"Applying {len(actual_attendance)} actual + {len(expected_attendance)} expected attendance records"
+            )
 
             # Create working copy of snapshots
             snapshots = [
@@ -147,8 +150,9 @@ class SnapshotGenerator:
                     priority=s.priority,
                     index_position=s.index_position,
                     total_attended=s.total_attended,
-                    active=s.active
-                ) for s in starting_snapshot
+                    active=s.active,
+                )
+                for s in starting_snapshot
             ]
 
             # Create lookup for faster processing
@@ -161,10 +165,10 @@ class SnapshotGenerator:
                         peep_lookup[peep_id].responded_this_period = True
 
             # Apply actual attendance (events that have completed)
-            self._apply_attendance_records(peep_lookup, actual_attendance, 'actual')
+            self._apply_attendance_records(peep_lookup, actual_attendance, "actual")
 
             # Apply expected attendance (events scheduled but not completed)
-            self._apply_attendance_records(peep_lookup, expected_attendance, 'expected')
+            self._apply_attendance_records(peep_lookup, expected_attendance, "expected")
 
             # Finalize the period (same logic as EventSequence.finalize())
             self._finalize_period(snapshots)
@@ -178,9 +182,9 @@ class SnapshotGenerator:
 
     def _apply_attendance_records(
         self,
-        peep_lookup: Dict[int, MemberSnapshot],
-        attendance_records: List[EventAttendance],
-        attendance_type: str
+        peep_lookup: dict[int, MemberSnapshot],
+        attendance_records: list[EventAttendance],
+        attendance_type: str,
     ) -> None:
         """
         Apply attendance records to update member states.
@@ -202,7 +206,7 @@ class SnapshotGenerator:
                 self.logger.warning(f"Peep {attendance.peep_id} not found in snapshot")
                 continue
 
-            if attendance.attendance_type in ['actual', 'expected']:
+            if attendance.attendance_type in ["actual", "expected"]:
                 # This person attended (or is expected to attend)
                 peep.num_events_this_period += 1
 
@@ -222,7 +226,7 @@ class SnapshotGenerator:
             for i, peep in enumerate(reordered_snapshots):
                 peep.index_position = i
 
-    def _finalize_period(self, snapshots: List[MemberSnapshot]) -> None:
+    def _finalize_period(self, snapshots: list[MemberSnapshot]) -> None:
         """
         Finalize period by updating totals, priorities, and reordering.
 
@@ -249,11 +253,8 @@ class SnapshotGenerator:
             peep.index_position = i
 
     def compare_snapshots(
-        self,
-        snapshot1: List[MemberSnapshot],
-        snapshot2: List[MemberSnapshot],
-        tolerance: int = 0
-    ) -> Tuple[bool, List[str]]:
+        self, snapshot1: list[MemberSnapshot], snapshot2: list[MemberSnapshot], tolerance: int = 0
+    ) -> tuple[bool, list[str]]:
         """
         Compare two snapshots for equality.
 
@@ -275,7 +276,7 @@ class SnapshotGenerator:
         s1_sorted = sorted(snapshot1, key=lambda p: p.peep_id)
         s2_sorted = sorted(snapshot2, key=lambda p: p.peep_id)
 
-        for p1, p2 in zip(s1_sorted, s2_sorted):
+        for p1, p2 in zip(s1_sorted, s2_sorted, strict=True):
             if p1.peep_id != p2.peep_id:
                 differences.append(f"Peep ID mismatch: {p1.peep_id} vs {p2.peep_id}")
                 continue
@@ -284,10 +285,14 @@ class SnapshotGenerator:
                 differences.append(f"Peep {p1.peep_id}: Priority {p1.priority} vs {p2.priority}")
 
             if abs(p1.index_position - p2.index_position) > tolerance:
-                differences.append(f"Peep {p1.peep_id}: Index {p1.index_position} vs {p2.index_position}")
+                differences.append(
+                    f"Peep {p1.peep_id}: Index {p1.index_position} vs {p2.index_position}"
+                )
 
             if abs(p1.total_attended - p2.total_attended) > tolerance:
-                differences.append(f"Peep {p1.peep_id}: Total attended {p1.total_attended} vs {p2.total_attended}")
+                differences.append(
+                    f"Peep {p1.peep_id}: Total attended {p1.total_attended} vs {p2.total_attended}"
+                )
 
             if p1.active != p2.active:
                 differences.append(f"Peep {p1.peep_id}: Active {p1.active} vs {p2.active}")
@@ -295,11 +300,8 @@ class SnapshotGenerator:
         return len(differences) == 0, differences
 
     def generate_snapshot_for_period(
-        self,
-        cursor,
-        period_id: int,
-        snapshot_type: str = 'permanent'
-    ) -> List[MemberSnapshot]:
+        self, cursor, period_id: int, snapshot_type: str = "permanent"
+    ) -> list[MemberSnapshot]:
         """
         Generate a complete snapshot for a period by automatically gathering all required data.
 
@@ -327,7 +329,7 @@ class SnapshotGenerator:
 
         # Load expected attendance if this is for scheduling
         expected_attendance = []
-        if snapshot_type == 'scheduling':
+        if snapshot_type == "scheduling":
             expected_attendance = self._load_expected_attendance(cursor, period_id)
 
         # Get who responded this period
@@ -338,18 +340,21 @@ class SnapshotGenerator:
             starting_snapshot=starting_snapshot,
             actual_attendance=actual_attendance,
             expected_attendance=expected_attendance,
-            responded_peep_ids=responded_peep_ids
+            responded_peep_ids=responded_peep_ids,
         )
 
-    def _load_starting_snapshot(self, cursor, period_id: int) -> List[MemberSnapshot]:
+    def _load_starting_snapshot(self, cursor, period_id: int) -> list[MemberSnapshot]:
         """Load the starting snapshot from the previous period."""
         # Get the previous period
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT id FROM schedule_periods
             WHERE period_name < (SELECT period_name FROM schedule_periods WHERE id = ?)
             ORDER BY period_name DESC
             LIMIT 1
-        """, (period_id,))
+        """,
+            (period_id,),
+        )
 
         result = cursor.fetchone()
         if result:
@@ -359,32 +364,38 @@ class SnapshotGenerator:
             # No previous period - this must be the baseline
             return self.snapshot_from_database(cursor, period_id)
 
-    def _load_actual_attendance(self, cursor, period_id: int) -> List[EventAttendance]:
+    def _load_actual_attendance(self, cursor, period_id: int) -> list[EventAttendance]:
         """Load actual attendance records for completed events in this period."""
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT ea.event_id, ea.peep_id, ea.actual_role, e.event_datetime
             FROM event_attendance ea
             JOIN events e ON ea.event_id = e.id
             WHERE e.period_id = ?
             AND ea.attendance_status = 'attended'
             ORDER BY e.event_datetime, ea.event_id, ea.peep_id
-        """, (period_id,))
+        """,
+            (period_id,),
+        )
 
         attendance_records = []
         for event_id, peep_id, actual_role, event_datetime in cursor.fetchall():
-            attendance_records.append(EventAttendance(
-                event_id=event_id,
-                peep_id=peep_id,
-                role=actual_role or 'leader',  # Fallback if null
-                attendance_type='actual',
-                event_datetime=datetime.fromisoformat(event_datetime)
-            ))
+            attendance_records.append(
+                EventAttendance(
+                    event_id=event_id,
+                    peep_id=peep_id,
+                    role=actual_role or "leader",  # Fallback if null
+                    attendance_type="actual",
+                    event_datetime=datetime.fromisoformat(event_datetime),
+                )
+            )
 
         return attendance_records
 
-    def _load_expected_attendance(self, cursor, period_id: int) -> List[EventAttendance]:
+    def _load_expected_attendance(self, cursor, period_id: int) -> list[EventAttendance]:
         """Load expected attendance from scheduled assignments for incomplete events."""
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT ea.event_id, ea.peep_id, ea.assigned_role, e.event_datetime
             FROM event_assignments ea
             JOIN events e ON ea.event_id = e.id
@@ -393,48 +404,68 @@ class SnapshotGenerator:
             AND ea.assignment_type = 'attendee'  -- Only actual attendees, not alternates
             AND att.id IS NULL  -- No attendance record yet (event hasn't happened)
             ORDER BY e.event_datetime, ea.event_id, ea.peep_id
-        """, (period_id,))
+        """,
+            (period_id,),
+        )
 
         attendance_records = []
         for event_id, peep_id, assigned_role, event_datetime in cursor.fetchall():
-            attendance_records.append(EventAttendance(
-                event_id=event_id,
-                peep_id=peep_id,
-                role=assigned_role,
-                attendance_type='expected',
-                event_datetime=datetime.fromisoformat(event_datetime)
-            ))
+            attendance_records.append(
+                EventAttendance(
+                    event_id=event_id,
+                    peep_id=peep_id,
+                    role=assigned_role,
+                    attendance_type="expected",
+                    event_datetime=datetime.fromisoformat(event_datetime),
+                )
+            )
 
         return attendance_records
 
-    def _load_period_responses(self, cursor, period_id: int) -> Set[int]:
+    def _load_period_responses(self, cursor, period_id: int) -> set[int]:
         """Load set of peep IDs who responded during this period."""
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT DISTINCT r.peep_id
             FROM responses r
             WHERE r.period_id = ?
-        """, (period_id,))
+        """,
+            (period_id,),
+        )
 
         return {row[0] for row in cursor.fetchall()}
 
-    def snapshot_from_database(self, cursor, period_id: int) -> List[MemberSnapshot]:
+    def snapshot_from_database(self, cursor, period_id: int) -> list[MemberSnapshot]:
         """
         Create a snapshot from database peep_order_snapshots for a specific period.
 
         This is used to get the starting snapshot for calculations.
         """
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT pos.peep_id, p.email, p.full_name, p.display_name, p.primary_role,
                    pos.priority, pos.index_position, pos.total_attended, pos.active
             FROM peep_order_snapshots pos
             JOIN peeps p ON pos.peep_id = p.id
             WHERE pos.period_id = ?
             ORDER BY pos.index_position
-        """, (period_id,))
+        """,
+            (period_id,),
+        )
 
         snapshots = []
         for row in cursor.fetchall():
-            peep_id, email, full_name, display_name, primary_role, priority, index_position, total_attended, active = row
+            (
+                peep_id,
+                email,
+                full_name,
+                display_name,
+                primary_role,
+                priority,
+                index_position,
+                total_attended,
+                active,
+            ) = row
 
             snapshot = MemberSnapshot(
                 peep_id=peep_id,
@@ -445,7 +476,7 @@ class SnapshotGenerator:
                 priority=priority,
                 index_position=index_position,
                 total_attended=total_attended,
-                active=active
+                active=active,
             )
             snapshots.append(snapshot)
 

@@ -4,31 +4,18 @@ DATE_FORMAT = "%Y-%m-%d %H:%M"
 DATESTR_FORMAT = "%A %B %d - %I%p"
 
 CLASS_CONFIG = {
-	60: {
-		"price": 120.0, 
-		"min_role": 2,
-		"max_role": 3,
-		"allow_downgrade": False
-	},
-	90: {
-		"price": 195.0,
-		"min_role": 4,
-		"max_role": 5,
-		"allow_downgrade": True
-	},
-	120: {
-		"price": 260.0,
-		"min_role": 6,
-		"max_role": 7,
-		"allow_downgrade": True
-	}
+    60: {"price": 120.0, "min_role": 2, "max_role": 3, "allow_downgrade": False},
+    90: {"price": 195.0, "min_role": 4, "max_role": 5, "allow_downgrade": True},
+    120: {"price": 260.0, "min_role": 6, "max_role": 7, "allow_downgrade": True},
 }
 
-ABS_MIN_ROLE = min(config["min_role"] for config in CLASS_CONFIG.values() if config["allow_downgrade"])
+ABS_MIN_ROLE = min(
+    config["min_role"] for config in CLASS_CONFIG.values() if config["allow_downgrade"]
+)
 ABS_MAX_ROLE = max(config["max_role"] for config in CLASS_CONFIG.values())
 
 # Private data submodule root - can be overridden by environment
-PRIVATE_DATA_ROOT = os.getenv("peeps-data_PATH", "peeps-data")
+PRIVATE_DATA_ROOT = os.getenv("PEEPS_DATA_PATH", "peeps-data")
 
 # Database paths
 SCHEMA_PATH = "src/peeps_scheduler/db/schema.sql"
