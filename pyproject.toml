@@ -1,0 +1,40 @@
+[tool.ruff]
+# Target modern Python, adjust if needed
+target-version = "py311"
+
+# Reasonable line length, plays well with VS Code
+line-length = 100
+indent-width = 4
+
+# Keep this tight at first. You can always add more later.
+lint.select = [
+  "E",   # pycodestyle errors
+  "F",   # pyflakes (real bugs)
+  "I",   # import sorting
+  "UP",  # pyupgrade (safe modernizations)
+]
+
+lint.ignore = [
+  "E203",  # whitespace before ':', conflicts with formatter
+  "E501",  # line length (handled by formatter)
+]
+
+lint.exclude = [
+  ".git",
+  ".venv",
+  "__pycache__",
+  "build",
+  "dist",
+]
+
+[tool.ruff.format]
+quote-style = "double"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+
+[tool.ruff.lint.isort]
+known-first-party = ["peeps_scheduler"]
+combine-as-imports = true
+lines-between-types = 0
+no-lines-before = ["third-party", "first-party", "local-folder"]

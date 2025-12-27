@@ -24,6 +24,11 @@
         "ask",
         "scripts"
     ],
+    "[python]": {
+        "editor.defaultFormatter": "charliermarsh.ruff",
+        "editor.formatOnSave": true,
+        "editor.detectIndentation": true
+    },
     "bookmarks.useWorkaroundForFormatters": true,
     "markdown.preview.breaks": false,
     "markdown-preview-github-styles.colorTheme": "auto",
