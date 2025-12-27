@@ -155,7 +155,6 @@ class TestAttendanceImport:
         ctx.importer.create_events(response_mapping)
 
         # Create attendance with non-existent event date
-        from tests.db.helpers import get_single_value
         attendance_json_builder(period_dir, [
             AttendanceSpec(
                 date="2025-02-99 17:00",  # Invalid date
@@ -203,8 +202,8 @@ class TestAttendanceImport:
         self, importer_factory, responses_csv_builder
     ):
         """PeriodImporter skips event_availability creation when response has empty availability."""
-        from tests.fixtures.data_specs import ResponseSpec
         from tests.db.helpers import assert_response_count, get_single_value, get_table_count
+        from tests.fixtures.data_specs import ResponseSpec
 
         ctx = importer_factory()
         period_dir = Path(ctx.period_data["period_dir"])

@@ -13,7 +13,7 @@ Tests cover:
 
 from pathlib import Path
 import pytest
-from tests.fixtures.data_specs import ResponseSpec, AttendanceSpec
+from tests.fixtures.data_specs import AttendanceSpec, ResponseSpec
 
 
 @pytest.mark.db

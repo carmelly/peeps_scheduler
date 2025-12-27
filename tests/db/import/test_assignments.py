@@ -183,7 +183,6 @@ class TestAssignmentImport:
         ctx.importer.create_events(response_mapping)
 
         # Create results.json with an event that doesn't exist in database yet
-        from tests.db.helpers import get_single_value
         results_json_builder(period_dir, [
             EventSpec(
                 date="2025-02-25 17:00",
