@@ -1,0 +1,15 @@
+#!/bin/bash
+# Post-checkout hook
+# Runs after branch checkout to ensure symlinks and hooks stay in sync
+
+# $3 = 0 for branch checkout, 1 for initial clone
+# Skip on initial clone (setup.sh should be run manually)
+# Run on branch checkout to hydrate symlinks
+if [ "$3" = "1" ]; then
+    exit 0
+fi
+
+# Hydrate symlinks and configure submodule hooks (if peeps-config exists)
+if [ -d "peeps-config" ]; then
+    ./peeps-config/scripts/hydrate.sh
+fi

@@ -30,3 +30,6 @@ db/backups/*
 
 # Repo zip for easy upload
 repo-*.zip
+
+# Node modules
+node_modules/
