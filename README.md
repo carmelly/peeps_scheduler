@@ -28,60 +28,87 @@ The system aims to maximize overall attendance, ensure fair distribution across 
 5. **Output**
    - A finalized schedule is exported with assigned participants and alternates.
 
-## Current Status
+## Quick Start
 
-**Version:** v1.0.0-baseline (December 2024)
-
-This is the **production-ready baseline release** of the file/CLI-based scheduler:
-
-- ✅ All 183 unit tests passing
-- ✅ Complete CSV-to-JSON workflow
-- ✅ Comprehensive architecture documentation in `docs/architecture/`
-- ✅ Known issues catalogued in `docs/known-issues-baseline.md`
-
-The `main` branch provides a stable, single-user CLI workflow using CSV and JSON files. Database integration and web UI features are under development on separate branches.
-
-## Usage
-
-The scheduler provides three main commands:
-
-### 1. Run Scheduler
-
-Generate an optimal event schedule from availability data:
+The scheduler provides three main commands (run from project root with venv activated):
 
 ```bash
-python main.py run --load-from-csv --data-folder peeps_data/2025-01 --max-events 7
+# Generate optimal schedule
+python -m peeps_scheduler.main run --load-from-csv --data-folder <data-folder> --max-events 7
+
+# Apply results after events conclude
+python -m peeps_scheduler.main apply-results --period-folder <data-folder>
+
+# Generate availability report
+python -m peeps_scheduler.main availability-report --data-folder <data-folder>
 ```
 
-### 2. Apply Results
-
-Update member priorities after events conclude:
-
-```bash
-python main.py apply-results --period-folder peeps_data/2025-01
-```
-
-### 3. Generate Availability Report
-
-Create a summary of member availability:
-
-```bash
-python main.py availability-report --data-folder peeps_data/2025-01
-```
+Replace `<data-folder>` with the path to your CSV data files.
 
 For detailed workflow documentation, see `docs/architecture/baseline-v1-overview.md`.
 
-## Roadmap
+## Repository Structure
 
-### Phase 1: Database Integration
+This project uses a src/ layout with the Python package at `src/peeps_scheduler/`:
 
-Database infrastructure is complete on the `db-migration` branch. Remaining work includes application layer integration and snapshot generation refinements.
+```text
+peeps-scheduler/
+  src/
+    peeps_scheduler/     # Python package
+      __init__.py
+      main.py
+      models.py
+      scheduler.py
+      db/                # Database modules
+      scripts/           # CLI scripts
+  tests/                 # Test suite
+  scripts/               # Developer utilities
+  docs/                  # Architecture and domain docs
+```
 
-### Phase 2+: Web UI and Multi-User Support
+**Note:** This repository uses git submodules for development workflows and example data, but the scheduler can run independently with your own data.
 
-Future phases will add web-based interfaces, real-time collaboration, and multi-user workflows.
+## Development Workflow
 
-For detailed implementation plans, see `.apm/Implementation_Plan.md`.
+### Initial Setup
+
+```bash
+# Clone repository
+git clone <url> peeps-scheduler
+cd peeps-scheduler
+
+# Create and activate Python virtual environment
+python3 -m venv .venv
+source .venv/bin/activate
+
+# Install package in editable mode
+pip install -e .
+
+# Install dependencies
+pip install -r requirements.txt
+```
+
+**Optional:** If you have access to the private submodules (example data and development configs):
+
+```bash
+# Initialize submodules after cloning
+git submodule update --init
+```
+
+### Testing
+
+Run the test suite:
+
+```bash
+# Run all tests
+pytest
+
+# Run only unit tests
+pytest -m unit
+
+# Run with coverage
+pytest --cov=peeps_scheduler
+```
 
 ## Documentation
 

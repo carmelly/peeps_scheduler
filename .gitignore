@@ -9,30 +9,11 @@ debug.log
 __pycache__/
 *.pyc
 
-# Private config files (tracked in separate repo)
-.private-config
-
-# AI Agent Configuration
-.claude
+# AI Agent Configuration (symlinked from peeps-config/overlay/)
+/.claude
+/.apm
 CLAUDE.md
 AGENTS.md
-
-# Agentic Project Management memory
-.apm
-
-# Obsidian vault configuration
-.obsidian/
-
-# Temporary files
-.tmp.driveupload/*
-
-# Data directory tracked in private submodule 
-peeps_data
-
-# Legacy data -- will be deleted when data migration is complete 
-data/*
-db/historical_data/*
-db/imports/*/data
 
 # SQLite database files and related artifacts
 db/*.db
