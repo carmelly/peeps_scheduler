@@ -11,7 +11,7 @@ Following testing philosophy:
 import pytest
 import tempfile
 from pathlib import Path
-from data_manager import DataManager, get_data_manager
+from peeps_scheduler.data_manager import DataManager, get_data_manager
 
 
 class TestDataManager:
@@ -58,9 +58,9 @@ class TestDataManager:
             assert periods == ["2025-08", "2025-09", "2025-10"]
     
     def test_uses_default_submodule_root(self):
-        """Test that DataManager uses 'peeps_data' as default submodule root."""
+        """Test that DataManager uses 'peeps-data' as default submodule root."""
         dm = DataManager()
-        assert str(dm.submodule_root) == "peeps_data"
+        assert str(dm.submodule_root) == "peeps-data"
     
     def test_custom_submodule_root(self):
         """Test that DataManager accepts custom submodule root."""
@@ -79,9 +79,9 @@ class TestGlobalDataManager:
         assert dm1 is dm2
     
     def test_singleton_uses_default_root(self):
-        """Test that global DataManager uses default peeps_data root."""
+        """Test that global DataManager uses default peeps-data root."""
         dm = get_data_manager()
-        assert str(dm.submodule_root) == "peeps_data"
+        assert str(dm.submodule_root) == "peeps-data"
 
 
 class TestDataManagerErrorHandling:

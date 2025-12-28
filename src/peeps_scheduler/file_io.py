@@ -4,8 +4,8 @@ import json
 import logging
 import os
 import sys
-from models import EventSequence, Peep, Event, Role, SwitchPreference
-import constants
+from peeps_scheduler.models import EventSequence, Peep, Event, Role, SwitchPreference
+import peeps_scheduler.constants as constants
 
 # -- Constants --
 

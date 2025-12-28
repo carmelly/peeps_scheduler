@@ -1,9 +1,9 @@
 import os
 import argparse
 import logging
-import utils
-from scheduler import Scheduler
-from data_manager import get_data_manager
+from peeps_scheduler import utils
+from peeps_scheduler.scheduler import Scheduler
+from peeps_scheduler.data_manager import get_data_manager
 
 def apply_results(period_folder, results_filename="actual_attendance.json"):
 
@@ -32,7 +32,7 @@ def apply_results(period_folder, results_filename="actual_attendance.json"):
 
 	# Apply results to fresh member list
 	updated_peeps = utils.apply_event_results(actual_attendance_file, members_file, responses_file)
-	from file_io import save_peeps_csv
+	from peeps_scheduler.file_io import save_peeps_csv
 	save_peeps_csv(updated_peeps, members_file)
 	logging.info("Updated members.csv ready for Google Sheets upload.")
 	return True
@@ -77,7 +77,7 @@ def main():
 	elif args.command == 'apply-results':
 		apply_results(args.period_folder, args.results_file)
 	elif args.command == 'availability-report':
-		from availability_report import run_availability_report
+		from peeps_scheduler.availability_report import run_availability_report
 		run_availability_report(args.data_folder, cancellations_file=args.cancellations_file)
 	else:
 		parser.print_help()

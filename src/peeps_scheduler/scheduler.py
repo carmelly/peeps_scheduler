@@ -1,11 +1,11 @@
 import copy
 import logging
 import time
-import constants
-import file_io
-from models import Event, EventSequence, Peep, Role, SwitchPreference
-import utils
-from data_manager import get_data_manager
+import peeps_scheduler.constants as constants
+from peeps_scheduler import file_io
+from peeps_scheduler.models import Event, EventSequence, Peep, Role, SwitchPreference
+from peeps_scheduler import utils
+from peeps_scheduler.data_manager import get_data_manager
 
 class Scheduler:
 	def __init__(self, data_folder, max_events, interactive=True, sequence_choice=0, cancellations_file='cancellations.json', partnerships_file='partnerships.json'):

@@ -50,7 +50,7 @@ The scheduler provides three main commands:
 Generate an optimal event schedule from availability data:
 
 ```bash
-python main.py run --load-from-csv --data-folder peeps_data/2025-01 --max-events 7
+python main.py run --load-from-csv --data-folder peeps-data/2025-01 --max-events 7
 ```
 
 ### 2. Apply Results
@@ -58,7 +58,7 @@ python main.py run --load-from-csv --data-folder peeps_data/2025-01 --max-events
 Update member priorities after events conclude:
 
 ```bash
-python main.py apply-results --period-folder peeps_data/2025-01
+python main.py apply-results --period-folder peeps-data/2025-01
 ```
 
 ### 3. Generate Availability Report
@@ -66,7 +66,7 @@ python main.py apply-results --period-folder peeps_data/2025-01
 Create a summary of member availability:
 
 ```bash
-python main.py availability-report --data-folder peeps_data/2025-01
+python main.py availability-report --data-folder peeps-data/2025-01
 ```
 
 For detailed workflow documentation, see `docs/architecture/baseline-v1-overview.md`.

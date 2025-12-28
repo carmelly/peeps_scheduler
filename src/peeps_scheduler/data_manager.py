@@ -15,7 +15,7 @@ from typing import Dict, List, Optional
 class DataManager:
 	"""Manages data paths and period archiving for the scheduling system."""
 	
-	def __init__(self, submodule_root: str = "peeps_data"):
+	def __init__(self, submodule_root: str = "peeps-data"):
 		"""
 		Initialize DataManager with submodule root path.
 		

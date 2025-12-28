@@ -1,6 +1,6 @@
 import pytest
 import datetime
-from models import Peep, Event, Role, SwitchPreference
+from peeps_scheduler.models import Peep, Event, Role, SwitchPreference
 
 
 @pytest.fixture

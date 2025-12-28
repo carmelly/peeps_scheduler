@@ -1,47 +1,25 @@
-# Log files
-debug.log
+# Virtual environment
+.venv/
 
-# Python cache and compiled files
-__pycache__/
-*.pyc
-
-# Private config files (tracked in separate repo)
-.private-config
-
-# AI Agent Configuration
+# Symlinked config files (point to peeps-config/overlay/)
+.apm
 .claude
 CLAUDE.md
-AGENTS.md
 
-# Agentic Project Management memory
-.apm
+# IDE
+.vscode/
 
-# Obsidian vault configuration
-.obsidian/
+# Python
+__pycache__/
+*.egg-info/
+build/
+dist/
 
-# Temporary files
-.tmp.driveupload/*
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
 
-# Data directory tracked in private submodule 
-peeps_data
-
-# Legacy data -- will be deleted when data migration is complete 
-data/*
-db/historical_data/*
-db/imports/*/data
-
-# SQLite database files and related artifacts
-db/*.db
-db/*.db-journal
-db/*.sqbpro
-db/backups/*
-**/sqlite3.exe
-
-# Test coverage report 
-.coverage 
-
-# Virtualenv
-.venv
-
-# Repo zip for easy upload
-repo-*.zip
+# Logs
+logs/
+*.log

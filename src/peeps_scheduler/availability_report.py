@@ -1,7 +1,7 @@
 from collections import defaultdict
-from data_manager import DataManager, get_data_manager
-from models import Role, SwitchPreference
-from file_io import load_cancellations, load_csv, normalize_email, parse_event_date
+from peeps_scheduler.data_manager import DataManager, get_data_manager
+from peeps_scheduler.models import Role, SwitchPreference
+from peeps_scheduler.file_io import load_cancellations, load_csv, normalize_email, parse_event_date
 
 def parse_availability(responses_file, members_file, cancelled_event_ids=None, cancelled_availability=None, year=None):
 	members = {normalize_email(row["Email Address"]): row for row in load_csv(members_file)}

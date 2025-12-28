@@ -1,3 +1,6 @@
-[submodule "peeps_data"]
-	path = peeps_data
+[submodule "peeps-data"]
+	path = peeps-data
 	url = git@github.com:carmelly/peeps-data.git
+[submodule "peeps-config"]
+	path = peeps-config
+	url = git@github.com:carmelly/peeps-config.git

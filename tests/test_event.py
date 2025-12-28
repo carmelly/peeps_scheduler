@@ -10,8 +10,8 @@ Following testing philosophy:
 
 import pytest
 import datetime
-from models import Event, Peep, Role
-import constants
+from peeps_scheduler.models import Event, Peep, Role
+import peeps_scheduler.constants as constants
 
 class TestEventAttendeeManagement:
     """Test core attendee addition, removal, and capacity management."""

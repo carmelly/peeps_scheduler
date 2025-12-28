@@ -8,9 +8,9 @@ Following testing philosophy:
 - One concept per test with descriptive names
 """
 
-from models import EventSequence, Role, SwitchPreference
-from scheduler import Scheduler
-import constants
+from peeps_scheduler.models import EventSequence, Role, SwitchPreference
+from peeps_scheduler.scheduler import Scheduler
+import peeps_scheduler.constants as constants
 
 def create_scheduler(**kwargs):
     """Factory for creating test schedulers."""

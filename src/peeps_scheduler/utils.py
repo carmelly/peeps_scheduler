@@ -3,9 +3,9 @@ import json
 import logging
 import datetime
 import itertools
-from constants import DATE_FORMAT, DATESTR_FORMAT
-from file_io import load_csv, save_json, normalize_email
-from models import EventSequence, Peep, Event, Role, SwitchPreference
+from peeps_scheduler.constants import DATE_FORMAT, DATESTR_FORMAT
+from peeps_scheduler.file_io import load_csv, save_json, normalize_email
+from peeps_scheduler.models import EventSequence, Peep, Event, Role, SwitchPreference
 
 def generate_event_permutations(events):
 	"""Generates all possible permutations of event sequences as a list of event ids."""
@@ -36,7 +36,7 @@ def setup_logging(verbose=False):
 		)
 
 def apply_event_results( result_json, members_csv, responses_csv):
-	from models import Peep, Event
+	from peeps_scheduler.models import Peep, Event
 	import os
 
 	peep_rows = load_csv(members_csv)

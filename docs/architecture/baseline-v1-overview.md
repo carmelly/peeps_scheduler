@@ -478,7 +478,7 @@ Defines event duration tiers:
 
 #### Data Management
 
-- `PRIVATE_DATA_ROOT` - Submodule path (default: "peeps_data", overrideable via env)
+- `PRIVATE_DATA_ROOT` - Submodule path (default: "peeps-data", overrideable via env)
 
 ---
 
@@ -1152,7 +1152,7 @@ Timestamp,Name,Email Address,Primary Role,Secondary Role,Max Sessions,Availabili
 
 ```bash
 # Manual: Export Google Forms responses to CSV
-# → peeps_data/2026-01/responses.csv
+# → peeps-data/2026-01/responses.csv
 ```
 
 #### 2. Run Scheduler
@@ -1160,7 +1160,7 @@ Timestamp,Name,Email Address,Primary Role,Secondary Role,Max Sessions,Availabili
 ```bash
 python main.py run \
   --load-from-csv \
-  --data-folder peeps_data/2026-01 \
+  --data-folder peeps-data/2026-01 \
   --max-events 7
 ```
 
@@ -1184,7 +1184,7 @@ User selects option → results.json created
 #### 3. Review Schedule
 
 ```bash
-# Manual: Review peeps_data/2026-01/results.json
+# Manual: Review peeps-data/2026-01/results.json
 # Verify assignments look reasonable
 ```
 
@@ -1199,21 +1199,21 @@ User selects option → results.json created
 
 ```bash
 # Manual: Create actual_attendance.json (copy results.json, edit attendees)
-# → peeps_data/2026-01/actual_attendance.json
+# → peeps-data/2026-01/actual_attendance.json
 ```
 
 #### 6. Apply Results
 
 ```bash
 python main.py apply-results \
-  --period-folder peeps_data/2026-01 \
+  --period-folder peeps-data/2026-01 \
   --results-file actual_attendance.json
 ```
 
 **Output:**
 
 ```text
-✓ Updated peeps saved to peeps_data/2026-01/members_updated.csv
+✓ Updated peeps saved to peeps-data/2026-01/members_updated.csv
 ```
 
 #### 7. Update Master Roster
@@ -1232,7 +1232,7 @@ For automated testing or scripted runs:
 ```bash
 python main.py run \
   --load-from-csv \
-  --data-folder peeps_data/2026-01 \
+  --data-folder peeps-data/2026-01 \
   --max-events 7 \
   --non-interactive \
   --sequence-choice 0
@@ -1256,7 +1256,7 @@ peeps_scheduler/
 │   ├── migrate.py           # Migration scripts
 │   ├── period_report.py     # Period reporting
 │   └── sqlite3.exe          # SQLite CLI (Windows)
-├── peeps_data/              # Git submodule (private data)
+├── peeps-data/              # Git submodule (private data)
 │   ├── 2025-12/
 │   │   ├── members.csv
 │   │   ├── responses.csv
@@ -1286,7 +1286,7 @@ peeps_scheduler/
 
 ### Key Directories
 
-#### peeps_data/ (Git Submodule)
+#### peeps-data/ (Git Submodule)
 
 - **Purpose:** Private data storage (not in main repo)
 - **Structure:** One folder per period (e.g., 2026-01/)
@@ -1371,13 +1371,13 @@ Defines three event duration tiers:
 
 **PEEPS_DATA_PATH:**
 
-- Default: "peeps_data"
+- Default: "peeps-data"
 - Override: `export PEEPS_DATA_PATH=/path/to/data`
 
 **DATA_FOLDER:**
 
 - Default: None (must specify via CLI)
-- Override: `export DATA_FOLDER=peeps_data/2026-01`
+- Override: `export DATA_FOLDER=peeps-data/2026-01`
 
 ### Logging
 
