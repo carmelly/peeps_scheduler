@@ -1,0 +1,5 @@
+body {
+  max-width: 100ch;   /* limit line length to ~100 characters */
+  margin: 0 auto;     /* center the page */
+  padding: 24px;      /* comfortable margins */
+}

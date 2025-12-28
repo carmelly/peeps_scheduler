@@ -1,0 +1,15 @@
+{
+    "config": {
+        "default": true,
+        "MD013": false, // line length: let Prettier handle wrapping decisions
+        "MD024": false, // no-duplicate-heading: allow duplicate headings (common in changelogs)
+        "MD033": false, // inline HTML (often useful in prompt docs)
+        "MD060": { "style": "any", "aligned_delimiter": false },
+        "MD007": { "indent": 2 }, // ul-indent: 2 spaces
+        "MD049": { "style": "asterisk" }, // emphasis style: prefer asterisks
+        "MD050": { "style": "asterisk" },
+        "MD004": { "style": "dash" } // ul-style: prefer dashes
+    },
+    "globs": [ "**/*.md" ],
+    "ignores": [ "**/node_modules/**", "**/dist/**", "**/build/**", "**/.venv/**" ]
+}

@@ -1,14 +1,3 @@
-# Virtual environment
-.venv/
-
-# Symlinked config files (point to peeps-config/overlay/)
-.apm
-.claude
-CLAUDE.md
-
-# IDE
-.vscode/
-
 # Python
 __pycache__/
 *.egg-info/
@@ -19,6 +8,27 @@ dist/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# AI Agent Configuration (symlinked from peeps-config/overlay/)
+/.claude
+/.apm
+CLAUDE.md
+
+# Virtual environment
+.venv
+
+# SQLite database files and related artifacts
+db/*.db
+db/*.db-journal
+db/*.sqbpro
+db/backups/*
+**/sqlite3.exe
+
+# Repo zip for easy upload
+repo-*.zip
+
+# Node modules
+node_modules/
 
 # Logs
 logs/
